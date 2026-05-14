@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-box"></i>
+            <strong>Gestión de Productos</strong>
+        </h3>
+
+        <hr>
+
+        <button class="btn btn-info mb-3"
+                data-toggle="modal"
+                data-target="#modal-producto">
+
+            <i class="fas fa-plus"></i>
+            Nuevo Producto
+
+        </button>
+
+        <table class="table table-responsive table-bordered table-striped">
+
+            <thead class="thead-dark">
+
+            <tr>
+                <th>ID</th>
+                <th>Imagen</th>
+                <th class="col-sm-3">Nombre</th>
+                <th>Categoría</th>
+                <th>Stock</th>
+                <th>Mínimo</th>
+                <th>Precio</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+
+            </thead>
+
+            <tbody>
+
+            <tr th:each="p : ${productos}">
+
+                <td th:text="${p.id}"></td>
+
+                <td>
+
+                    <img th:src="${p.imagenUrl}"
+                         width="60">
+
+                </td>
+
+                <td th:text="${p.nombre}"></td>
+
+                <td th:text="${p.categoria != null ? p.categoria.nombre : 'Sin Categoría'}"></td>
+
+                <!-- STOCK -->
+                <td th:classappend="${p.stock <= p.stockMin ? 'text-danger font-weight-bold' : ''}"
+                    th:text="${p.stock}">
+                </td>
+
+                <td th:text="${p.stockMin}"></td>
+
+                <td>
+                    <strong>S/.</strong>
+                    <span th:text="${p.precio}"></span>
+                </td>
+
+                <td>
+
+                    <span th:if="${p.estado == 1}"
+                          class="badge badge-success">
+
+                        Activo
+
+                    </span>
+
+                    <span th:if="${p.estado == 0}"
+                          class="badge badge-danger">
+
+                        Inactivo
+
+                    </span>
+
+                </td>
+
+                <td>
+
+                    <button class="btn btn-warning btn-sm btn-editar"
+                            th:attr="data-id=${p.id}">
+
+                        <i class="fas fa-edit"></i>
+
+                    </button>
+
+                    <button class="btn btn-danger btn-sm">
+
+                        <i class="fas fa-trash"></i>
+
+                    </button>
+
+                    <button class="btn btn-sm"
+                            th:classappend="${p.estado == 1 ? 'btn-secondary' : 'btn-success'}">
+
+                        <i class="fas"
+                           th:classappend="${p.estado == 1 ? ' fa-ban' : ' fa-check'}"></i>
+
+                    </button>
+
+                </td>
+
+            </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <!-- MODAL PRODUCTO -->
+
+    <div id="modal-producto"
+         class="modal fade"
+         data-backdrop="false"
+         tabindex="-1">
+
+        <div class="modal-dialog">
+
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark text-white">
+
+                    <h5 id="modal-titulo"
+                        class="modal-title">
+
+                        Crear Producto
+
+                    </h5>
+
+                    <button type="button"
+                            class="close text-white"
+                            data-dismiss="modal">
+
+                        &times;
+
+                    </button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="form-producto"
+                          enctype="multipart/form-data">
+
+                        <input type="hidden"
+                               id="producto-id">
+
+                        <label>Nombre:</label>
+
+                        <input type="text"
+                               id="nombre"
+                               class="form-control"
+                               required>
+
+                        <label class="mt-2">Descripción:</label>
+
+                        <textarea id="descripcion"
+                                  class="form-control"
+                                  required></textarea>
+
+                        <label class="mt-2">Precio:</label>
+
+                        <input type="number"
+                               id="precio"
+                               step="0.01"
+                               class="form-control"
+                               required>
+
+                        <!-- CATEGORIA -->
+
+                        <div class="form-group mt-2">
+
+                            <label>Categoría:</label>
+
+                            <select id="id-categoria"
+                                    class="form-control"
+                                    required>
+
+                                <option value="">
+                                    -- Seleccionar Categoría --
+                                </option>
+
+                                <option th:each="c : ${categorias}"
+                                        th:value="${c.id}"
+                                        th:text="${c.nombre}">
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                        <!-- STOCK -->
+
+                        <div class="row">
+
+                            <div class="col-md-6">
+
+                                <label class="mt-2">
+                                    Stock Actual:
+                                </label>
+
+                                <input type="number"
+                                       id="stock"
+                                       class="form-control"
+                                       value="0"
+                                       min="0"
+                                       required>
+
+                            </div>
+
+                            <div class="col-md-6">
+
+                                <label class="mt-2">
+                                    Stock Mínimo:
+                                </label>
+
+                                <input type="number"
+                                       id="stock-min"
+                                       class="form-control"
+                                       value="5"
+                                       min="0"
+                                       required>
+
+                            </div>
+
+                        </div>
+
+                        <!-- IMAGEN -->
+
+                        <label class="mt-2">
+                            Imagen:
+                        </label>
+
+                        <input type="file"
+                               id="imagen"
+                               accept="image/*"
+                               class="form-control">
+
+                        <img id="imagen-preview"
+                             style="max-width:100px; display:none; margin-top:10px;">
+
+                        <div class="text-right mt-4">
+
+                            <button class="btn btn-info">
+
+                                Guardar Producto
+
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    data-dismiss="modal">
+
+                                Cancelar
+
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

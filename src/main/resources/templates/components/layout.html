@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es"
+      xmlns:th="http://www.thymeleaf.org">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Sistema Gas</title>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <!-- Fuente -->
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet"
+          th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet"
+          th:href="@{/assets/adminlte/plugins/bootstrap/css/bootstrap.min.css}">
+
+    <!-- AdminLTE -->
+    <link rel="stylesheet"
+          th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
+
+    <!-- Tus estilos -->
+    <link rel="stylesheet"
+          th:href="@{/assets/css/estilos.css}">
+
+</head>
+
+<body class="hold-transition sidebar-mini">
+
+<div class="wrapper">
+
+    <!-- HEADER -->
+    <div th:replace="components/header :: header"></div>
+
+    <!-- SIDEBAR -->
+    <div th:replace="components/sidebar :: sidebar"></div>
+
+    <!-- CONTENIDO -->
+    <div class="content-wrapper p-3">
+
+        <div th:replace="~{${contenido} :: content}"></div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div th:replace="components/footer :: footer"></div>
+
+</div>
+
+<!-- jQuery -->
+<script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
+
+<!-- Bootstrap -->
+<script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
+
+<!-- AdminLTE -->
+<script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
+
+</body>
+</html>

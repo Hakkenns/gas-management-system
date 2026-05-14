@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-user-tag"></i>
+            <strong>Gestión de Perfiles</strong>
+        </h3>
+
+        <hr>
+
+        <!-- BOTON NUEVO -->
+        <button class="btn btn-info mb-3"
+                data-toggle="modal"
+                data-target="#modal-perfil">
+
+            <i class="fas fa-plus"></i>
+            Nuevo Perfil
+
+        </button>
+        <!-- TABLA -->
+        <table class="table table-bordered table-striped">
+
+            <thead class="thead-dark">
+
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre de Perfil</th>
+                    <th>Descripción</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                <!-- SI NO HAY DATOS -->
+                <tr th:if="${#lists.isEmpty(perfiles)}">
+
+                    <td colspan="5"
+                        class="text-center">
+
+                        No hay perfiles registrados.
+
+                    </td>
+
+                </tr>
+
+                <!-- LISTAR -->
+                <tr th:each="p : ${perfiles}">
+
+                    <td th:text="${p.id}"></td>
+
+                    <td th:text="${p.nombrePerfil}"></td>
+
+                    <td th:text="${p.descripcion}"></td>
+
+                    <td>
+
+                        <span class="badge badge-success"
+                              th:if="${p.estado == 1}">
+                            ACTIVO
+                        </span>
+
+                        <span class="badge badge-danger"
+                              th:if="${p.estado == 0}">
+                            INACTIVO
+                        </span>
+
+                        <span class="badge badge-secondary"
+                              th:if="${p.estado == 2}">
+                            ELIMINADO
+                        </span>
+
+                    </td>
+
+                    <td>
+
+                        <!-- PERMISOS -->
+                        <button class="btn btn-info btn-sm">
+
+                            <i class="fas fa-key"></i>
+
+                        </button>
+
+                        <!-- EDITAR -->
+                        <button class="btn btn-warning btn-sm">
+
+                            <i class="fas fa-edit"></i>
+
+                        </button>
+
+                        <!-- ACTIVAR / DESACTIVAR -->
+                        <a href="#"
+                           class="btn btn-success btn-sm"
+                           th:if="${p.estado == 0}">
+
+                            <i class="fas fa-check"></i>
+
+                        </a>
+
+                        <a href="#"
+                           class="btn btn-secondary btn-sm"
+                           th:if="${p.estado == 1}">
+
+                            <i class="fas fa-ban"></i>
+
+                        </a>
+
+                        <!-- ELIMINAR -->
+                        <a href="#"
+                           class="btn btn-danger btn-sm"
+                           th:if="${p.estado != 2}">
+
+                            <i class="fas fa-trash"></i>
+
+                        </a>
+
+                    </td>
+
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+
+
+
+    <!-- MODAL PERFIL -->
+    <div class="modal fade"
+         id="modal-perfil"
+         tabindex="-1"
+         data-backdrop="false">
+
+        <div class="modal-dialog">
+
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark">
+
+                    <h5 class="modal-title">
+                        Crear Perfil
+                    </h5>
+
+                    <button type="button"
+                            class="close text-white"
+                            data-dismiss="modal">
+
+                        ×
+
+                    </button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <form>
+
+                        <input type="hidden"
+                               id="id-perfil">
+
+                        <label>
+                            Nombre del Perfil
+                        </label>
+
+                        <input type="text"
+                               class="form-control"
+                               id="nombre-perfil">
+
+                        <label class="mt-2">
+                            Descripción
+                        </label>
+
+                        <textarea class="form-control"
+                                  id="descripcion-perfil"></textarea>
+
+                        <div class="modal-footer">
+
+                            <button type="submit"
+                                    class="btn btn-info">
+
+                                Guardar
+
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    data-dismiss="modal">
+
+                                Cancelar
+
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+
+
+    <!-- MODAL PERMISOS -->
+    <div class="modal fade"
+         id="modal-permisos"
+         tabindex="-1">
+
+        <div class="modal-dialog modal-lg">
+
+            <div class="modal-content">
+
+                <div class="modal-body">
+
+                    <h5 class="mb-3">
+
+                        Asignando Permisos
+
+                    </h5>
+
+                    <div class="table-responsive"
+                         style="max-height: 400px; overflow-y: auto;">
+
+                        <table class="table table-sm table-hover table-striped">
+
+                            <thead class="thead-dark">
+
+                                <tr>
+                                    <th>Opción</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody>
+
+                                <tr>
+                                    <td>Módulo ejemplo</td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    <div class="mt-3">
+
+                        <button class="btn btn-success">
+
+                            Guardar Permisos
+
+                        </button>
+
+                        <button class="btn btn-secondary"
+                                data-dismiss="modal">
+
+                            Cerrar
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
