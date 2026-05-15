@@ -38,8 +38,9 @@ public class PerfilController {
     private OpcionService opcionService;
 
     @GetMapping
-    public String perfiles(Model model) {
-        model.addAttribute("menu", opcionService.listAll());
+    public String perfiles(Model model, jakarta.servlet.http.HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("perfiles", perfilService.listNotDeleted());
         model.addAttribute("contenido", "views/perfiles");
         return "components/layout";

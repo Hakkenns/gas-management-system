@@ -136,9 +136,18 @@ function performLogin() {
     .then(usuarioData => {
         // Login exitoso
         console.log('Usuario logueado:', usuarioData);
-        
-        // Redirigir al dashboard
-        window.location.href = '/';
+
+        // Solicitar ruta de landing según el perfil en sesión
+        fetch('/api/landing')
+            .then(r => r.json())
+            .then(data => {
+                const path = data.path || '/';
+                window.location.href = path;
+            })
+            .catch(err => {
+                console.error('Error obteniendo landing:', err);
+                window.location.href = '/';
+            });
     })
     .catch(error => {
         console.error('Error:', error);

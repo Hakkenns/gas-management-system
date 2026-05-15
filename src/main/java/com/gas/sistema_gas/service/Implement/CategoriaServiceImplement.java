@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.CategoriaMapper;
@@ -15,46 +16,40 @@ import com.gas.sistema_gas.service.CategoriaService;
 
 import jakarta.transaction.Transactional;
 
-public class CategoriaServiceImplement implements CategoriaService{
+@Service
+public class CategoriaServiceImplement implements CategoriaService {
     
     @Autowired
     private CategoriaMapper categoriaMapper;
+
     @Autowired
     private CategoriaRepository categoriaRepository;
 
     @Override
     @Transactional
-    public List<CategoriaDTO.SimpleResponse> listAll(){
-        return  categoriaRepository.findAll().stream()
-                .filter(c -> c.getEstado() == 1)
+    public List<CategoriaDTO.SimpleResponse> listAll() {
+        return categoriaRepository.findAll().stream()
                 .map(categoriaMapper::toSimpleResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public CategoriaDTO.SimpleResponse createCategory(CategoriaDTO.Create createDto){
-
-
-        // Verificar que el nombre de la categorai no exista
-        if(categoriaRepository.existsByNombre(createDto.nombre())){
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombde de categoria ya existe");
+    public CategoriaDTO.SimpleResponse createCategory(CategoriaDTO.Create createDto) {
+        if (categoriaRepository.existsByNombre(createDto.nombre())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de la categoría ya existe");
         }
 
         Categoria categoria = categoriaMapper.toEntity(createDto);
-
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
 
     @Override
     @Transactional
-    public CategoriaDTO.SimpleResponse updateCategory(Long id, CategoriaDTO.Update updateDto){
-
-        // Verificamos que la categoria exista
+    public CategoriaDTO.SimpleResponse updateCategory(Long id, CategoriaDTO.Update updateDto) {
         Categoria categoria = categoriaRepository.findById(id)
-                    .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
-        
-        // modificamos los datos de categoria
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
+
         categoria.setNombre(updateDto.nombre());
         categoria.setDescripcion(updateDto.descripcion());
 
@@ -63,24 +58,30 @@ public class CategoriaServiceImplement implements CategoriaService{
 
     @Override
     @Transactional
-    public void deleteCategory(Long id){
-
-        // Verificamos si la categoria existe
+    public void setState(Long id, Integer estado) {
         Categoria categoria = categoriaRepository.findById(id)
-                    .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
-        
-        // Eliminaciión lógica: Cambiar estado
-        categoria.setEstado(0);
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
 
-        // guardamos los cambios
+        categoria.setEstado(estado);
         categoriaRepository.save(categoria);
     }
 
     @Override
     @Transactional
-    public CategoriaDTO.SimpleResponse findById(Long id){
-        return  categoriaRepository.findById(id)
+    public void deleteCategory(Long id) {
+        Categoria categoria = categoriaRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
+
+        categoria.setEstado(0);
+        categoriaRepository.save(categoria);
+    }
+
+    @Override
+    @Transactional
+    public CategoriaDTO.SimpleResponse findById(Long id) {
+        return categoriaRepository.findById(id)
                 .map(categoriaMapper::toSimpleResponse)
-                .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
     }
 }
+

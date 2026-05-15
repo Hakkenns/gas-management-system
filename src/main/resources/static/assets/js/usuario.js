@@ -72,6 +72,64 @@ function abrirModalEditar(id) {
 }
 
 
+function reloadUsuariosTable() {
+    fetch('/usuarios/tabla')
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('No se pudo cargar la tabla de usuarios.');
+            }
+            return response.text();
+        })
+        .then(function(html) {
+            var tbody = document.getElementById('tabla-usuarios');
+            if (tbody) {
+                tbody.outerHTML = html;
+            }
+        })
+        .catch(function(error) {
+            console.error('Error recargando tabla de usuarios:', error);
+            alert('No se pudo recargar la tabla de usuarios.');
+        });
+}
+
+
+var formUsuario = document.getElementById('form-usuario');
+if (formUsuario) {
+    formUsuario.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        var url = formUsuario.action;
+        var data = new URLSearchParams(new FormData(formUsuario)).toString();
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: data
+        })
+        .then(function(response) {
+            return response.json().then(function(body) {
+                if (!response.ok) {
+                    throw new Error(body.message || 'Error guardando usuario.');
+                }
+                return body;
+            });
+        })
+        .then(function(body) {
+            if (body.status === 'OK') {
+                $('#modal-usuario').modal('hide');
+                reloadUsuariosTable();
+            } else {
+                throw new Error(body.message || 'Error guardando usuario.');
+            }
+        })
+        .catch(function(error) {
+            console.error('Error guardando usuario:', error);
+            alert(error.message || 'Error guardando usuario.');
+        });
+    });
+}
+
+
 // ─── CAMBIAR ESTADO (ACTIVAR / DESACTIVAR) ────────────────────────────────────
 function cambiarEstado(id, nuevoEstado) {
 
@@ -83,20 +141,27 @@ function cambiarEstado(id, nuevoEstado) {
 
     fetch('/usuarios/' + id + '/estado', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: nuevoEstado })
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'estado=' + encodeURIComponent(nuevoEstado)
     })
     .then(function(response) {
-        if (response.ok) {
-            // Recargar la página para reflejar el nuevo estado
-            window.location.reload();
+        return response.json().then(function(body) {
+            if (!response.ok) {
+                throw new Error(body.message || 'Error cambiando estado.');
+            }
+            return body;
+        });
+    })
+    .then(function(body) {
+        if (body.status === 'OK') {
+            reloadUsuariosTable();
         } else {
-            alert('No se pudo cambiar el estado del usuario.');
+            throw new Error(body.message || 'Error cambiando estado.');
         }
     })
     .catch(function(error) {
         console.error('Error:', error);
-        alert('Error al cambiar el estado.');
+        alert(error.message || 'Error al cambiar el estado.');
     });
 }
 
@@ -118,15 +183,24 @@ document.getElementById('btn-confirmar-eliminar').addEventListener('click', func
         method: 'POST'
     })
     .then(function(response) {
-        if (response.ok) {
+        return response.json().then(function(body) {
+            if (!response.ok) {
+                throw new Error(body.message || 'Error eliminando usuario.');
+            }
+            return body;
+        });
+    })
+    .then(function(body) {
+        if (body.status === 'OK') {
             $('#modal-eliminar').modal('hide');
-            window.location.reload();
+            idUsuarioAEliminar = null;
+            reloadUsuariosTable();
         } else {
-            alert('No se pudo eliminar el usuario.');
+            throw new Error(body.message || 'Error eliminando usuario.');
         }
     })
     .catch(function(error) {
         console.error('Error:', error);
-        alert('Error al eliminar el usuario.');
+        alert(error.message || 'Error al eliminar el usuario.');
     });
 });

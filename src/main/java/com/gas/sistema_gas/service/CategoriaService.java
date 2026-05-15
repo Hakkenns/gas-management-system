@@ -9,6 +9,7 @@ public interface CategoriaService {
     List<CategoriaDTO.SimpleResponse> listAll();
     CategoriaDTO.SimpleResponse createCategory(CategoriaDTO.Create createDto);
     CategoriaDTO.SimpleResponse updateCategory(Long id, CategoriaDTO.Update updateDto);
+    void setState(Long id, Integer estado);
     void deleteCategory(Long id);
     CategoriaDTO.SimpleResponse findById(Long id);
 }

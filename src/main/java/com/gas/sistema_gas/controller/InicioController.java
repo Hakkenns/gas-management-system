@@ -14,12 +14,12 @@ public class InicioController {
     private OpcionService opcionService;
 
     @GetMapping("/inicio")
-    public String inicio(Model model){
+    public String inicio(Model model, jakarta.servlet.http.HttpSession session){
 
         model.addAttribute("contenido", "views/dashboard");
 
-        model.addAttribute("menu",
-                opcionService.listAll());
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
 
         return "components/layout";
     }

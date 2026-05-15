@@ -384,22 +384,24 @@ CREATE TABLE `proveedores` (
 --
 
 CREATE TABLE `usuarios` (
-  `id_usuario` bigint(20) NOT NULL,
+  `id_usuario` bigint(20) NOT NULL AUTO_INCREMENT,
   `id_perfil` bigint(20) NOT NULL,
   `username` varchar(50) NOT NULL,
+  `nombre` varchar(150) NOT NULL,
   `correo` varchar(150) NOT NULL,
   `password` varchar(255) NOT NULL,
   `fecha_creacion` datetime DEFAULT NULL,
   `estado` int(11) NOT NULL,
-  `id_empleado` bigint(20) DEFAULT NULL
+  `id_empleado` bigint(20) DEFAULT NULL,
+  PRIMARY KEY (`id_usuario`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `usuarios`
 --
 
-INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`) VALUES
-(1, 1, 'yogacix', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 1, NULL);
+INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `nombre`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`) VALUES
+(1, 1, 'yogacix', 'Administrador', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 1, NULL);
 
 --
 -- Índices para tablas volcadas

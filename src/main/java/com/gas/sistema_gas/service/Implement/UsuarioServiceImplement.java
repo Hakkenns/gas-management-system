@@ -35,7 +35,7 @@ public class UsuarioServiceImplement implements UsuarioService {
     @Transactional(readOnly = true)
     public List<UsuarioDTO.SimpleResponse> listAll() {
         return usuarioRepository.findAll().stream()
-                .filter(u -> u.getEstado() == 1) // Filtrar a todos los usuarios con estado 1
+                .filter(u -> u.getEstado() != 2) // Mostrar activos e inactivos, pero no eliminados
                 .map(usuarioMapper::toSimpleResponse)
                 .collect(Collectors.toList());
     }
@@ -44,7 +44,6 @@ public class UsuarioServiceImplement implements UsuarioService {
     @Transactional
     public UsuarioDTO.SimpleResponse createUser(UsuarioDTO.Create createDto) {
 
-        // Verificación de correo (Usando el DTO)
         if (usuarioRepository.existsByCorreo(createDto.correo())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya existe");
         }
@@ -53,78 +52,71 @@ public class UsuarioServiceImplement implements UsuarioService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de usuario ya existe");
         }
 
-        // Convetimos el DTO a Entidad Usuario
         Usuario usuario = usuarioMapper.toEntity(createDto);
+        usuario.setNombre(createDto.nombre());
 
-        // 🔐 ENCRIPTAR CONTRASEÑA CON BCRYPT
         usuario.setPassword(passwordEncoder.encode(usuario.getPassword()));
 
-        // Buscamos el Perfil real en la BD usando el ID del formulaopcionRepository
         Perfil perfil = perfilRepository.findById(createDto.idPerfil()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
 
-        // Vinculamos el usuario con su perfil correspondiente
         usuario.setPerfil(perfil);
 
-        // PERSITENCIA: Guardamos en la base de datos y dentro de la variable
-        // usuarioGuardado para el Mapper
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
 
-        // RESPONSE: Convetirmos la entidad guardada a DTO SimpleResponse de respuesta
         return usuarioMapper.toSimpleResponse(usuarioGuardado);
     }
 
     @Override
     @Transactional
     public UsuarioDTO.SimpleResponse updateUser(Long id, UsuarioDTO.Update updateDto) {
-        // 1. Buscamos al usuario actual
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
-        // Verifica si el correo que se envia es diferente al que ya tenia
-        // verifica si ese correo es nuevo buscandolo en la base de datos
         if (!usuario.getCorreo().equalsIgnoreCase(updateDto.correo())) {
             if (usuarioRepository.existsByCorreo(updateDto.correo())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya esta registrado");
             }
         }
 
-        if(!usuario.getUserName().equalsIgnoreCase(updateDto.userName())){
-            if(usuarioRepository.existsByUserName(updateDto.userName())){
+        if (!usuario.getUserName().equalsIgnoreCase(updateDto.userName())) {
+            if (usuarioRepository.existsByUserName(updateDto.userName())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de usuario ya esta registrado");
             }
         }
 
-        // 3. Actualizamos el perfil si es necesario
         Perfil perfil = perfilRepository.findById(updateDto.idPerfil())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
 
-        // 2. Actualizamos los datos (sin cambiar la fecha de creación)
-        
+        usuario.setNombre(updateDto.nombre());
         usuario.setUserName(updateDto.userName());
         usuario.setCorreo(updateDto.correo());
         usuario.setPerfil(perfil);
 
-        // 🔐 Si mandas contraseña nueva, encriptarla con BCrypt
         if (updateDto.password() != null && !updateDto.password().isBlank()) {
             usuario.setPassword(passwordEncoder.encode(updateDto.password()));
         }
-
-        usuario.setPerfil(perfil);
 
         return usuarioMapper.toSimpleResponse(usuarioRepository.save(usuario));
     }
 
     @Override
     @Transactional
-    public void deleteUser(Long id) {
-
-        // 1. Buscamos al usuario actual
+    public UsuarioDTO.SimpleResponse setState(Long id, Integer estado) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
-        // Borrado lógico (cambiamos el estado)
-        usuario.setEstado(0);
+        usuario.setEstado(estado);
+        return usuarioMapper.toSimpleResponse(usuarioRepository.save(usuario));
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        usuario.setEstado(2);
         usuarioRepository.save(usuario);
     }
 

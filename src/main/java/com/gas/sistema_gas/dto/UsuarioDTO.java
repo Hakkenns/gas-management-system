@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 public class UsuarioDTO {
 
     public record Create(
+        @NotBlank(message = "El nombre completo es obligatorio")
+        String nombre,
         @NotBlank(message = "El username es obligatorio")
         String userName,
         @NotBlank(message = "La contraseña es obligatoria")
@@ -15,9 +17,7 @@ public class UsuarioDTO {
         @Email(message = "Formato de correo inválido")
         String correo,
         @NotNull(message = "El ID de perfil es obligatorio")
-        Long idPerfil,
-        @NotNull(message = "El ID de empleado es obligatorio")
-        Long idEmpleado
+        Long idPerfil
     ) {}
 
 
@@ -32,6 +32,8 @@ public class UsuarioDTO {
     ) {}
 
      public record Update(
+        @NotBlank(message = "El nombre completo es obligatorio")
+        String nombre,
         @NotBlank(message = "El username es obligatorio")
         String userName,
         String password,     

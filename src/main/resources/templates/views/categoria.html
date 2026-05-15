@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="es"
+      xmlns:th="http://www.thymeleaf.org">
 
 <body>
 
@@ -14,7 +15,9 @@
 
         <hr>
 
-        <button class="btn btn-info mb-3"
+        <!-- BOTON NUEVA CATEGORIA -->
+        <button id="btn-crear-categoria"
+                class="btn btn-info mb-3"
                 data-toggle="modal"
                 data-target="#modal-categoria">
 
@@ -23,6 +26,7 @@
 
         </button>
 
+        <!-- TABLA -->
         <table class="table table-bordered table-striped">
 
             <thead class="thead-dark">
@@ -39,14 +43,19 @@
 
             <tbody>
 
+                <!-- SI NO HAY DATOS -->
                 <tr th:if="${#lists.isEmpty(categorias)}">
 
-                    <td colspan="5" class="text-center">
-                        No hay categorías registradas.
+                    <td colspan="5"
+                        class="text-center">
+
+                        No hay categorías registradas
+
                     </td>
 
                 </tr>
 
+                <!-- LISTAR -->
                 <tr th:each="c : ${categorias}">
 
                     <td th:text="${c.id}"></td>
@@ -55,17 +64,18 @@
 
                     <td th:text="${c.descripcion}"></td>
 
+                    <!-- ESTADO -->
                     <td>
 
-                        <span th:if="${c.estado == 1}"
-                              class="badge badge-success">
+                        <span class="badge badge-success"
+                              th:if="${c.estado == 1}">
 
                             ACTIVO
 
                         </span>
 
-                        <span th:if="${c.estado == 0}"
-                              class="badge badge-danger">
+                        <span class="badge badge-danger"
+                              th:if="${c.estado == 0}">
 
                             INACTIVO
 
@@ -73,33 +83,44 @@
 
                     </td>
 
+                    <!-- ACCIONES -->
                     <td>
 
-                        <button class="btn btn-warning btn-sm">
+                        <!-- EDITAR -->
+                        <button class="btn btn-warning btn-sm btn-editar-categoria"
+
+                                th:data-id="${c.id}"
+                                th:data-nombre="${c.nombre}"
+                                th:data-descripcion="${c.descripcion}">
 
                             <i class="fas fa-edit"></i>
 
                         </button>
 
-                        <button class="btn btn-danger btn-sm">
+                        <!-- ELIMINAR -->
+                        <a th:href="@{/categorias/eliminar/{id}(id=${c.id})}"
+                           class="btn btn-danger btn-sm">
 
                             <i class="fas fa-trash"></i>
 
-                        </button>
+                        </a>
 
-                        <button th:if="${c.estado == 1}"
-                                class="btn btn-secondary btn-sm">
+                        <!-- CAMBIAR ESTADO -->
+                        <a th:if="${c.estado == 1}"
+                           th:href="@{/categorias/estado/{id}/{estado}(id=${c.id},estado=0)}"
+                           class="btn btn-secondary btn-sm">
 
                             <i class="fas fa-ban"></i>
 
-                        </button>
+                        </a>
 
-                        <button th:if="${c.estado == 0}"
-                                class="btn btn-success btn-sm">
+                        <a th:if="${c.estado == 0}"
+                           th:href="@{/categorias/estado/{id}/{estado}(id=${c.id},estado=1)}"
+                           class="btn btn-success btn-sm">
 
                             <i class="fas fa-check"></i>
 
-                        </button>
+                        </a>
 
                     </td>
 
@@ -112,7 +133,6 @@
     </div>
 
     <!-- MODAL -->
-
     <div class="modal fade"
          id="modal-categoria"
          tabindex="-1"
@@ -122,10 +142,14 @@
 
             <div class="modal-content">
 
-                <div class="modal-header bg-dark text-white">
+                <!-- HEADER -->
+                <div class="modal-header bg-dark">
 
-                    <h5 class="modal-title">
-                        Crear Categoría
+                    <h5 class="modal-title text-white"
+                        id="modal-titulo-categoria">
+
+                        Nueva Categoría
+
                     </h5>
 
                     <button type="button"
@@ -138,33 +162,43 @@
 
                 </div>
 
+                <!-- BODY -->
                 <div class="modal-body">
 
-                    <form>
+                    <form th:action="@{/categorias}"
+                          method="post"
+                          id="form-categoria">
 
-                        <input type="hidden" id="categoria-id">
+                        <!-- ID -->
+                        <input type="hidden"
+                               id="categoria-id"
+                               name="id">
 
+                        <!-- NOMBRE -->
                         <div class="form-group">
 
-                            <label>Nombre</label>
+                            <label>Nombre de Categoría</label>
 
                             <input type="text"
                                    class="form-control"
                                    id="nombre-categoria"
+                                   name="nombre"
                                    required>
 
                         </div>
 
-                        <div class="form-group">
+                        <!-- DESCRIPCION -->
+                        <div class="form-group mt-2">
 
                             <label>Descripción</label>
 
                             <textarea class="form-control"
                                       id="descripcion-categoria"
-                                      rows="3"></textarea>
+                                      name="descripcion"></textarea>
 
                         </div>
 
+                        <!-- BOTONES -->
                         <div class="text-right mt-4">
 
                             <button type="submit"
@@ -193,6 +227,9 @@
         </div>
 
     </div>
+
+    <!-- JS -->
+    <script th:src="@{/assets/js/categoria.js}"></script>
 
 </div>
 

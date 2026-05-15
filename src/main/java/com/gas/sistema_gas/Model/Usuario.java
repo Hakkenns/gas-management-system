@@ -41,6 +41,10 @@ public class Usuario {
     @NotBlank(message = "El username es obligatorio")
     private String userName;
 
+    @Column(name = "nombre", nullable = false, length = 150)
+    @NotBlank(message = "El nombre completo es obligatorio")
+    private String nombre;
+
     @Column(nullable = false, length = 255)
     @NotBlank(message = "La contraseña es obligatoria")
     private String password;

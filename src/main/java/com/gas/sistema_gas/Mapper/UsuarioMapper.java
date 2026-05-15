@@ -20,10 +20,11 @@ public interface UsuarioMapper {
 
     @Mapping(source = "perfil.nombrePerfil", target = "nombrePerfil")
     @Mapping(source = "perfil.id", target = "idPerfil")
-    @Mapping(source = "empleado.nombre", target = "nombre")
+    @Mapping(source = "nombre", target = "nombre")
     UsuarioDTO.SimpleResponse toSimpleResponse(Usuario usuario);
 
     @Mapping(source = "perfil.nombrePerfil", target = "nombrePerfil")
+    @Mapping(source = "perfil.id", target = "idPerfil")
     @Mapping(source = "empleado.nombre", target = "nombre")
     @Mapping(source = "userName", target = "username")
     LoginDTO.Response toLoginResponse(Usuario usuario);

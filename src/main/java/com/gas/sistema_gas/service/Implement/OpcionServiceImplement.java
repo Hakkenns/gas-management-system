@@ -36,6 +36,27 @@ public class OpcionServiceImplement implements OpcionService {
 
     @Override
     @Transactional
+    public List<OpcionDTO.SimpleResponse> listByPerfilId(Long perfilId) {
+        if (perfilId == null) return listAll();
+
+        // Si es administrador (perfil id == 1) mostramos todas las opciones activas
+        if (perfilId.equals(1L)) {
+            return repository.findAll().stream()
+                .filter(o -> o.getEstado() == 1)
+                .map(opcionMapper::toSimpleResponse)
+                .collect(Collectors.toList());
+        }
+
+        // Mostrar solo opciones activas que estén asociadas al perfil (no incluir opciones globales sin perfiles)
+        return repository.findAll().stream()
+            .filter(o -> o.getEstado() == 1)
+            .filter(o -> o.getPerfiles() != null && o.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId)))
+            .map(opcionMapper::toSimpleResponse)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
     public OpcionDTO.SimpleResponse createOpcion(OpcionDTO.Create createDto) {
         Opcion opcion = opcionMapper.toEntity(createDto);
         opcion.setEstado(1);

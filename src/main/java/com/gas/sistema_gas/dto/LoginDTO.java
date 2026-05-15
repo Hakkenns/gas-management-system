@@ -23,6 +23,7 @@ public class LoginDTO {
         String nombre,
         String username,
         String correo,
-        String nombrePerfil
+        String nombrePerfil,
+        Long idPerfil
     ) {}
 }

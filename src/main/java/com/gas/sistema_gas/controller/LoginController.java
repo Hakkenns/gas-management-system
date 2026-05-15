@@ -15,12 +15,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.dto.LoginDTO;
 import com.gas.sistema_gas.service.AuthService;
+import com.gas.sistema_gas.service.OpcionService;
 
 @Controller
 public class LoginController {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private OpcionService opcionService;
 
     /**
      * GET: Muestra el formulario de login
@@ -54,6 +58,7 @@ public class LoginController {
             session.setAttribute("usuarioLogueado", usuario);
             session.setAttribute("usuarioId", usuario.id());
             session.setAttribute("usuarioPerfil", usuario.nombrePerfil());
+            session.setAttribute("usuarioPerfilId", usuario.idPerfil());
             
             return usuario;
             
@@ -74,6 +79,35 @@ public class LoginController {
     public String logout(HttpSession session) {
         session.invalidate();
         return "redirect:/login";
+    }
+
+    /**
+     * Devuelve la ruta de landing según el perfil del usuario en sesión.
+     */
+    @GetMapping("/api/landing")
+    @ResponseBody
+    public java.util.Map<String, String> landing(HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+
+        if (perfilId == null) {
+            return java.util.Map.of("path", "/");
+        }
+
+        // Admin ve dashboard
+        if (perfilId.equals(1L)) {
+            return java.util.Map.of("path", "/");
+        }
+
+        // Buscar la primera opción disponible para este perfil
+        var opciones = opcionService.listByPerfilId(perfilId);
+        if (opciones == null || opciones.isEmpty()) {
+            return java.util.Map.of("path", "/");
+        }
+
+        String ruta = opciones.get(0).ruta();
+        if (ruta == null || ruta.isBlank()) ruta = "/";
+
+        return java.util.Map.of("path", ruta.startsWith("/") ? ruta : "/" + ruta);
     }
 
     /**
