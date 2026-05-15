@@ -76,7 +76,6 @@ public class PedidoServiceImplement implements PedidoService {
         // 2. Generar Código Correlativo Simple (Ej: PED-2026-0001)
         // Nota: Esto se puede mejorar con un método en el Repo, pero aquí te doy la
         // lógica base
-        String lastCodigo = pedidoRepository.findLastCodigo(); // Debes tener este método en el Repo
         pedido.setCodigo("PED-" + System.currentTimeMillis()); // Generación rápida temporal
 
         pedido.setCliente(cliente);

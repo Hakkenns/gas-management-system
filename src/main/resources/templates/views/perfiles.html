@@ -15,13 +15,9 @@
         <hr>
 
         <!-- BOTON NUEVO -->
-        <button class="btn btn-info mb-3"
-                data-toggle="modal"
-                data-target="#modal-perfil">
-
+        <button id="btn-crear-perfil" class="btn btn-info mb-3" type="button">
             <i class="fas fa-plus"></i>
             Nuevo Perfil
-
         </button>
         <!-- TABLA -->
         <table class="table table-bordered table-striped">
@@ -38,7 +34,7 @@
 
             </thead>
 
-            <tbody>
+            <tbody id="tabla-perfiles" th:fragment="tablaPerfiles">
 
                 <!-- SI NO HAY DATOS -->
                 <tr th:if="${#lists.isEmpty(perfiles)}">
@@ -53,7 +49,7 @@
                 </tr>
 
                 <!-- LISTAR -->
-                <tr th:each="p : ${perfiles}">
+                <tr th:each="p : ${perfiles}" th:attr="data-id=${p.id}">
 
                     <td th:text="${p.id}"></td>
 
@@ -81,47 +77,37 @@
                     </td>
 
                     <td>
-
                         <!-- PERMISOS -->
-                        <button class="btn btn-info btn-sm">
-
+                        <button type="button" class="btn btn-info btn-sm btn-permisos-perfil"
+                                th:attr="data-id=${p.id},data-nombre=${p.nombrePerfil}">
                             <i class="fas fa-key"></i>
-
                         </button>
 
                         <!-- EDITAR -->
-                        <button class="btn btn-warning btn-sm">
-
+                        <button type="button" class="btn btn-warning btn-sm btn-editar-perfil"
+                                th:attr="data-id=${p.id}">
                             <i class="fas fa-edit"></i>
-
                         </button>
 
                         <!-- ACTIVAR / DESACTIVAR -->
-                        <a href="#"
-                           class="btn btn-success btn-sm"
-                           th:if="${p.estado == 0}">
-
+                        <button type="button" class="btn btn-success btn-sm btn-cambiar-estado"
+                                th:if="${p.id != 1 and p.estado == 0}"
+                                th:attr="data-id=${p.id},data-estado=${p.estado}">
                             <i class="fas fa-check"></i>
+                        </button>
 
-                        </a>
-
-                        <a href="#"
-                           class="btn btn-secondary btn-sm"
-                           th:if="${p.estado == 1}">
-
+                        <button type="button" class="btn btn-secondary btn-sm btn-cambiar-estado"
+                                th:if="${p.id != 1 and p.estado == 1}"
+                                th:attr="data-id=${p.id},data-estado=${p.estado}">
                             <i class="fas fa-ban"></i>
-
-                        </a>
+                        </button>
 
                         <!-- ELIMINAR -->
-                        <a href="#"
-                           class="btn btn-danger btn-sm"
-                           th:if="${p.estado != 2}">
-
+                        <button type="button" class="btn btn-danger btn-sm btn-eliminar-perfil"
+                                th:if="${p.id != 1 and p.estado != 2}"
+                                th:attr="data-id=${p.id}">
                             <i class="fas fa-trash"></i>
-
-                        </a>
-
+                        </button>
                     </td>
 
                 </tr>
@@ -148,7 +134,7 @@
 
                 <div class="modal-header bg-dark">
 
-                    <h5 class="modal-title">
+                    <h5 id="modal-titulo-perfil" class="modal-title">
                         Crear Perfil
                     </h5>
 
@@ -164,10 +150,11 @@
 
                 <div class="modal-body">
 
-                    <form>
+                    <form id="form-perfil">
 
                         <input type="hidden"
-                               id="id-perfil">
+                               id="id-perfil"
+                               name="id">
 
                         <label>
                             Nombre del Perfil
@@ -175,14 +162,16 @@
 
                         <input type="text"
                                class="form-control"
-                               id="nombre-perfil">
+                               id="nombre-perfil"
+                               name="nombrePerfil">
 
                         <label class="mt-2">
                             Descripción
                         </label>
 
                         <textarea class="form-control"
-                                  id="descripcion-perfil"></textarea>
+                                  id="descripcion-perfil"
+                                  name="descripcion"></textarea>
 
                         <div class="modal-footer">
 
@@ -195,10 +184,9 @@
 
                             <button type="button"
                                     class="btn btn-secondary"
-                                    data-dismiss="modal">
-
+                                    data-dismiss="modal"
+                                    id="btn-cancelar-perfil">
                                 Cancelar
-
                             </button>
 
                         </div>
@@ -229,52 +217,50 @@
                 <div class="modal-body">
 
                     <h5 class="mb-3">
-
                         Asignando Permisos
-
                     </h5>
 
-                    <div class="table-responsive"
-                         style="max-height: 400px; overflow-y: auto;">
+                    <p class="mb-3">
+                        Perfil: <strong id="perm-nombre-perfil"></strong>
+                    </p>
 
-                        <table class="table table-sm table-hover table-striped">
+                    <form id="form-permisos-ajax">
 
-                            <thead class="thead-dark">
+                        <input type="hidden" id="perm-id" name="permId">
 
-                                <tr>
-                                    <th>Opción</th>
-                                </tr>
+                        <div class="table-responsive"
+                             style="max-height: 400px; overflow-y: auto;">
 
-                            </thead>
+                            <table class="table table-sm table-hover table-striped">
 
-                            <tbody>
+                                <thead class="thead-dark">
 
-                                <tr>
-                                    <td>Módulo ejemplo</td>
-                                </tr>
+                                    <tr>
+                                        <th>Opción</th>
+                                    </tr>
 
-                            </tbody>
+                                </thead>
 
-                        </table>
+                                <tbody id="perm-lista-opciones">
+                                </tbody>
 
-                    </div>
+                            </table>
 
-                    <div class="mt-3">
+                        </div>
 
-                        <button class="btn btn-success">
+                        <div class="mt-3">
 
-                            Guardar Permisos
+                            <button type="submit" class="btn btn-success">
+                                Guardar Permisos
+                            </button>
 
-                        </button>
+                            <button type="button" class="btn btn-secondary close-permisos">
+                                Cerrar
+                            </button>
 
-                        <button class="btn btn-secondary"
-                                data-dismiss="modal">
+                        </div>
 
-                            Cerrar
-
-                        </button>
-
-                    </div>
+                    </form>
 
                 </div>
 
@@ -283,6 +269,8 @@
         </div>
 
     </div>
+
+    <script th:src="@{/assets/js/perfiles.js}" defer></script>
 
 </div>
 

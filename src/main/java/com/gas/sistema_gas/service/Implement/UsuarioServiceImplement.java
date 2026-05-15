@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,6 +28,8 @@ public class UsuarioServiceImplement implements UsuarioService {
     private UsuarioRepository usuarioRepository;
     @Autowired
     private PerfilRepository perfilRepository;
+    
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
     @Transactional(readOnly = true)
@@ -52,6 +55,9 @@ public class UsuarioServiceImplement implements UsuarioService {
 
         // Convetimos el DTO a Entidad Usuario
         Usuario usuario = usuarioMapper.toEntity(createDto);
+
+        // 🔐 ENCRIPTAR CONTRASEÑA CON BCRYPT
+        usuario.setPassword(passwordEncoder.encode(usuario.getPassword()));
 
         // Buscamos el Perfil real en la BD usando el ID del formulaopcionRepository
         Perfil perfil = perfilRepository.findById(createDto.idPerfil()).orElseThrow(
@@ -99,9 +105,9 @@ public class UsuarioServiceImplement implements UsuarioService {
         usuario.setCorreo(updateDto.correo());
         usuario.setPerfil(perfil);
 
-        // Si mandas contraseña nueva, deberías encriptarla aquí
+        // 🔐 Si mandas contraseña nueva, encriptarla con BCrypt
         if (updateDto.password() != null && !updateDto.password().isBlank()) {
-            usuario.setPassword(updateDto.password());
+            usuario.setPassword(passwordEncoder.encode(updateDto.password()));
         }
 
         usuario.setPerfil(perfil);

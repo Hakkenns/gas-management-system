@@ -13,7 +13,7 @@ public class InicioController {
     @Autowired
     private OpcionService opcionService;
 
-    @GetMapping("/")
+    @GetMapping("/inicio")
     public String inicio(Model model){
 
         model.addAttribute("contenido", "views/dashboard");

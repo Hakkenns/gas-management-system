@@ -16,5 +16,6 @@ public interface ProveedorMapper {
     ProveedorDTO.SimpleResponse toSimpleResponse(Proveedor proveedor);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "estado", ignore = true)
     void updateEntityFromDto(ProveedorDTO.Update updateDto, @MappingTarget Proveedor proveedor);
 }

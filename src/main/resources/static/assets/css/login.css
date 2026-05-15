@@ -4,8 +4,17 @@
     box-sizing: border-box;
 }
 
+html,
 body {
-    background-image: url("/images/Fondo.jpeg");
+    height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: url("/img/Fondo.jpeg");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -16,20 +25,24 @@ body {
 body::before {
     content: "";
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     background: rgba(15, 23, 42, 0.25);
+    pointer-events: none;
 }
 
 
 .login-box {
-    width: 380px;
+    width: 100%;
+    max-width: 430px;
     padding: 50px 40px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 30px 70px rgba(0,0,0,0.28);
     z-index: 10;
 }
 
@@ -51,6 +64,15 @@ h2 {
     top: 12px;
     left: 0;
     color: rgba(255,255,255,0.6);
+}
+
+.input-group-custom .toggle-password {
+    left: auto;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,255,255,0.8);
+    cursor: pointer;
 }
 
 

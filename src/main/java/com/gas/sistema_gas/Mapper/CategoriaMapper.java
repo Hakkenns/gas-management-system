@@ -11,6 +11,8 @@ public interface CategoriaMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "estado", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
     Categoria toEntity(CategoriaDTO.Create createDto);
 
     CategoriaDTO.SimpleResponse toSimpleResponse(Categoria categoria);

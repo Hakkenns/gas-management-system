@@ -13,6 +13,16 @@ public class DashboardController {
     @Autowired
     private OpcionService opcionService;
 
+    /**
+     * GET: Ruta principal redirige al dashboard
+     */
+    @GetMapping("/")
+    public String home(Model model) {
+        model.addAttribute("menu", opcionService.listAll());
+        model.addAttribute("contenido", "views/dashboard");
+        return "components/layout";
+    }
+
     @GetMapping("/dashboard")
     public String dashboard(Model model) {
 

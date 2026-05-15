@@ -1,14 +1,10 @@
-
 document.addEventListener("click", function (e) {
 
-    //modal de crear perfil
+    // modal de crear perfil
     if (e.target.closest("#btn-crear-perfil")) {
-
         document.getElementById("form-perfil").reset();
         document.getElementById("id-perfil").value = "";
-
         document.getElementById("modal-titulo-perfil").textContent = "Crear Perfil";
-
         $("#modal-perfil").modal("show");
     }
 
@@ -16,58 +12,45 @@ document.addEventListener("click", function (e) {
         $("#modal-perfil").modal("hide");
     }
 
-
-    //editar perfil
+    // editar perfil
     if (e.target.closest(".btn-editar-perfil")) {
-
         const id = e.target.closest(".btn-editar-perfil").dataset.id;
 
-        fetch(`views/perfiles.php?action=obtener&id=${id}`)
+        fetch(`/perfiles/${id}`)
             .then(r => r.json())
             .then(data => {
-
                 document.getElementById("modal-titulo-perfil").textContent = "Editar Perfil";
-
-                document.getElementById("id-perfil").value = data.id_perfil;
-                document.getElementById("nombre-perfil").value = data.nombre_perfil;
+                document.getElementById("id-perfil").value = data.id;
+                document.getElementById("nombre-perfil").value = data.nombrePerfil;
                 document.getElementById("descripcion-perfil").value = data.descripcion;
-
                 $("#modal-perfil").modal("show");
             })
             .catch(err => console.log("ERROR JSON PERFIL:", err));
     }
 
-    //abrir el modal
+    // abrir el modal de permisos
     if (e.target.closest(".btn-permisos-perfil")) {
-
         const btn = e.target.closest(".btn-permisos-perfil");
         const id = btn.dataset.id;
         const nombre = btn.dataset.nombre;
 
         document.getElementById("perm-nombre-perfil").textContent = nombre;
+        document.getElementById("perm-id").value = id;
 
-        $("#modal-permisos").modal("show");
-
-        fetch(`views/perfiles.php?action=obtener_permisos&id=${id}`)
+        fetch(`/perfiles/${id}/permisos`)
             .then(r => r.json())
             .then(data => {
-
-                document.getElementById("perm-id").value = data.idPerfil;
-
                 let rows = "";
 
                 data.opciones.forEach(op => {
-
-                    const checked = data.permisosActuales.includes(op.id_opcion)
-                        ? "checked"
-                        : "";
-
+                    const checked = data.permisosActuales.includes(op.id) ? "checked" : "";
                     rows += `<tr><td><label class="d-flex align-items-center" style="gap:1px; cursor:pointer;">
-                              <input type="checkbox" name="opciones_seleccionadas[]" value="${op.id_opcion}" ${checked}> <span>${op.nombre}</span>
+                              <input type="checkbox" name="idOpciones" value="${op.id}" ${checked}> <span>${op.nombre}</span>
                              </label></td></tr>`;
                 });
 
                 document.getElementById("perm-lista-opciones").innerHTML = rows;
+                $("#modal-permisos").modal("show");
             })
             .catch(err => {
                 console.log("ERROR JSON:", err);
@@ -77,90 +60,155 @@ document.addEventListener("click", function (e) {
     if (e.target.closest(".close-permisos")) {
         $("#modal-permisos").modal("hide");
     }
+
+    if (e.target.closest(".btn-cambiar-estado")) {
+        const btn = e.target.closest(".btn-cambiar-estado");
+        const id = btn.dataset.id;
+        const estadoActual = parseInt(btn.dataset.estado, 10);
+        PerfilCambiarEstado(id, estadoActual);
+    }
+
+    if (e.target.closest(".btn-eliminar-perfil")) {
+        const id = e.target.closest(".btn-eliminar-perfil").dataset.id;
+        PerfilEliminar(id);
+    }
 });
 
+function reloadPerfilesTable() {
+    fetch("/perfiles/tabla")
+        .then(r => {
+            if (!r.ok) {
+                throw new Error("Error cargando tabla de perfiles");
+            }
+            return r.text();
+        })
+        .then(html => {
+            const tbody = document.getElementById("tabla-perfiles");
+            if (tbody) {
+                tbody.outerHTML = html;
+            }
+        })
+        .catch(err => {
+            console.log("ERROR recargando tabla de perfiles:", err);
+        });
+}
 
-
-//guardar perfil ajax
+// guardar perfil ajax
 $("#form-perfil").on("submit", function (e) {
     e.preventDefault();
 
+    const id = document.getElementById("id-perfil").value;
+    const url = id ? `/perfiles/${id}/editar` : "/perfiles";
+
     $.ajax({
-        url: "views/perfiles.php?action=guardar_perfil",
+        url: url,
         type: "POST",
         data: $(this).serialize(),
+        dataType: "json",
         success: function (resp) {
-            if (resp.trim() === "OK") {
+            if (resp.status === "OK") {
                 $("#modal-perfil").modal('hide');
-                AbrirPagina("perfiles");
+                reloadPerfilesTable();
             } else {
-                console.log("Error:", resp);
+                const message = resp.message || "Error guardando perfil";
+                alert(message);
             }
+        },
+        error: function (xhr) {
+            let msg = xhr.responseText;
+            try {
+                const json = JSON.parse(xhr.responseText);
+                msg = json.message || msg;
+            } catch (e) {}
+            alert(msg);
+            console.log("Error guardando perfil:", msg);
         }
     });
 });
 
-
-//guardar permisos ajax
+// guardar permisos ajax
 $(document).on("submit", "#form-permisos-ajax", function (e) {
-
     e.preventDefault();
 
+    const id = document.getElementById("perm-id").value;
+
     $.ajax({
-        url: "views/perfiles.php?action=guardar_permisos",
+        url: `/perfiles/${id}/permisos`,
         type: "POST",
         data: $(this).serialize(),
+        dataType: "json",
         success: function (resp) {
-
-            let data = {};
-
-            try {
-                data = JSON.parse(resp);
-            } catch (e) {
-                console.log("Respuesta no válida:", resp);
-                return;
-            }
-
-            if (data.status === "OK") {
-
+            if (resp.status === "OK") {
                 $("#modal-permisos").modal("hide");
-
-                $(".main-sidebar").replaceWith(data.sidebar);
-
-                AbrirPagina("perfiles");
+                reloadPerfilesTable();
+            } else {
+                const message = resp.message || "Error guardando permisos";
+                alert(message);
             }
+        },
+        error: function (xhr) {
+            let msg = xhr.responseText;
+            try {
+                const json = JSON.parse(xhr.responseText);
+                msg = json.message || msg;
+            } catch (e) {}
+            alert(msg);
+            console.log("Error guardando permisos:", msg);
         }
     });
 });
 
-
-
 function PerfilCambiarEstado(id, estadoActual) {
+    const nuevoEstado = estadoActual === 1 ? 0 : 1;
 
-    let accion = (estadoActual == 1) ? "anular" : "activar";
-
-    $.get(`views/perfiles.php?action=${accion}&id=${id}`, function (resp) {
-        if (resp.trim() === "OK") {
-            AbrirPagina("perfiles");
-        } else {
-            console.log("Error cambiando estado:", resp);
+    $.ajax({
+        url: `/perfiles/${id}/estado`,
+        type: "POST",
+        data: { estado: nuevoEstado },
+        dataType: "json",
+        success: function (resp) {
+            if (resp.status === "OK") {
+                reloadPerfilesTable();
+            } else {
+                const message = resp.message || "Error cambiando estado";
+                alert(message);
+            }
+        },
+        error: function (xhr) {
+            let msg = xhr.responseText;
+            try {
+                const json = JSON.parse(xhr.responseText);
+                msg = json.message || msg;
+            } catch (e) {}
+            alert(msg);
+            console.log("Error cambiando estado:", msg);
         }
     });
 }
 
-
-
-
 function PerfilEliminar(id) {
-
     if (!confirm("¿Eliminar el perfil?")) return;
 
-    $.get(`views/perfiles.php?action=eliminar&id=${id}`, function (resp) {
-
-        if (resp.trim() === "OK") {
-            AbrirPagina("perfiles");
-        } else {
-            console.log("ERROR ELIMINANDO PERFIL:", resp);
+    $.ajax({
+        url: `/perfiles/${id}/eliminar`,
+        type: "POST",
+        dataType: "json",
+        success: function (resp) {
+            if (resp.status === "OK") {
+                reloadPerfilesTable();
+            } else {
+                const message = resp.message || "ERROR ELIMINANDO PERFIL";
+                alert(message);
+            }
+        },
+        error: function (xhr) {
+            let msg = xhr.responseText;
+            try {
+                const json = JSON.parse(xhr.responseText);
+                msg = json.message || msg;
+            } catch (e) {}
+            alert(msg);
+            console.log("ERROR ELIMINANDO PERFIL:", msg);
         }
     });
 }

@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface PerfilRepository extends JpaRepository<Perfil, Long> {
     List<Perfil> findByEstado(Integer estado);
+    List<Perfil> findByEstadoNot(Integer estado);
     boolean existsByNombrePerfil(String nombrePerfil);
 }

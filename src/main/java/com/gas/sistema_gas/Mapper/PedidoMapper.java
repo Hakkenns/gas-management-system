@@ -22,6 +22,7 @@ public interface PedidoMapper {
     @Mapping(target = "estadoPago", ignore = true)
     @Mapping(target = "estadoPedido", ignore = true)
     @Mapping(target = "subtotal", ignore = true)
+    @Mapping(target = "codigo", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     Pedido toEntity(PedidoDTO.Create createDto);

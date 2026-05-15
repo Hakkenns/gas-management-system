@@ -5,7 +5,7 @@ import com.gas.sistema_gas.dto.PerfilDTO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring"/* , uses = {OpcionMapper.class}*/)
+@Mapper(componentModel = "spring", uses = {OpcionMapper.class})
 public interface PerfilMapper {
 
     @Mapping(target = "id", ignore = true)

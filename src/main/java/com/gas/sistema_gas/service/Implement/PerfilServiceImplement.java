@@ -3,7 +3,6 @@ package com.gas.sistema_gas.service.Implement;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,7 +24,7 @@ public class PerfilServiceImplement implements PerfilService {
 
     private final PerfilRepository perfilRepository;
     private final PerfilMapper perfilMapper;
-    private final OpcionRepository opcionRepository; // Para validar los permisos
+    private final OpcionRepository opcionRepository;
 
     @Override
     @Transactional
@@ -35,9 +34,30 @@ public class PerfilServiceImplement implements PerfilService {
         }
 
         Perfil perfil = perfilMapper.toEntity(dto);
-        
-        // Cargar las opciones (permisos) seleccionadas
+
         if (dto.idOpciones() != null && !dto.idOpciones().isEmpty()) {
+            List<Opcion> opciones = opcionRepository.findAllById(dto.idOpciones());
+            perfil.setOpciones(opciones);
+        }
+
+        return perfilMapper.toResponse(perfilRepository.save(perfil));
+    }
+
+    @Override
+    @Transactional
+    public PerfilDTO.Response update(Long id, PerfilDTO.Create dto) {
+        Perfil perfil = perfilRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
+
+        if (!perfil.getNombrePerfil().equals(dto.nombrePerfil())
+                && perfilRepository.existsByNombrePerfil(dto.nombrePerfil())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El perfil ya existe");
+        }
+
+        perfil.setNombrePerfil(dto.nombrePerfil());
+        perfil.setDescripcion(dto.descripcion());
+
+        if (dto.idOpciones() != null) {
             List<Opcion> opciones = opcionRepository.findAllById(dto.idOpciones());
             perfil.setOpciones(opciones);
         }
@@ -54,6 +74,14 @@ public class PerfilServiceImplement implements PerfilService {
     }
 
     @Override
+    @Transactional
+    public List<PerfilDTO.Response> listNotDeleted() {
+        return perfilRepository.findByEstadoNot(2).stream()
+                .map(perfilMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public PerfilDTO.Response findById(Long id) {
         return perfilRepository.findById(id)
                 .map(perfilMapper::toResponse)
@@ -62,10 +90,46 @@ public class PerfilServiceImplement implements PerfilService {
 
     @Override
     @Transactional
+    public PerfilDTO.Response setState(Long id, Integer estado) {
+        Perfil perfil = perfilRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
+
+        if (perfil.getId() != null && perfil.getId().equals(1L) && !estado.equals(1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El administrador no puede ser inactivado o eliminado");
+        }
+
+        perfil.setEstado(estado);
+        return perfilMapper.toResponse(perfilRepository.save(perfil));
+    }
+
+    @Override
+    @Transactional
+    public PerfilDTO.Response assignOptions(Long id, List<Long> idOpciones) {
+        Perfil perfil = perfilRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
+
+        if (idOpciones == null || idOpciones.isEmpty()) {
+            perfil.setOpciones(List.of());
+        } else {
+            perfil.setOpciones(opcionRepository.findAllById(idOpciones));
+        }
+
+        return perfilMapper.toResponse(perfilRepository.save(perfil));
+    }
+
+    @Override
+    @Transactional
     public void delete(Long id) {
         Perfil perfil = perfilRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
-        perfil.setEstado(0);
+
+        if (perfil.getId() != null && perfil.getId().equals(1L)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El administrador no puede ser eliminado");
+        }
+
+        perfil.setEstado(2);
         perfilRepository.save(perfil);
     }
 }
