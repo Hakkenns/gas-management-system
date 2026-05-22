@@ -28,9 +28,17 @@ public class OpcionServiceImplement implements OpcionService {
     @Override
     @Transactional
     public List<OpcionDTO.SimpleResponse> listAll() {
-        return repository.findAll().stream()
-                .filter(o -> o.getEstado() == 1)
-                .map(opcionMapper::toSimpleResponse)
+        // Traemos solo los módulos principales activos
+        return repository.findByPadreIsNullAndEstado(1).stream()
+                .map(opcion -> {
+                    // Filtramos sus hijos para que solo viajen los que están activos
+                    if (opcion.getHijos() != null) {
+                        opcion.setHijos(opcion.getHijos().stream()
+                                .filter(h -> h.getEstado() == 1)
+                                .collect(Collectors.toList()));
+                    }
+                    return opcionMapper.toSimpleResponse(opcion);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -39,18 +47,25 @@ public class OpcionServiceImplement implements OpcionService {
     public List<OpcionDTO.SimpleResponse> listByPerfilId(Long perfilId) {
         if (perfilId == null) return listAll();
 
-        // Si es administrador (perfil id == 1) mostramos todas las opciones activas
+        // Si es administrador (id == 1) mostramos toda la estructura activa
         if (perfilId.equals(1L)) {
-            return repository.findAll().stream()
-                .filter(o -> o.getEstado() == 1)
-                .map(opcionMapper::toSimpleResponse)
-                .collect(Collectors.toList());
+            return listAll();
         }
 
-        // Mostrar solo opciones activas que estén asociadas al perfil (no incluir opciones globales sin perfiles)
-        return repository.findAll().stream()
-            .filter(o -> o.getEstado() == 1)
-            .filter(o -> o.getPerfiles() != null && o.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId)))
+        // Para otros perfiles: traemos raíces activas y filtramos hijos asignados a su perfil
+        return repository.findByPadreIsNullAndEstado(1).stream()
+            .map(opcion -> {
+                if (opcion.getHijos() != null) {
+                    opcion.setHijos(opcion.getHijos().stream()
+                        .filter(h -> h.getEstado() == 1)
+                        .filter(h -> h.getPerfiles() != null && h.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId)))
+                        .collect(Collectors.toList()));
+                }
+                return opcion;
+            })
+            // El menú padre se muestra si él mismo tiene permiso OR si le quedó algún hijo con permiso
+            .filter(o -> (o.getPerfiles() != null && o.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId))) 
+                      || (o.getHijos() != null && !o.getHijos().isEmpty()))
             .map(opcionMapper::toSimpleResponse)
             .collect(Collectors.toList());
     }

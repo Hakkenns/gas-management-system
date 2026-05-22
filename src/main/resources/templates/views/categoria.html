@@ -1,224 +1,135 @@
 <!DOCTYPE html>
-<html lang="es"
-      xmlns:th="http://www.thymeleaf.org">
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
 
 <body>
 
-<div th:fragment="content">
+    <div th:fragment="content">
 
-    <div class="content p-3">
+        <div class="content p-3">
 
-        <h3>
-            <i class="fas fa-tags"></i>
-            <strong>Gestión de Categorías</strong>
-        </h3>
+            <h3>
+                <i class="fas fa-tags"></i>
+                <strong>Gestión de Categorías</strong>
+            </h3>
 
-        <hr>
+            <hr>
 
-        <!-- BOTON NUEVA CATEGORIA -->
-        <button id="btn-crear-categoria"
-                class="btn btn-info mb-3"
-                data-toggle="modal"
+            <button id="btn-crear-categoria" class="btn btn-info mb-3" data-toggle="modal"
                 data-target="#modal-categoria">
+                <i class="fas fa-plus"></i>
+                Nueva Categoría
+            </button>
 
-            <i class="fas fa-plus"></i>
-            Nueva Categoría
+            <div id="contenedor-tabla-categoria" th:fragment="tablaCategorias">
+                
+                <table class="table table-bordered table-striped">
 
-        </button>
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
 
-        <!-- TABLA -->
-        <table class="table table-bordered table-striped">
+                    <tbody>
 
-            <thead class="thead-dark">
+                        <tr th:if="${#lists.isEmpty(categorias)}">
+                            <td colspan="5" class="text-center">
+                                No hay categorías registradas
+                            </td>
+                        </tr>
 
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Descripción</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
+                        <tr th:each="c : ${categorias}">
 
-            </thead>
+                            <td th:text="${c.id}"></td>
+                            <td th:text="${c.nombre}"></td>
+                            <td th:text="${c.descripcion}"></td>
 
-            <tbody>
+                            <td>
+                                <span class="badge badge-success" th:if="${c.estado == 1}">
+                                    ACTIVO
+                                </span>
+                                <span class="badge badge-danger" th:if="${c.estado == 0}">
+                                    INACTIVO
+                                </span>
+                            </td>
 
-                <!-- SI NO HAY DATOS -->
-                <tr th:if="${#lists.isEmpty(categorias)}">
+                            <td>
+                                <button type="button" class="btn btn-warning btn-sm btn-editar-categoria"
+                                    th:attr="data-id=${c.id},data-nombre=${c.nombre},data-descripcion=${c.descripcion}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
 
-                    <td colspan="5"
-                        class="text-center">
+                                <button type="button" class="btn btn-danger btn-sm btn-eliminar-categoria"
+                                    th:attr="data-id=${c.id}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
 
-                        No hay categorías registradas
+                                <button type="button" class="btn btn-secondary btn-sm btn-cambiar-estado-categoria"
+                                    th:if="${c.estado == 1}" th:attr="data-id=${c.id},data-estado=0">
+                                    <i class="fas fa-ban"></i>
+                                </button>
 
-                    </td>
+                                <button type="button" class="btn btn-success btn-sm btn-cambiar-estado-categoria"
+                                    th:if="${c.estado == 0}" th:attr="data-id=${c.id},data-estado=1">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </td>
 
-                </tr>
+                        </tr>
 
-                <!-- LISTAR -->
-                <tr th:each="c : ${categorias}">
+                    </tbody>
 
-                    <td th:text="${c.id}"></td>
+                </table>
+                
+            </div> </div>
 
-                    <td th:text="${c.nombre}"></td>
+        <div class="modal fade" id="modal-categoria" tabindex="-1" data-backdrop="false">
 
-                    <td th:text="${c.descripcion}"></td>
+            <div class="modal-dialog">
 
-                    <!-- ESTADO -->
-                    <td>
+                <div class="modal-content">
 
-                        <span class="badge badge-success"
-                              th:if="${c.estado == 1}">
-
-                            ACTIVO
-
-                        </span>
-
-                        <span class="badge badge-danger"
-                              th:if="${c.estado == 0}">
-
-                            INACTIVO
-
-                        </span>
-
-                    </td>
-
-                    <!-- ACCIONES -->
-                    <td>
-
-                        <!-- EDITAR -->
-                        <button class="btn btn-warning btn-sm btn-editar-categoria"
-
-                                th:data-id="${c.id}"
-                                th:data-nombre="${c.nombre}"
-                                th:data-descripcion="${c.descripcion}">
-
-                            <i class="fas fa-edit"></i>
-
+                    <div class="modal-header bg-dark">
+                        <h5 class="modal-title text-white" id="modal-titulo-categoria">
+                            Nueva Categoría
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            &times;
                         </button>
+                    </div>
 
-                        <!-- ELIMINAR -->
-                        <a th:href="@{/categorias/eliminar/{id}(id=${c.id})}"
-                           class="btn btn-danger btn-sm">
+                    <div class="modal-body">
 
-                            <i class="fas fa-trash"></i>
+                        <form th:action="@{/categorias}" method="post" id="form-categoria">
 
-                        </a>
+                            <input type="hidden" id="categoria-id" name="id">
 
-                        <!-- CAMBIAR ESTADO -->
-                        <a th:if="${c.estado == 1}"
-                           th:href="@{/categorias/estado/{id}/{estado}(id=${c.id},estado=0)}"
-                           class="btn btn-secondary btn-sm">
+                            <div class="form-group">
+                                <label>Nombre de Categoría</label>
+                                <input type="text" class="form-control" id="nombre-categoria" name="nombre" required>
+                            </div>
 
-                            <i class="fas fa-ban"></i>
+                            <div class="form-group mt-2">
+                                <label>Descripción</label>
+                                <textarea class="form-control" id="descripcion-categoria" name="descripcion"></textarea>
+                            </div>
 
-                        </a>
+                            <div class="text-right mt-4">
+                                <button type="submit" class="btn btn-info">
+                                    Guardar
+                                </button>
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                                    Cancelar
+                                </button>
+                            </div>
 
-                        <a th:if="${c.estado == 0}"
-                           th:href="@{/categorias/estado/{id}/{estado}(id=${c.id},estado=1)}"
-                           class="btn btn-success btn-sm">
+                        </form>
 
-                            <i class="fas fa-check"></i>
-
-                        </a>
-
-                    </td>
-
-                </tr>
-
-            </tbody>
-
-        </table>
-
-    </div>
-
-    <!-- MODAL -->
-    <div class="modal fade"
-         id="modal-categoria"
-         tabindex="-1"
-         data-backdrop="false">
-
-        <div class="modal-dialog">
-
-            <div class="modal-content">
-
-                <!-- HEADER -->
-                <div class="modal-header bg-dark">
-
-                    <h5 class="modal-title text-white"
-                        id="modal-titulo-categoria">
-
-                        Nueva Categoría
-
-                    </h5>
-
-                    <button type="button"
-                            class="close text-white"
-                            data-dismiss="modal">
-
-                        &times;
-
-                    </button>
-
-                </div>
-
-                <!-- BODY -->
-                <div class="modal-body">
-
-                    <form th:action="@{/categorias}"
-                          method="post"
-                          id="form-categoria">
-
-                        <!-- ID -->
-                        <input type="hidden"
-                               id="categoria-id"
-                               name="id">
-
-                        <!-- NOMBRE -->
-                        <div class="form-group">
-
-                            <label>Nombre de Categoría</label>
-
-                            <input type="text"
-                                   class="form-control"
-                                   id="nombre-categoria"
-                                   name="nombre"
-                                   required>
-
-                        </div>
-
-                        <!-- DESCRIPCION -->
-                        <div class="form-group mt-2">
-
-                            <label>Descripción</label>
-
-                            <textarea class="form-control"
-                                      id="descripcion-categoria"
-                                      name="descripcion"></textarea>
-
-                        </div>
-
-                        <!-- BOTONES -->
-                        <div class="text-right mt-4">
-
-                            <button type="submit"
-                                    class="btn btn-info">
-
-                                Guardar
-
-                            </button>
-
-                            <button type="button"
-                                    class="btn btn-secondary"
-                                    data-dismiss="modal">
-
-                                Cancelar
-
-                            </button>
-
-                        </div>
-
-                    </form>
+                    </div>
 
                 </div>
 
@@ -226,12 +137,10 @@
 
         </div>
 
+        <script th:src="@{/assets/js/categoria.js}"></script>
+
     </div>
 
-    <!-- JS -->
-    <script th:src="@{/assets/js/categoria.js}"></script>
-
-</div>
-
 </body>
+
 </html>

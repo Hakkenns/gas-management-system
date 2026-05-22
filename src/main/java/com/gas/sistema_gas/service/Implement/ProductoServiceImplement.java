@@ -36,7 +36,7 @@ public class ProductoServiceImplement implements ProductoService {
         @Transactional
         public List<ProductoDTO.SimpleResponse> listAll() {
                 return productoRepository.findAll().stream()
-                                .filter(p -> p.getEstado() == 1)
+                                .filter(p -> p.getEstado() != 2)                                
                                 .map(productoMapper::toSimpleResponse)
                                 .collect(Collectors.toList());
         }
@@ -109,10 +109,20 @@ public class ProductoServiceImplement implements ProductoService {
                                                 "El producto no existe"));
 
                 // Eliminación Lógica (cambiar estado)
-                producto.setEstado(0);
+                producto.setEstado(2);
 
-                // gurdamos los cambios
+                // Guardamos los cambios
                 productoRepository.save(producto);
+        }
+
+        @Override
+        @Transactional
+        public ProductoDTO.SimpleResponse setState(Long id, Integer estado) {
+                Producto producto = productoRepository.findById(id)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "El producto no existe"));
+                producto.setEstado(estado);
+                return productoMapper.toSimpleResponse(productoRepository.save(producto));
         }
 
         @Override

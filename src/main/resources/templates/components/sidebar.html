@@ -7,31 +7,44 @@
        class="main-sidebar sidebar-dark-primary elevation-4">
 
     <a th:href="@{/}" class="brand-link text-center">
-
-        <span class="brand-text font-weight-dark">
-            <strong>Sistema Ventas</strong>
-        </span>
-
+        <span class="brand-text font-weight-dark">Sistema Ventas</span>
+        <img th:src="@{/img/logo.png}" alt="Logo" class="brand-image sidebar-logo">
     </a>
 
     <div class="sidebar">
 
         <nav class="mt-2">
 
-            <ul class="nav nav-pills nav-sidebar flex-column">
+            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
 
-                <li class="nav-item"
-                    th:each="opcion : ${menu}">
+                <li th:each="opcion : ${menu}" 
+                    th:class="${#lists.isEmpty(opcion.hijos)} ? 'nav-item' : 'nav-item has-treeview'">
 
-                    <a th:href="@{${opcion.ruta}}"
+                    <a th:if="${#lists.isEmpty(opcion.hijos)}" 
+                       th:href="@{ '/' + ${opcion.ruta} }"
                        class="nav-link">
-
-                        <i class="nav-icon"
-                           th:classappend="${opcion.icono}"></i>
-
+                        <i class="nav-icon" th:classappend="${opcion.icono}"></i>
                         <p th:text="${opcion.nombre}"></p>
-
                     </a>
+
+                    <a th:if="${not #lists.isEmpty(opcion.hijos)}" 
+                       href="#" 
+                       class="nav-link">
+                        <i class="nav-icon" th:classappend="${opcion.icono}"></i>
+                        <p>
+                            <span th:text="${opcion.nombre}"></span>
+                            <i class="right fas fa-angle-left"></i>
+                        </p>
+                    </a>
+
+                    <ul th:if="${not #lists.isEmpty(opcion.hijos)}" class="nav nav-treeview pl-3">
+                        <li th:each="sub : ${opcion.hijos}" class="nav-item">
+                            <a th:href="@{ '/' + ${sub.ruta} }" class="nav-link">
+                                <i class="nav-icon" th:classappend="${sub.icono}"></i>
+                                <p th:text="${sub.nombre}"></p>
+                            </a>
+                        </li>
+                    </ul>
 
                 </li>
 

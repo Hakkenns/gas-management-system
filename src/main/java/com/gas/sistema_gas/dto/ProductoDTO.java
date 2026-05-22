@@ -32,7 +32,9 @@ public class ProductoDTO {
     public record SimpleResponse(
         Long id, 
         String nombre,
+        Long idCategoria,
         String nombreCategoria,
+        Long idProveedor,
         String nombreProveedor,
         BigDecimal precioCompra,
         BigDecimal precioVenta,

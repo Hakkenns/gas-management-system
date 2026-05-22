@@ -112,25 +112,32 @@ function performLogin() {
         })
     })
     .then(response => {
-        
         if (response.status === 401) {
-            // Usuario o contraseña incorrectos
             return response.json().then(data => {
-                throw new Error(data.detail || 'Usuario o contraseña incorrectos');
+                throw new Error(data.message || data.detail || 'Usuario o contraseña incorrectos');
             });
         }
-        
+
         if (response.status === 403) {
-            // Usuario desactivado
             return response.json().then(data => {
-                throw new Error(data.detail || 'El usuario está desactivado');
+                throw new Error(data.message || data.detail || 'El usuario está desactivado');
             });
         }
-        
-        if (!response.ok) {
-            throw new Error('Error en la autenticación');
+
+        if (response.status === 423) {
+            return response.json().then(data => {
+                throw new Error(data.message || data.detail || 'Cuenta bloqueada por 15 minutos');
+            });
         }
-        
+
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.message || data.detail || 'Error en la autenticación');
+            }).catch(() => {
+                throw new Error('Error en la autenticación');
+            });
+        }
+
         return response.json();
     })
     .then(usuarioData => {

@@ -19,7 +19,9 @@ public interface ProductoMapper {
     Producto toEntity(ProductoDTO.Create createDto);
     
     //para respuesta simple
+    @Mapping(source = "categoria.id", target = "idCategoria")
     @Mapping(source = "categoria.nombre", target = "nombreCategoria")
+    @Mapping(source = "proveedor.id", target = "idProveedor")
     @Mapping(source = "proveedor.nombre", target = "nombreProveedor")
     @Mapping(source = "estado", target = "estado")
     ProductoDTO.SimpleResponse toSimpleResponse(Producto producto);

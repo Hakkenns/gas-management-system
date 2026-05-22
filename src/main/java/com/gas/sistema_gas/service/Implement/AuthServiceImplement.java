@@ -1,6 +1,9 @@
 package com.gas.sistema_gas.service.Implement;
 
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -25,6 +28,16 @@ public class AuthServiceImplement implements AuthService {
     
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    // Mapa en memoria para llevar el control de intentos fallidos y bloqueo temporal
+    private final ConcurrentMap<String, FailedLogin> loginAttempts = new ConcurrentHashMap<>();
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos
+
+    private static class FailedLogin {
+        final AtomicInteger attempts = new AtomicInteger(0);
+        volatile long lockUntil = 0L;
+    }
+
     /**
      * Autentica un usuario validando username y password
      */
@@ -37,6 +50,18 @@ public class AuthServiceImplement implements AuthService {
                 HttpStatus.UNAUTHORIZED, 
                 "Usuario o contraseña incorrectos"
             ));
+        // Validar bloqueo temporal (si aplica)
+        long now = System.currentTimeMillis();
+        FailedLogin fl = loginAttempts.get(usuario.getUserName());
+        if (fl != null && fl.lockUntil > now) {
+            long remainingMs = fl.lockUntil - now;
+            long minutes = remainingMs / 60000;
+            long seconds = (remainingMs % 60000) / 1000;
+            throw new ResponseStatusException(
+                HttpStatus.LOCKED,
+                String.format("Cuenta bloqueada por %d minutos %d segundos", minutes, seconds)
+            );
+        }
 
         // Validar que el usuario esté activo
         if (usuario.getEstado() == 0) {
@@ -58,13 +83,26 @@ public class AuthServiceImplement implements AuthService {
         }
 
         if (!passwordMatches) {
+            // Registrar intento fallido
+            FailedLogin entry = loginAttempts.computeIfAbsent(usuario.getUserName(), k -> new FailedLogin());
+            int attempts = entry.attempts.incrementAndGet();
+            if (attempts >= MAX_ATTEMPTS) {
+                entry.lockUntil = now + LOCK_DURATION_MS;
+                entry.attempts.set(0);
+                throw new ResponseStatusException(
+                    HttpStatus.LOCKED,
+                    "Cuenta bloqueada por 15 minutos. Intente más tarde."
+                );
+            }
+
             throw new ResponseStatusException(
                 HttpStatus.UNAUTHORIZED, 
                 "Usuario o contraseña incorrectos"
             );
         }
 
-        // Convertir a DTO Response para enviar al cliente
+        // Login exitoso: limpiar contador de intentos y devolver DTO
+        loginAttempts.remove(usuario.getUserName());
         return usuarioMapper.toLoginResponse(usuario);
     }
 

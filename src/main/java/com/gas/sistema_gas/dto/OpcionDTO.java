@@ -1,5 +1,7 @@
 package com.gas.sistema_gas.dto;
 
+import java.util.List;
+
 import jakarta.validation.constraints.*;
 
 public class OpcionDTO {
@@ -18,7 +20,8 @@ public class OpcionDTO {
         String nombre,
         String icono,
         String ruta,
-        Integer estado
+        Integer estado,
+        List<OpcionDTO.SimpleResponse> hijos
     ){}
 
     public record Update(

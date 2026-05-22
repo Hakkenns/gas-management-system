@@ -29,6 +29,7 @@ public class CategoriaServiceImplement implements CategoriaService {
     @Transactional
     public List<CategoriaDTO.SimpleResponse> listAll() {
         return categoriaRepository.findAll().stream()
+                .filter(categoria -> categoria.getEstado() != 2) // Excluimos las categorías con estado = 2 (Eliminadas)
                 .map(categoriaMapper::toSimpleResponse)
                 .collect(Collectors.toList());
     }
@@ -72,7 +73,7 @@ public class CategoriaServiceImplement implements CategoriaService {
         Categoria categoria = categoriaRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
 
-        categoria.setEstado(0);
+        categoria.setEstado(2);
         categoriaRepository.save(categoria);
     }
 

@@ -8,7 +8,8 @@ public class ProveedorDTO {
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
         
-        String rubro,
+        @NotNull(message = "El rubro es obligatorio") // Cambiado a idRubro (Long)
+        Long idRubro,
 
         @NotBlank(message = "El teléfono es obligatorio")
         @Pattern(regexp = "\\d{9}", message = "El teléfono debe tener 9 dígitos")
@@ -25,7 +26,8 @@ public class ProveedorDTO {
     public record SimpleResponse(
         Long id,
         String nombre,
-        String rubro,
+        Long idRubro,        // ID del rubro por si lo necesitas en JS
+        String nombreRubro,  // Nombre del rubro para pintarlo en tu tabla HTML (ej: "Gas")
         String telefono,
         String correo,
         String ruc,
@@ -35,14 +37,18 @@ public class ProveedorDTO {
     public record Update(
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
-        String rubro,
+        
+        @NotNull(message = "El rubro es obligatorio") // Cambiado a idRubro (Long)
+        Long idRubro,
+        
         @Pattern(regexp = "\\d{9}", message = "El teléfono debe tener 9 dígitos")
         String telefono,
+        
         @Email(message = "Formato de correo no válido")
         String correo,
+        
+        @NotBlank(message = "El RUC es obligatorio")
+        @Pattern(regexp = "\\d{11}", message = "El RUC debe tener 11 dígitos")
         String ruc
-        
-        
-        
     ){}
 }

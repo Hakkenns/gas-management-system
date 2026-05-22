@@ -9,5 +9,7 @@ import com.gas.sistema_gas.Model.Opcion;
 public interface OpcionRepository extends JpaRepository<Opcion, Long>{
 
     List<Opcion> findByEstado(Integer estado);
+    List<Opcion> findByPadreIsNullAndEstado(Integer estado);
+    
 
 }

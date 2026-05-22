@@ -40,6 +40,13 @@ public class Opcion {
     @Column(nullable = false)
     private Integer estado = 1;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_padre")
+    private Opcion padre;
+
+    @OneToMany(mappedBy = "padre", cascade = CascadeType.ALL)
+    private List<Opcion> hijos;
+
     // Relación ManyToMany con Perfil (lado inverso)
     @ManyToMany(mappedBy = "opciones")
     @JsonIgnoreProperties("opciones")

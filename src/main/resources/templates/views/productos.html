@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+    <div th:fragment="content">
+
+        <div class="content p-3">
+
+            <h3>
+                <i class="fas fa-box"></i>
+                <strong>Gestión de Productos</strong>
+            </h3>
+
+            <hr>
+
+            <button id="btn-crear-producto" class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-producto">
+                <i class="fas fa-plus"></i>
+                Nuevo Producto
+            </button>
+
+            <div id="contenedor-tabla-productos">
+                <table class="table table-bordered table-striped" id="tabla-productos" th:fragment="tablaProductos">
+
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Proveedor</th>
+                            <th>P. Compra</th>
+                            <th>P. Venta</th>
+                            <th>Stock Ll.</th>
+                            <th>Stock Vac.</th>
+                            <th>Stock Mín.</th>
+                            <th>¿Envase?</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(productos)}">
+                            <td colspan="12" class="text-center">
+                                No hay productos registrados
+                            </td>
+                        </tr>
+
+                        <tr th:each="p : ${productos}">
+                            <td th:text="${p.id}"></td>
+                            <td th:text="${p.nombre}"></td>
+                            <td th:text="${p.nombreCategoria}"></td>
+                            <td th:text="${p.nombreProveedor}"></td>
+                            <td th:text="'S/ ' + ${p.precioCompra}"></td>
+                            <td th:text="'S/ ' + ${p.precioVenta}"></td>
+                            <td th:text="${p.stockLlenos}"></td>
+                            <td th:text="${p.stockVacios}"></td>
+                            <td th:text="${p.stockMinimo}"></td>
+                            <td>
+                                <span class="badge badge-info" th:if="${p.requiereEnvase}">SÍ</span>
+                                <span class="badge badge-secondary" th:if="${!p.requiereEnvase}">NO</span>
+                            </td>
+                            <td>
+                                <span class="badge badge-success" th:if="${p.estado == 1}">ACTIVO</span>
+                                <span class="badge badge-danger" th:if="${p.estado == 0}">INACTIVO</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-warning btn-sm btn-editar-producto"
+                                    th:data-id="${p.id}" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+
+                                <button type="button" th:if="${p.estado == 1}"
+                                    class="btn btn-secondary btn-sm btn-estado-producto" th:data-id="${p.id}"
+                                    th:data-estado="0" title="Inhabilitar">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+
+                                <button type="button" th:if="${p.estado == 0}"
+                                    class="btn btn-success btn-sm btn-estado-producto" th:data-id="${p.id}"
+                                    th:data-estado="1" title="Activar">
+                                    <i class="fas fa-check"></i>
+                                </button>
+
+                                <button type="button" class="btn btn-danger btn-sm btn-eliminar-producto"
+                                    th:data-id="${p.id}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modal-producto" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+
+                    <div class="modal-header bg-dark">
+                        <h5 class="modal-title text-white" id="modal-titulo-producto">Nuevo Producto</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <form id="form-producto" th:action="@{/productos}" method="post">
+
+                            <input type="hidden" id="producto-id" name="id">
+
+                            <div class="row">
+                                <div class="col-md-6 form-group">
+                                    <label>Nombre del Producto</label>
+                                    <input type="text" class="form-control" id="producto-nombre" name="nombre" required>
+                                </div>
+
+                                <div class="col-md-6 form-group">
+                                    <label>URL de la Imagen</label>
+                                    <input type="text" class="form-control" id="producto-urlImagen" name="urlImagen">
+                                </div>
+                            </div>
+
+                            <div class="row mt-2">
+                                <div class="col-md-6 form-group">
+                                    <label>Categoría</label>
+                                    <select class="form-control" id="producto-categoria" name="idCategoria" required>
+                                        <option value="">-- Seleccione Categoría --</option>
+                                        <option th:each="c : ${categorias}" th:value="${c.id}" th:text="${c.nombre}">
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 form-group">
+                                    <label>Proveedor</label>
+                                    <select class="form-control" id="producto-proveedor" name="idProveedor" required>
+                                        <option value="">-- Seleccione Proveedor --</option>
+                                        <option th:each="p : ${proveedores}" th:value="${p.id}" th:text="${p.nombre}">
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mt-2">
+                                <div class="col-md-6 form-group">
+                                    <label>Precio Compra</label>
+                                    <input type="number" step="0.01" class="form-control" id="producto-precioCompra"
+                                        name="precioCompra" required>
+                                </div>
+
+                                <div class="col-md-6 form-group">
+                                    <label>Precio Venta</label>
+                                    <input type="number" step="0.01" class="form-control" id="producto-precioVenta"
+                                        name="precioVenta" required>
+                                </div>
+                            </div>
+
+                            <div class="row mt-2">
+                                <div class="col-md-4 form-group">
+                                    <label>Stock Llenos (Gas)</label>
+                                    <input type="number" class="form-control" id="producto-stockLlenos"
+                                        name="stockLlenos" value="0" min="0">
+                                </div>
+
+                                <div class="col-md-4 form-group">
+                                    <label>Stock Vacíos (Envases)</label>
+                                    <input type="number" class="form-control" id="producto-stockVacios"
+                                        name="stockVacios" value="0" min="0">
+                                </div>
+
+                                <div class="col-md-4 form-group">
+                                    <label>Stock Mínimo</label>
+                                    <input type="number" class="form-control" id="producto-stockMinimo"
+                                        name="stockMinimo" value="0" min="0">
+                                </div>
+                            </div>
+
+                            <div class="row mt-2">
+                                <div class="col-md-8 form-group">
+                                    <label>Descripción</label>
+                                    <textarea class="form-control" id="producto-descripcion" name="descripcion"
+                                        rows="2"></textarea>
+                                </div>
+
+                                <div class="col-md-4 form-group d-flex align-items-center mt-4">
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" class="custom-control-input" id="producto-requiereEnvase"
+                                            name="requiereEnvase" value="true">
+                                        <label class="custom-control-label" for="producto-requiereEnvase">¿Requiere
+                                            Envase de retorno?</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-right mt-4">
+                                <button type="submit" class="btn btn-info">Guardar</button>
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/productos.js}"></script>
+
+    </div>
+
+</body>
+
+</html>
