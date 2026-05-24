@@ -49,6 +49,9 @@ public class Compra {
     @NotNull(message = "El usuario es obligatorio")
     private Usuario usuario;
 
+    @Column(name = "situacion", nullable = false)
+    private Integer situacion = 1;
+
     // Auditoría
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private LocalDateTime createdAt;

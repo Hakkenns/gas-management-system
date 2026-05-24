@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+    <div th:fragment="content">
+
+        <div class="content p-3">
+            <h3>
+                <i class="fas fa-shopping-cart"></i>
+                <strong>Registro de Compras</strong>
+            </h3>
+            <hr>
+
+            <button id="btn-crear-compra" class="btn btn-info mb-3">
+                <i class="fas fa-plus"></i> Nueva Compra
+            </button>
+
+            <div id="contenedor-tabla">
+                <table class="table table-bordered table-striped" id="tabla-compras" th:fragment="tablaCompras">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>N° Documento</th>
+                            <th>Proveedor</th>
+                            <th>Monto Total</th>
+                            <th>Fecha Registro</th>
+                            <th>Usuario</th>
+                            <th>Situación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(compras)}">
+                            <td colspan="7" class="text-center">No hay registros de compras</td>
+                        </tr>
+                        <tr th:each="c : ${compras}">
+                            <td th:text="${c.id}"></td>
+                            <td th:text="${c.numDocumento}"></td>
+                            <td th:text="${c.nombreProveedor}"></td>
+                            <td th:text="'S/ ' + ${c.montoTotal}"></td>
+                            <td th:text="${c.fechaCompra}"></td>
+                            <td th:text="${c.nombreUsuario}"></td>
+                            <td>
+                                <span class="badge badge-success" th:if="${c.situacion == 1}">REALIZADO</span>
+                                <span class="badge badge-danger" th:if="${c.situacion == 2}">ANULADO</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-info btn-sm btn-ver-detalle" th:data-id="${c.id}"
+                                    title="Ver Detalles">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-anular-compra ml-1" th:data-id="${c.id}"
+                                    title="Anular Compra"
+                                    th:class="${c.situacion == 1 ? 'btn btn-sm btn-danger btn-anular-compra ml-1' : 'btn btn-sm btn-secondary btn-anular-compra ml-1'}"
+                                    th:disabled="${c.situacion == 2}">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal fade" id="modal-compra" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+
+                <div class="modal-content">
+
+                    <div class="modal-header bg-dark">
+                        <h5 class="modal-title text-white">Ingresar Documento de Compra</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <form id="form-compra">
+                            <div class="row">
+                                <div class="form-group col-md-4">
+                                    <label>Proveedor</label>
+                                    <select class="form-control" id="input-proveedor" required>
+                                        <option value="">-- Seleccione proveedor --</option>
+                                        <option th:each="p : ${proveedores}" th:value="${p.id}" th:text="${p.nombre}">
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label>Nota de Compra</label>
+                                    <input type="text" class="form-control" id="input-documento"
+                                        placeholder="Ejem: NC001-0001" readonly required>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label>Fecha Emisión</label>
+                                    <input type="datetime-local" class="form-control" id="input-fecha" required>
+                                </div>
+                            </div>
+
+                            <div class="card border-secondary mt-3">
+                                <div class="card-header bg-secondary text-white py-2">Agregar Productos al Detalle
+                                </div>
+                                <div class="card-body row align-items-end py-3">
+                                    <div class="form-group col-md-5 mb-0">
+                                        <label>Producto</label>
+                                        <select class="form-control" id="select-producto">
+                                            <option value="">-- Seleccione --</option>
+                                            <option th:each="prod : ${productos}" th:value="${prod.id}"
+                                                th:text="${prod.nombre}"></option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <label>Cantidad</label>
+                                        <input type="number" class="form-control" id="select-cantidad" min="1"
+                                            value="1">
+                                    </div>
+                                    <div class="form-group col-md-3 mb-0">
+                                        <label>Precio Costo</label>
+                                        <input type="number" class="form-control" id="select-precio" step="0.01"
+                                            min="0.01">
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <button type="button" id="btn-agregar-lista" class="btn btn-success btn-block">
+                                            <i class="fas fa-plus"></i> Añadir
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <table class="table table-sm table-bordered mt-3">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th width="15%">Cantidad</th>
+                                        <th width="20%">P. Unitario</th>
+                                        <th width="20%">Subtotal</th>
+                                        <th width="10%">Quitar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-filas-compras"></tbody>
+                            </table>
+
+                            <div class="text-right mt-3">
+                                <h5><strong>Total General: S/ <span id="txt-total-general">0.00</span></strong></h5>
+                            </div>
+
+                            <div class="text-right mt-4">
+                                <button type="submit" class="btn btn-info">Registrar Ingreso</button>
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modal-detalle-ver" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">Artículos en este Documento</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table table-sm table-striped table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Cantidad Ingresada</th>
+                                    <th>Costo de Adquisición</th>
+                                </tr>
+                            </thead>
+                            <tbody id="filas-ver-detalle"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/compras.js}"></script>
+    </div>
+</body>
+
+</html>
