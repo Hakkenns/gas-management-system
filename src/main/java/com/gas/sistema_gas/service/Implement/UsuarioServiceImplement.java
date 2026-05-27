@@ -69,6 +69,7 @@ public class UsuarioServiceImplement implements UsuarioService {
 
     @Override
     @Transactional
+    @SuppressWarnings("unchecked")
     public UsuarioDTO.SimpleResponse updateUser(Long id, UsuarioDTO.Update updateDto) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));

@@ -393,7 +393,7 @@ CREATE TABLE `productos` (
   `stock_vacios` int(11) NOT NULL DEFAULT 0,
   `stock_minimo` int(11) NOT NULL DEFAULT 0,
   `requiere_envase` bit(1) NOT NULL DEFAULT b'0',
-  `url_imagen` varchar(255) DEFAULT NULL,
+  `url_imagen` TEXT DEFAULT NULL,
   `estado` int(11) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()

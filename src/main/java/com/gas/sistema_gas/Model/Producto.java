@@ -33,13 +33,19 @@ public class Producto {
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
-    @Column(name ="url_imagen", length = 255)
+    @Lob
+    @Column(name = "url_imagen", columnDefinition = "LONGTEXT")
     private String urlImagen;
 
     @Column(name = "precio_compra", nullable = false, precision = 10, scale = 2)
     @NotNull(message = "El precio de compra es obligatorio")
     @DecimalMin(value = "0.00", message = "El precio de compra no puede ser negativo")
     private BigDecimal precioCompra;
+
+    @Column(name = "ganancia_producto", nullable = false, precision = 10, scale = 2)
+    @NotNull(message = "La ganancia del producto es obligatoria")
+    @DecimalMin(value = "0.00", message = "La ganancia no puede ser negativa")
+    private BigDecimal gananciaProducto = BigDecimal.ZERO;
 
     @Column(name = "precio_venta", nullable = false, precision = 10, scale = 2)
     @NotNull(message = "El precio de venta es obligatorio")
@@ -74,10 +80,7 @@ public class Producto {
     @NotNull(message = "La categoría es obligatoria")
     private Categoria categoria;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_proveedor", nullable = false)
-    @NotNull(message = "El proveedor es obligatorio")
-    private Proveedor proveedor;
+ 
 
     // Auditoría
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)

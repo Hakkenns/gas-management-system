@@ -12,7 +12,7 @@ public interface ProductoMapper {
     //para converti de dto a entidad
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "categoria", ignore = true)
-    @Mapping(target = "proveedor", ignore = true)
+    
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "estado", ignore = true)
@@ -21,15 +21,17 @@ public interface ProductoMapper {
     //para respuesta simple
     @Mapping(source = "categoria.id", target = "idCategoria")
     @Mapping(source = "categoria.nombre", target = "nombreCategoria")
-    @Mapping(source = "proveedor.id", target = "idProveedor")
-    @Mapping(source = "proveedor.nombre", target = "nombreProveedor")
+    @Mapping(source = "descripcion", target = "descripcion")
     @Mapping(source = "estado", target = "estado")
     ProductoDTO.SimpleResponse toSimpleResponse(Producto producto);
 
     //paraupdate esto es el qeui nos esta fallando
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "categoria", ignore = true)
-    @Mapping(target = "proveedor", ignore = true)
+    @Mapping(target = "urlImagen", ignore = true)
+    @Mapping(target = "precioCompra", ignore = true)
+    @Mapping(target = "precioVenta", ignore = true)
+    @Mapping(target = "stockLlenos", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     void updateEntityFromDto(ProductoDTO.Update updateDto, @MappingTarget Producto producto);

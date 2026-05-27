@@ -9,22 +9,16 @@ public class ProductoDTO {
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
         String descripcion,
-        String urlImagen,
-        @NotNull(message = "El precio de compra es obligatorio")
-        @DecimalMin(value = "0.00", message= "El precio de compra no puede ser negativo")
-        BigDecimal precioCompra,
-        @NotNull(message = "El precio de venta es obligatorio")
-        @DecimalMin(value = "0.01", message = "El precio de venta debe ser mayor a 0")
-        BigDecimal precioVenta,
         boolean requiereEnvase,
         @NotNull(message = "La categoría es obligatoria")
         Long idCategoria,
-        @NotNull(message = "El proveedor es obligatorio")
-        Long idProveedor,
-        @Min(value = 0, message = "El stock de llenos no puede ser negativo")
-        Integer stockLlenos,
+        @NotNull(message = "La ganancia del producto es obligatoria")
+        @DecimalMin(value = "0.00", message = "La ganancia no puede ser negativa")
+        BigDecimal gananciaProducto,
+        @NotNull(message = "El stock de vacíos es obligatorio")
         @Min(value = 0, message = "El stock de vacíos no puede ser negativo")
         Integer stockVacios,
+        @NotNull(message = "El stock mínimo es obligatorio")
         @Min(value = 0, message = "El stock mínimo no puede ser negativo")
         Integer stockMinimo
     ){}
@@ -32,11 +26,12 @@ public class ProductoDTO {
     public record SimpleResponse(
         Long id, 
         String nombre,
+        String descripcion,
+        String urlImagen,
         Long idCategoria,
         String nombreCategoria,
-        Long idProveedor,
-        String nombreProveedor,
         BigDecimal precioCompra,
+        BigDecimal gananciaProducto,
         BigDecimal precioVenta,
         boolean requiereEnvase,
         Integer stockLlenos,
@@ -49,19 +44,17 @@ public class ProductoDTO {
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
         String descripcion,
-        String urlImagen,
-        @NotNull
+        @NotNull(message = "La ganancia del producto es obligatoria")
         @DecimalMin(value = "0.00")
-        BigDecimal precioCompra,
-        @DecimalMin(value = "0.01")
-        BigDecimal precioVenta,
+        BigDecimal gananciaProducto,
         boolean requiereEnvase,
         @NotNull
         Long idCategoria,
-        @NotNull
-        Long idProveedor,
-        Integer stockLlenos,
+        @NotNull(message = "El stock de vacíos es obligatorio")
+        @Min(value = 0, message = "El stock de vacíos no puede ser negativo")
         Integer stockVacios,
+        @NotNull(message = "El stock mínimo es obligatorio")
+        @Min(value = 0, message = "El stock mínimo no puede ser negativo")
         Integer stockMinimo,
         Integer estado
     ){}
