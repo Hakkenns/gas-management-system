@@ -115,7 +115,7 @@ public class ProductoController {
         }
     }
 
-    // Eliminar producto vía AJAX (Borrado lógico)
+    // Eliminar producto vía AJAX (Borrado lógico),actualizacion para git
     @PostMapping("/{id}/eliminar")
     @ResponseBody
     public Map<String, Object> eliminarProductoAjax(@PathVariable Long id) {
