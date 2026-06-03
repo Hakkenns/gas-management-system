@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+
+<body>
+    <div th:fragment="content">
+
+        <div class="content p-3">
+            <h3>
+                <i class="fas fa-cash-register"></i>
+                <strong>Ventas</strong>
+            </h3>
+            <hr>
+
+            <div class="row mb-3">
+                <div class="col-md-4 text-right">
+                    <button type="button" class="btn btn-info" disabled>
+                        <i class="fas fa-plus"></i> Nueva venta
+                    </button>
+                </div>
+            </div>
+
+            <div id="contenedor-tabla-ventas">
+                <table class="table table-bordered table-striped" id="tabla-ventas">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Monto Total</th>
+                            <th>Estado Pedido</th>
+                            <th>Estado Pago</th>
+                            <th>Método Pago</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(ventas)}">
+                            <td colspan="9" class="text-center">No hay ventas registradas</td>
+                        </tr>
+                        <tr th:each="venta : ${ventas}">
+                            <td th:text="${venta.idPedido}"></td>
+                            <td th:text="${venta.idPedido != null ? 'PED-' + venta.idPedido : 'N/A'}"></td>
+                            <td th:text="${venta.fechaSolicitud}"></td>
+                            <td th:text="${venta.nombreCliente}"></td>
+                            <td th:text="'S/ ' + ${venta.montoTotal}"></td>
+                            <td>
+                                <span class="badge badge-success" th:if="${venta.estadoPedido == 'ENTREGADO'}">ENTREGADO</span>
+                                <span class="badge badge-warning" th:if="${venta.estadoPedido == 'PENDIENTE'}">PENDIENTE</span>
+                                <span class="badge badge-danger" th:if="${venta.estadoPedido == 'ANULADO'}">ANULADO</span>
+                                <span class="badge badge-secondary" th:if="${venta.estadoPedido != 'ENTREGADO' and venta.estadoPedido != 'PENDIENTE' and venta.estadoPedido != 'ANULADO'}" th:text="${venta.estadoPedido}"></span>
+                            </td>
+                            <td>
+                                <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
+                                <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
+                                <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE'}" th:text="${venta.estadoPago}"></span>
+                            </td>
+                            <td th:text="${venta.metodoPago}"></td>
+                            <td>
+                                <button type="button" class="btn btn-info btn-sm btn-ver-detalle-venta" th:data-id="${venta.idPedido}">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modal-detalle-venta" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">Detalle de Venta</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-striped">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th class="text-center">Cantidad</th>
+                                        <th class="text-right">Precio Unitario</th>
+                                        <th class="text-right">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalle-venta-body">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="detalle-venta-sin-items" class="text-center text-muted" style="display:none;">
+                            No hay detalles disponibles para esta venta.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/ventas-view.js}"></script>
+    </div>
+</body>
+
+</html>

@@ -305,7 +305,8 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (6, 'Proveedores', 'fas fa-truck', 'proveedores', 1, NULL),
 (7, 'Tipos de productos', 'fas fa-box', 'categorias', 1, 4),
 (8, 'Rubros', 'fas fa-tags', 'rubros', 1, 4),
-(9, 'Compras', 'fas fa-shopping-cart', 'compras', 1, NULL);
+(9, 'Compras', 'fas fa-shopping-cart', 'compras', 1, NULL),
+(10, 'Ventas', 'fas fa-cash-register', 'ventas', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -720,7 +721,7 @@ ALTER TABLE `inventario`
 -- AUTO_INCREMENT de la tabla `opciones`
 --
 ALTER TABLE `opciones`
-  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `pedidos`
