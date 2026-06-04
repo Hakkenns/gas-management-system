@@ -95,4 +95,13 @@ public class ClienteServiceImplement implements ClienteService{
                 .map(clienteMapper::toSimpleResponse)
                 .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
     }
+
+    @Override
+    @Transactional
+    public ClienteDTO.SimpleResponse findByDni(String dni){
+        return clienteRepository.findByDni(dni)
+                .filter(cliente -> cliente.getEstado() == 1)
+                .map(clienteMapper::toSimpleResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+    }
 }

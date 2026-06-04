@@ -76,23 +76,31 @@
                         <form id="form-venta">
                             <div class="row">
                                 <div class="form-group col-md-4">
-                                    <label>Cliente</label>
-                                    <select class="form-control" id="select-cliente" required>
-                                        <option value="">-- Seleccione cliente --</option>
-                                        <option th:each="cliente : ${clientes}" th:value="${cliente.id}" th:text="${cliente.nombre}"></option>
-                                    </select>
+                                <label>DNI del cliente</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="input-dni-cliente" placeholder="Ej: 12345678" maxlength="8" required>
+                                    <div class="input-group-append">
+                                        <button type="button" id="btn-buscar-cliente" class="btn btn-secondary">Buscar</button>
+                                    </div>
                                 </div>
-                                <div class="form-group col-md-4">
-                                    <label>Método de Pago</label>
-                                    <select class="form-control" id="select-metodo" required>
-                                        <option value="">-- Seleccione método --</option>
-                                        <option th:each="metodo : ${metodosPago}" th:value="${metodo.id}" th:text="${metodo.nombre}"></option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-md-4">
-                                    <label>Código de Venta</label>
-                                    <input type="text" class="form-control" id="input-codigo" placeholder="NV001-0001" readonly>
-                                </div>
+                                <small id="cliente-feedback" class="form-text text-muted">Ingrese el DNI y busque el cliente.</small>
+                                <input type="hidden" id="input-id-cliente">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Cliente</label>
+                                <input type="text" class="form-control" id="input-nombre-cliente" readonly placeholder="Nombre del cliente aparecerá aquí">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Método de Pago</label>
+                                <select class="form-control" id="select-metodo" required>
+                                    <option value="">-- Seleccione método --</option>
+                                    <option th:each="metodo : ${metodosPago}" th:value="${metodo.id}" th:text="${metodo.nombre}"></option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Código de Venta</label>
+                                <input type="text" class="form-control" id="input-codigo" placeholder="NV001-0001" readonly>
+                            </div>
                             </div>
 
                             <div class="form-group">

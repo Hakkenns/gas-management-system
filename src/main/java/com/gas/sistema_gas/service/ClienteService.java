@@ -11,5 +11,6 @@ public interface ClienteService{
     ClienteDTO.SimpleResponse updateClient(Long id, ClienteDTO.Update updateDto);
     void deleteClient(Long id);
     ClienteDTO.SimpleResponse findById(Long id);
+    ClienteDTO.SimpleResponse findByDni(String dni);
     List<ClienteDTO.SimpleResponse> listAll();
 }

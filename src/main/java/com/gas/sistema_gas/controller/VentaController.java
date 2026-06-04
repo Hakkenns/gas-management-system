@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.gas.sistema_gas.Model.DetallePedido;
@@ -83,6 +84,17 @@ public class VentaController {
         } catch (Exception e) {
             return Map.of("status", "ERROR", "message", e.getMessage());
         }
+    }
+
+    @GetMapping("/cliente")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> buscarClientePorDni(@RequestParam String dni) {
+        var cliente = clienteService.findByDni(dni);
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("id", cliente.id());
+        respuesta.put("nombre", cliente.nombre());
+        respuesta.put("dni", cliente.dni());
+        return ResponseEntity.ok(respuesta);
     }
 
     @GetMapping("/detalle/{id}")

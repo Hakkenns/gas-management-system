@@ -15,6 +15,38 @@ $(function() {
         $('#txt-total-general').text(formatMoney(total));
     }
 
+    function limpiarClienteSeleccionado() {
+        $('#input-id-cliente').val('');
+        $('#input-nombre-cliente').val('');
+        $('#cliente-feedback').text('Ingrese el DNI y busque el cliente.');
+    }
+
+    function mostrarCliente(cliente) {
+        $('#input-id-cliente').val(cliente.id);
+        $('#input-nombre-cliente').val(cliente.nombre);
+        $('#cliente-feedback').text('Cliente encontrado.');
+    }
+
+    function buscarClientePorDni(dni) {
+        if (!/^[0-9]{8}$/.test(dni)) {
+            limpiarClienteSeleccionado();
+            return;
+        }
+
+        fetch(`/ventas/cliente?dni=${dni}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Cliente no encontrado');
+                }
+                return response.json();
+            })
+            .then(cliente => mostrarCliente(cliente))
+            .catch(() => {
+                limpiarClienteSeleccionado();
+                $('#cliente-feedback').text('No se encontró un cliente con ese DNI.');
+            });
+    }
+
     function renderizarFilas() {
         const tbody = $('#tabla-filas-venta').empty();
         detallesVenta.forEach((item, index) => {
@@ -43,6 +75,9 @@ $(function() {
         $('#tabla-filas-venta').empty();
         $('#txt-total-general').text('0.00');
 
+        limpiarClienteSeleccionado();
+        $('#input-dni-cliente').val('');
+
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
             .then(r => r.json())
             .then(data => {
@@ -56,6 +91,17 @@ $(function() {
             .finally(() => {
                 $('#modal-venta').modal('show');
             });
+    });
+
+    $('#btn-buscar-cliente').on('click', function() {
+        buscarClientePorDni($('#input-dni-cliente').val().trim());
+    });
+
+    $('#input-dni-cliente').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            buscarClientePorDni($(this).val().trim());
+        }
     });
 
     $('#select-producto').on('change', function() {
@@ -108,8 +154,14 @@ $(function() {
             return;
         }
 
+        const clientId = parseInt($('#input-id-cliente').val(), 10);
+        if (!clientId) {
+            alert('Debe buscar y seleccionar un cliente por DNI antes de registrar la venta.');
+            return;
+        }
+
         const payload = {
-            idCliente: parseInt($('#select-cliente').val(), 10),
+            idCliente: clientId,
             idMetodoPago: parseInt($('#select-metodo').val(), 10),
             observaciones: $('#input-observaciones').val(),
             detalles: detallesVenta.map(item => ({
