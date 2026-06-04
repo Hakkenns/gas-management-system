@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.ClienteMapper;
@@ -15,6 +16,7 @@ import com.gas.sistema_gas.service.ClienteService;
 
 import jakarta.transaction.Transactional;
 
+@Service
 public class ClienteServiceImplement implements ClienteService{
     
     @Autowired

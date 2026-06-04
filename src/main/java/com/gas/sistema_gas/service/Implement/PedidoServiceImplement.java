@@ -26,6 +26,7 @@ import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.service.PedidoService;
 
 import jakarta.transaction.Transactional;
@@ -49,6 +50,8 @@ public class PedidoServiceImplement implements PedidoService {
     private DetallePedidoRepository detalleRepository;
     @Autowired
     private MetodoPagoRepository metodoPagoRepository;
+    @Autowired
+    private CorrelativoService correlativoService;
 
     @Override
     @Transactional
@@ -60,24 +63,31 @@ public class PedidoServiceImplement implements PedidoService {
 
     @Override
     @Transactional
-    public PedidoDTO.SimpleResponse createOrder(PedidoDTO.Create createDto) {
+    public PedidoDTO.SimpleResponse createOrder(PedidoDTO.Create createDto, Long idUsuarioLogueado) {
+        if (createDto.detalles() == null || createDto.detalles().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe agregar al menos un detalle de venta");
+        }
+
         Pedido pedido = pedidoMapper.toEntity(createDto);
 
         // 1. Validar Relaciones
         Cliente cliente = clienteRepository.findById(createDto.idCliente())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
-        Usuario usuario = usuarioRepository.findById(createDto.idUsuario())
+        Usuario usuario = usuarioRepository.findById(idUsuarioLogueado)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no existe"));
-        Empleado empleado = empleadoRepository.findById(createDto.idEmpleado())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado"));
         MetodoPago metodoPago = metodoPagoRepository.findById(createDto.idMetodoPago())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
 
-        // 2. Generar Código Correlativo Simple (Ej: PED-2026-0001)
-        // Nota: Esto se puede mejorar con un método en el Repo, pero aquí te doy la
-        // lógica base
-        pedido.setCodigo("PED-" + System.currentTimeMillis()); // Generación rápida temporal
+        Empleado empleado = null;
+        if (createDto.idEmpleado() != null) {
+            empleado = empleadoRepository.findById(createDto.idEmpleado())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado"));
+        } else if (usuario.getEmpleado() != null) {
+            empleado = usuario.getEmpleado();
+        }
 
+        // 2. Generar código definitivo de venta
+        pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
         pedido.setCliente(cliente);
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
@@ -86,41 +96,42 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setEstadoPedido("PENDIENTE");
         pedido.setEstadoPago("PENDIENTE");
 
-        // Guardar cabecera inicial
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
-
         BigDecimal montoAcumulado = BigDecimal.ZERO;
 
-        // 3. Procesar Detalles y Stock
         for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            // Validar Stock Llenos
+            if (item.cantidad() == null || item.cantidad() < 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La cantidad debe ser mayor a cero");
+            }
+
+            BigDecimal precioUnitario = item.precioUnitario() != null && item.precioUnitario().compareTo(BigDecimal.ZERO) > 0
+                    ? item.precioUnitario()
+                    : producto.getPrecioVenta();
+
             if (producto.getStockLlenos() < item.cantidad()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Stock insuficiente para " + producto.getNombre());
             }
 
-            // Descontar Stock
             producto.setStockLlenos(producto.getStockLlenos() - item.cantidad());
             productoRepository.save(producto);
 
-            // Crear Detalle
             DetallePedido detalle = new DetallePedido();
             detalle.setPedido(pedidoGuardado);
             detalle.setProducto(producto);
             detalle.setCantidad(item.cantidad());
-            detalle.setPrecioUnitario(item.precioUnitario());
+            detalle.setPrecioUnitario(precioUnitario);
 
-            // Calculamos el importe de la línea
-            BigDecimal importeLinea = item.precioUnitario().multiply(new BigDecimal(item.cantidad()));
+            BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
             montoAcumulado = montoAcumulado.add(importeLinea);
 
             detalleRepository.save(detalle);
         }
 
-        // 4. Actualizar Totales
         pedidoGuardado.setSubtotal(montoAcumulado);
         pedidoGuardado.setMontoTotal(montoAcumulado);
 

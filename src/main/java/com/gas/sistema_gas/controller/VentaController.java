@@ -4,22 +4,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpSession;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.service.ClienteService;
+import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.service.OpcionService;
 import com.gas.sistema_gas.service.PedidoService;
-
-import jakarta.servlet.http.HttpSession;
+import com.gas.sistema_gas.service.ProductoService;
 
 @Controller
 @RequestMapping("/ventas")
@@ -32,6 +39,15 @@ public class VentaController {
     private OpcionService opcionService;
 
     @Autowired
+    private ClienteService clienteService;
+
+    @Autowired
+    private ProductoService productoService;
+
+    @Autowired
+    private MetodoPagoService metodoPagoService;
+
+    @Autowired
     private DetallePedidoRepository detallePedidoRepository;
 
     @GetMapping
@@ -39,8 +55,34 @@ public class VentaController {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("ventas", pedidoService.listAll());
+        model.addAttribute("clientes", clienteService.listAll());
+        model.addAttribute("productos", productoService.listAll());
+        model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("contenido", "views/ventas");
         return "components/layout";
+    }
+
+    @PostMapping
+    @ResponseBody
+    public Map<String, Object> registrarVenta(@Valid @RequestBody PedidoDTO.Create pedidoDto,
+                                               BindingResult result,
+                                               HttpSession session) {
+        if (result.hasErrors()) {
+            String message = result.getAllErrors().get(0).getDefaultMessage();
+            return Map.of("status", "ERROR", "message", message);
+        }
+
+        Long idUsuarioLogueado = (Long) session.getAttribute("usuarioId");
+        if (idUsuarioLogueado == null) {
+            return Map.of("status", "ERROR", "message", "No se ha identificado al usuario logueado");
+        }
+
+        try {
+            pedidoService.createOrder(pedidoDto, idUsuarioLogueado);
+            return Map.of("status", "OK");
+        } catch (Exception e) {
+            return Map.of("status", "ERROR", "message", e.getMessage());
+        }
     }
 
     @GetMapping("/detalle/{id}")
