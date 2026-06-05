@@ -18,7 +18,6 @@ public interface PedidoMapper {
     @Mapping(target = "fechaSolicitud", ignore = true)
     @Mapping(target = "montoTotal", ignore = true)
     @Mapping(target = "fechaEntrega", ignore = true)
-    @Mapping(target = "numOperacion", ignore = true)
     @Mapping(target = "estadoPago", ignore = true)
     @Mapping(target = "estadoPedido", ignore = true)
     @Mapping(target = "subtotal", ignore = true)

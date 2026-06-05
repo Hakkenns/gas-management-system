@@ -26,6 +26,7 @@ public class PedidoDTO {
         Long idUsuario,
         @NotNull(message = "El método pago es obligatorio")
         Long idMetodoPago,
+        String numOperacion,
         String observaciones,
         @NotNull(message = "El detalle de la venta es obligatorio")
         List<DetalleCreate> detalles

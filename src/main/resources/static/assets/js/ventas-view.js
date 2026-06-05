@@ -10,6 +10,19 @@ $(function() {
         return parseMoney(value).toFixed(2);
     }
 
+    function actualizarCamposMetodoPago() {
+        const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
+        const esDigital = metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin';
+
+        if (esDigital) {
+            $('#row-num-operacion').show();
+            $('#input-num-operacion').prop('required', true);
+        } else {
+            $('#row-num-operacion').hide();
+            $('#input-num-operacion').prop('required', false).val('');
+        }
+    }
+
     function actualizarTotal() {
         const total = detallesVenta.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
         $('#txt-total-general').text(formatMoney(total));
@@ -93,6 +106,7 @@ $(function() {
 
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
+        actualizarCamposMetodoPago();
 
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
             .then(r => r.json())
@@ -131,6 +145,10 @@ $(function() {
         if (precio !== undefined) {
             $('#select-precio').val(formatMoney(precio));
         }
+    });
+
+    $('#select-metodo').on('change', function() {
+        actualizarCamposMetodoPago();
     });
 
     $('#btn-agregar-detalle').on('click', function() {
@@ -188,6 +206,14 @@ $(function() {
             return;
         }
 
+        const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
+        const numOperacion = $('#input-num-operacion').val().trim() || null;
+
+        if ((metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin') && !numOperacion) {
+            alert('El número de operación es obligatorio para Yape y Plin.');
+            return;
+        }
+
         const payload = {
             idCliente: clientId,
             dniCliente: dniCliente,
@@ -196,6 +222,7 @@ $(function() {
             telefonoCliente: telefonoCliente,
             referenciaCliente: referenciaCliente,
             idMetodoPago: parseInt($('#select-metodo').val(), 10),
+            numOperacion: numOperacion,
             observaciones: $('#input-observaciones').val(),
             detalles: detallesVenta.map(item => ({
                 idProducto: parseInt(item.idProducto, 10),

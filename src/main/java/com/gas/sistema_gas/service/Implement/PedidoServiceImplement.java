@@ -129,12 +129,25 @@ public class PedidoServiceImplement implements PedidoService {
             empleado = usuario.getEmpleado();
         }
 
+        String numOperacion = createDto.numOperacion();
+        if (numOperacion != null && numOperacion.isBlank()) {
+            numOperacion = null;
+        }
+        if (metodoPago.getNombre() != null && (
+                metodoPago.getNombre().equalsIgnoreCase("yape") ||
+                metodoPago.getNombre().equalsIgnoreCase("plin")
+        ) && (numOperacion == null || numOperacion.isEmpty())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El número de operación es obligatorio para Yape y Plin");
+        }
+
         // 2. Generar código definitivo de venta
         pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
         pedido.setCliente(cliente);
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
         pedido.setMetodoPago(metodoPago);
+        pedido.setNumOperacion(numOperacion);
         pedido.setFechaSolicitud(LocalDateTime.now());
         pedido.setEstadoPedido("PENDIENTE");
         pedido.setEstadoPago("PENDIENTE");

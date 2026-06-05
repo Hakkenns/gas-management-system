@@ -111,6 +111,11 @@
                                         <option th:each="metodo : ${metodosPago}" th:value="${metodo.id}" th:text="${metodo.nombre}"></option>
                                     </select>
                                 </div>
+                                <div class="form-group col-md-4" id="row-num-operacion" style="display:none;">
+                                    <label>Número de operación</label>
+                                    <input type="text" class="form-control" id="input-num-operacion" placeholder="Número de operación" maxlength="50">
+                                    <small class="form-text text-muted">Requerido para Yape o Plin.</small>
+                                </div>
                             </div>
                             <div class="row">
                                 <div class="form-group col-md-4">
