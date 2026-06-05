@@ -38,9 +38,8 @@ public class ClienteServiceImplement implements ClienteService{
     public ClienteDTO.SimpleResponse createClient(ClienteDTO.Create createDto){
 
         // Validamos si el DNI del cliente viene vacío
-        // Si el DNI no es nullo y el dni tampoco esta vacío entrar a la otra condición
-        if(createDto.dni() !=null && !createDto.correo().isBlank()){    
-            if(clienteRepository.existsByDni(createDto.dni())){
+        if (createDto.dni() != null && !createDto.dni().isBlank()) {
+            if (clienteRepository.existsByDni(createDto.dni())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un cliente registrado con ese DNI");
             }
         }

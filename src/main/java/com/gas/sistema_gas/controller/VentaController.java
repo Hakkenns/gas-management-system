@@ -56,7 +56,6 @@ public class VentaController {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("ventas", pedidoService.listAll());
-        model.addAttribute("clientes", clienteService.listAll());
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("contenido", "views/ventas");
@@ -94,6 +93,9 @@ public class VentaController {
         respuesta.put("id", cliente.id());
         respuesta.put("nombre", cliente.nombre());
         respuesta.put("dni", cliente.dni());
+        respuesta.put("telefono", cliente.telefono());
+        respuesta.put("direccion", cliente.direccion());
+        respuesta.put("referencia", cliente.referencia());
         return ResponseEntity.ok(respuesta);
     }
 

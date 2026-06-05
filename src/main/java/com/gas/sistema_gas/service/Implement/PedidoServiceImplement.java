@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.PedidoMapper;
+import com.gas.sistema_gas.Mapper.ClienteMapper;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
@@ -25,6 +26,7 @@ import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
+import com.gas.sistema_gas.dto.ClienteDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.service.PedidoService;
@@ -38,6 +40,8 @@ public class PedidoServiceImplement implements PedidoService {
     private PedidoRepository pedidoRepository;
     @Autowired
     private PedidoMapper pedidoMapper;
+    @Autowired
+    private ClienteMapper clienteMapper;
     @Autowired
     private ProductoRepository productoRepository;
     @Autowired
@@ -71,8 +75,47 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedido = pedidoMapper.toEntity(createDto);
 
         // 1. Validar Relaciones
-        Cliente cliente = clienteRepository.findById(createDto.idCliente())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+        Cliente cliente;
+        if (createDto.idCliente() != null) {
+            cliente = clienteRepository.findById(createDto.idCliente())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+        } else if (createDto.dniCliente() != null && !createDto.dniCliente().isBlank()) {
+            cliente = clienteRepository.findByDni(createDto.dniCliente())
+                    .filter(c -> c.getEstado() == 1)
+                    .orElseGet(() -> {
+                        ClienteDTO.Create clienteDto = new ClienteDTO.Create(
+                                createDto.nombreCliente(),
+                                createDto.dniCliente(),
+                                createDto.telefonoCliente(),
+                                createDto.direccionCliente(),
+                                createDto.referenciaCliente(),
+                                null
+                        );
+                        Cliente nuevoCliente = clienteMapper.toEntity(clienteDto);
+                        return clienteRepository.save(nuevoCliente);
+                    });
+        } else {
+            if (createDto.nombreCliente() == null || createDto.nombreCliente().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre del cliente es obligatorio");
+            }
+            if (createDto.direccionCliente() == null || createDto.direccionCliente().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La dirección del cliente es obligatoria");
+            }
+            if (createDto.telefonoCliente() == null || createDto.telefonoCliente().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El teléfono del cliente es obligatorio");
+            }
+            ClienteDTO.Create clienteDto = new ClienteDTO.Create(
+                    createDto.nombreCliente(),
+                    null,
+                    createDto.telefonoCliente(),
+                    createDto.direccionCliente(),
+                    createDto.referenciaCliente(),
+                    null
+            );
+            Cliente nuevoCliente = clienteMapper.toEntity(clienteDto);
+            cliente = clienteRepository.save(nuevoCliente);
+        }
+
         Usuario usuario = usuarioRepository.findById(idUsuarioLogueado)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no existe"));
         MetodoPago metodoPago = metodoPagoRepository.findById(createDto.idMetodoPago())

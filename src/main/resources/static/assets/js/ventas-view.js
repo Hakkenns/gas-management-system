@@ -18,18 +18,33 @@ $(function() {
     function limpiarClienteSeleccionado() {
         $('#input-id-cliente').val('');
         $('#input-nombre-cliente').val('');
-        $('#cliente-feedback').text('Ingrese el DNI y busque el cliente.');
+        $('#input-telefono-cliente').val('');
+        $('#input-direccion-cliente').val('');
+        $('#input-referencia-cliente').val('');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
+        $('#cliente-feedback').text('Ingrese el DNI y busque el cliente, o complete los datos manualmente.');
     }
 
     function mostrarCliente(cliente) {
         $('#input-id-cliente').val(cliente.id);
         $('#input-nombre-cliente').val(cliente.nombre);
-        $('#cliente-feedback').text('Cliente encontrado.');
+        $('#input-telefono-cliente').val(cliente.telefono);
+        $('#input-direccion-cliente').val(cliente.direccion);
+        $('#input-referencia-cliente').val(cliente.referencia || '');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
+        $('#cliente-feedback').text('Cliente encontrado. Si desea usar datos distintos, borre el DNI o comience nuevamente.');
     }
 
     function buscarClientePorDni(dni) {
+        if (!dni) {
+            limpiarClienteSeleccionado();
+            $('#cliente-feedback').text('DNI opcional, complete los datos del cliente manualmente.');
+            return;
+        }
         if (!/^[0-9]{8}$/.test(dni)) {
             limpiarClienteSeleccionado();
+            $('#input-dni-cliente').val(dni);
+            $('#cliente-feedback').text('Ingrese un DNI válido de 8 dígitos.');
             return;
         }
 
@@ -43,7 +58,8 @@ $(function() {
             .then(cliente => mostrarCliente(cliente))
             .catch(() => {
                 limpiarClienteSeleccionado();
-                $('#cliente-feedback').text('No se encontró un cliente con ese DNI.');
+                $('#input-dni-cliente').val(dni);
+                $('#cliente-feedback').text('No se encontró un cliente con ese DNI. Complete los datos y la venta creará un nuevo cliente.');
             });
     }
 
@@ -104,6 +120,12 @@ $(function() {
         }
     });
 
+    $('#input-dni-cliente').on('input', function() {
+        if ($(this).val().trim() === '') {
+            limpiarClienteSeleccionado();
+        }
+    });
+
     $('#select-producto').on('change', function() {
         const precio = $(this).find('option:selected').data('precio');
         if (precio !== undefined) {
@@ -154,14 +176,25 @@ $(function() {
             return;
         }
 
-        const clientId = parseInt($('#input-id-cliente').val(), 10);
-        if (!clientId) {
-            alert('Debe buscar y seleccionar un cliente por DNI antes de registrar la venta.');
+        const clientId = parseInt($('#input-id-cliente').val(), 10) || null;
+        const dniCliente = $('#input-dni-cliente').val().trim() || null;
+        const nombreCliente = $('#input-nombre-cliente').val().trim();
+        const direccionCliente = $('#input-direccion-cliente').val().trim();
+        const telefonoCliente = $('#input-telefono-cliente').val().trim();
+        const referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
+
+        if (!nombreCliente || !direccionCliente || !telefonoCliente) {
+            alert('Debe completar el nombre, dirección y teléfono del cliente.');
             return;
         }
 
         const payload = {
             idCliente: clientId,
+            dniCliente: dniCliente,
+            nombreCliente: nombreCliente,
+            direccionCliente: direccionCliente,
+            telefonoCliente: telefonoCliente,
+            referenciaCliente: referenciaCliente,
             idMetodoPago: parseInt($('#select-metodo').val(), 10),
             observaciones: $('#input-observaciones').val(),
             detalles: detallesVenta.map(item => ({

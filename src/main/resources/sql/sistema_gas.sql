@@ -261,7 +261,10 @@ CREATE TABLE `metodo_pago` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
-
+INSERT INTO metodo_pago (id_metodo, nombre, estado) VALUES
+  (1, 'Efectivo', 1),
+  (2, 'Yape', 1),
+  (3, 'Plin', 1);
 --
 -- Estructura de tabla para la tabla `motos`
 --
