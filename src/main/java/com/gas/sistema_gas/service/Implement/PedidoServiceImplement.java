@@ -151,6 +151,9 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setFechaSolicitud(LocalDateTime.now());
         pedido.setEstadoPedido("PENDIENTE");
         pedido.setEstadoPago("PENDIENTE");
+        // Inicializar valores monetarios para evitar errores de validación en el primer save
+        pedido.setSubtotal(BigDecimal.ZERO);
+        pedido.setMontoTotal(BigDecimal.ZERO);
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
