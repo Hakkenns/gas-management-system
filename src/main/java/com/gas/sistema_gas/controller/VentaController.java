@@ -46,6 +46,9 @@ public class VentaController {
     private ProductoService productoService;
 
     @Autowired
+    private com.gas.sistema_gas.service.CategoriaService categoriaService;
+
+    @Autowired
     private MetodoPagoService metodoPagoService;
 
     @Autowired
@@ -57,6 +60,7 @@ public class VentaController {
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("ventas", pedidoService.listAll());
         model.addAttribute("productos", productoService.listAll());
+        model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("contenido", "views/ventas");
         return "components/layout";

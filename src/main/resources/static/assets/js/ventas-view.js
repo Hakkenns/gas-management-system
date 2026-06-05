@@ -140,11 +140,73 @@ $(function() {
         }
     });
 
-    $('#select-producto').on('change', function() {
-        const precio = $(this).find('option:selected').data('precio');
-        if (precio !== undefined) {
-            $('#select-precio').val(formatMoney(precio));
+    // Nota: el select de productos fue reemplazado por un input + hidden id.
+
+    // Abrir modal de búsqueda de productos
+    $('#btn-buscar-producto').on('click', function() {
+        $('#input-buscar-nombre').val('');
+        $('#select-buscar-categoria').val('');
+        $('#tabla-busqueda-productos tbody tr').show();
+        $('#modal-buscar-producto').modal('show');
+    });
+
+    // Soporte rápido: presionar Enter en el input de producto abre el modal y filtra
+    $('#input-producto-nombre').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            const q = $(this).val().trim();
+            $('#input-buscar-nombre').val(q);
+            $('#select-buscar-categoria').val('');
+            filtrarProductos();
+            $('#modal-buscar-producto').modal('show');
         }
+    });
+
+    function filtrarProductos() {
+        const nombre = $('#input-buscar-nombre').val().trim().toLowerCase();
+        const categoria = $('#select-buscar-categoria').val();
+
+        $('#tabla-busqueda-productos tbody tr').each(function() {
+            const row = $(this);
+            const nombreRow = (row.find('td').first().text() || '').toLowerCase();
+            const categoriaRow = row.data('categoria') ? String(row.data('categoria')) : '';
+
+            const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
+            const matchCategoria = !categoria || categoria === '' || categoriaRow === categoria;
+
+            if (matchNombre && matchCategoria) {
+                row.show();
+            } else {
+                row.hide();
+            }
+        });
+    }
+
+    $('#btn-filtrar-productos').on('click', function() {
+        filtrarProductos();
+    });
+
+    $('#input-buscar-nombre').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            filtrarProductos();
+        }
+    });
+
+    // Seleccionar producto desde la tabla de búsqueda
+    $(document).on('click', '.btn-seleccionar-producto', function() {
+        const row = $(this).closest('tr');
+        const id = row.data('id');
+        const precio = row.data('precio');
+        const nombre = row.find('td').first().text().trim();
+
+            if (id) {
+                // Guardar id en el hidden y mostrar nombre en el input visible
+                $('#select-producto').val(id);
+                $('#input-producto-nombre').val(nombre);
+                $('#select-precio').val(formatMoney(precio));
+                $('#modal-buscar-producto').modal('hide');
+            }
     });
 
     $('#select-metodo').on('change', function() {
@@ -153,7 +215,7 @@ $(function() {
 
     $('#btn-agregar-detalle').on('click', function() {
         const idProducto = $('#select-producto').val();
-        const nombreProducto = $('#select-producto option:selected').text();
+        const nombreProducto = $('#input-producto-nombre').val();
         const cantidad = parseInt($('#select-cantidad').val(), 10);
         const precio = parseMoney($('#select-precio').val());
 
@@ -174,7 +236,9 @@ $(function() {
             });
         }
 
+        // Limpiar selección de producto (hidden id + nombre visible)
         $('#select-producto').val('');
+        $('#input-producto-nombre').val('');
         $('#select-cantidad').val('1');
         $('#select-precio').val('');
         renderizarFilas();

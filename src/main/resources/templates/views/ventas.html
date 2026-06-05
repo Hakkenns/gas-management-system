@@ -134,10 +134,15 @@
                                 <div class="card-body row align-items-end py-3">
                                     <div class="form-group col-md-5 mb-0">
                                         <label>Producto</label>
-                                        <select class="form-control" id="select-producto">
-                                            <option value="">-- Seleccione --</option>
-                                            <option th:each="prod : ${productos}" th:value="${prod.id}" th:text="${prod.nombre}" th:data-precio="${prod.precioVenta}"></option>
-                                        </select>
+                                        <div class="input-group">
+                                            <input type="hidden" id="select-producto" />
+                                            <input type="text" class="form-control" id="input-producto-nombre" placeholder="Buscar/Seleccionar producto">
+                                            <div class="input-group-append">
+                                                <button type="button" id="btn-buscar-producto" class="btn btn-secondary" title="Buscar producto">
+                                                    <i class="fas fa-search"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="form-group col-md-2 mb-0">
                                         <label>Cantidad</label>
@@ -179,6 +184,62 @@
                                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal búsqueda de productos -->
+        <div class="modal fade" id="modal-buscar-producto" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">Buscar producto</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row mb-3">
+                            <div class="col-md-6">
+                                <input type="text" id="input-buscar-nombre" class="form-control" placeholder="Buscar por nombre">
+                            </div>
+                            <div class="col-md-4">
+                                <select id="select-buscar-categoria" class="form-control">
+                                    <option value="">-- Todas las categorías --</option>
+                                    <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nombre}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" id="btn-filtrar-productos" class="btn btn-primary btn-block">Filtrar</button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="tabla-busqueda-productos">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Categoría</th>
+                                        <th class="text-right">Precio</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="prod : ${productos}" th:data-id="${prod.id}" th:data-precio="${prod.precioVenta}" th:data-categoria="${prod.idCategoria}">
+                                        <td th:text="${prod.nombre}"></td>
+                                        <td th:text="${prod.nombreCategoria}"></td>
+                                        <td class="text-right" th:text="${prod.precioVenta}"></td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
                     </div>
                 </div>
             </div>
