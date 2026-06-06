@@ -1,0 +1,143 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: url("/img/Fondo.jpeg");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    position: relative;
+}
+
+
+body::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.25);
+    pointer-events: none;
+}
+
+
+.login-box {
+    width: 100%;
+    max-width: 430px;
+    padding: 50px 40px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 30px 70px rgba(0,0,0,0.28);
+    z-index: 10;
+}
+
+
+h2 {
+    color: white;
+    text-align: center;
+    margin-bottom: 45px;
+}
+
+
+.input-group-custom {
+    position: relative;
+    margin-bottom: 35px;
+}
+
+.input-group-custom i {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    color: rgba(255,255,255,0.6);
+}
+
+.input-group-custom .toggle-password {
+    left: auto;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,255,255,0.8);
+    cursor: pointer;
+}
+
+
+.form-control-custom {
+    width: 100%;
+    padding: 12px 5px 12px 30px;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid rgba(255,255,255,0.4);
+    color: white;
+    outline: none;
+}
+
+
+.input-group-custom label {
+    position: absolute;
+    top: 12px;
+    left: 30px;
+    color: rgba(255,255,255,0.8);
+    transition: 0.3s;
+}
+
+
+.form-control-custom:focus ~ label,
+.form-control-custom:valid ~ label {
+    top: -18px;
+    left: 0;
+    font-size: 12px;
+    color: #38bdf8;
+}
+
+.form-control-custom:focus {
+    border-bottom: 1.5px solid #38bdf8;
+}
+
+
+.login-btn {
+    background: #0ea5e9;
+    border: none;
+}
+
+.login-btn:hover {
+    background: #0284c7;
+}
+
+.logo {
+    width: 120px;
+}
+
+.bienvenida {
+    text-align: center;
+    color: white;
+    font-size: 22px;
+    margin-bottom: 5px;
+}
+
+.subtexto {
+    text-align: center;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 20px;
+}
+
+.footer-text {
+    text-align: center;
+    margin-top: 25px;
+    color: rgba(255,255,255,0.6);
+    font-size: 12px;
+}

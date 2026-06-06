@@ -2,10 +2,10 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Servidor: 127.0.0.1
--- Tiempo de generación: 24-05-2026 a las 05:45:05
+-- Servidor: 127.0.0.1:3307
+-- Tiempo de generación: 06-06-2026 a las 02:05:12
 -- Versión del servidor: 10.4.32-MariaDB
--- Versión de PHP: 8.2.12
+-- Versión de PHP: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -81,6 +81,13 @@ CREATE TABLE `clientes` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `clientes`
+--
+
+INSERT INTO `clientes` (`id_cliente`, `nombre`, `dni`, `direccion`, `referencia`, `telefono`, `correo`, `estado`, `created_at`, `updated_at`) VALUES
+(1, 'Esnaydeher', '73838677', 'ADSASD', 'ASDASDA', '963335241', NULL, 1, '2026-06-05 18:47:07', '2026-06-05 18:47:07');
+
 -- --------------------------------------------------------
 
 --
@@ -145,7 +152,7 @@ CREATE TABLE `correlativos` (
 --
 
 INSERT INTO `correlativos` (`id_correlativo`, `numero_actual`, `serie`, `tipo`) VALUES
-(1, 0, 'NV001', 'VENTA_NOTA'),
+(1, 1, 'NV001', 'VENTA_NOTA'),
 (2, 8, 'NC001', 'COMPRA_NOTA');
 
 -- --------------------------------------------------------
@@ -183,6 +190,13 @@ CREATE TABLE `detalle_pedido` (
   `id_pedido` bigint(20) NOT NULL,
   `id_producto` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `detalle_pedido`
+--
+
+INSERT INTO `detalle_pedido` (`id_detalle`, `cantidad`, `precio_unitario`, `id_pedido`, `id_producto`) VALUES
+(1, 2, 45.00, 1, 3);
 
 -- --------------------------------------------------------
 
@@ -260,11 +274,17 @@ CREATE TABLE `metodo_pago` (
   `estado` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `metodo_pago`
+--
+
+INSERT INTO `metodo_pago` (`id_metodo`, `nombre`, `estado`) VALUES
+(1, 'Efectivo', 1),
+(2, 'Yape', 1),
+(3, 'Plin', 1);
+
 -- --------------------------------------------------------
-INSERT INTO metodo_pago (id_metodo, nombre, estado) VALUES
-  (1, 'Efectivo', 1),
-  (2, 'Yape', 1),
-  (3, 'Plin', 1);
+
 --
 -- Estructura de tabla para la tabla `motos`
 --
@@ -336,6 +356,13 @@ CREATE TABLE `pedidos` (
   `id_usuario` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `pedidos`
+--
+
+INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `num_operacion`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_metodo`, `id_usuario`) VALUES
+(1, 'NV001-0001', '2026-06-05 23:47:07', 'PENDIENTE', 'PENDIENTE', NULL, '2026-06-05 18:47:07.000000', 90.00, NULL, '', 90.00, '2026-06-05 23:47:07', 1, NULL, 1, 2);
+
 -- --------------------------------------------------------
 
 --
@@ -388,7 +415,6 @@ INSERT INTO `perfil_opcion` (`id_perfil`, `id_opcion`) VALUES
 CREATE TABLE `productos` (
   `id_producto` bigint(20) NOT NULL,
   `id_categoria` bigint(20) NOT NULL,
-  `id_proveedor` bigint(20) NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `descripcion` text DEFAULT NULL,
   `precio_compra` decimal(10,2) NOT NULL,
@@ -397,20 +423,21 @@ CREATE TABLE `productos` (
   `stock_vacios` int(11) NOT NULL DEFAULT 0,
   `stock_minimo` int(11) NOT NULL DEFAULT 0,
   `requiere_envase` bit(1) NOT NULL DEFAULT b'0',
-  `url_imagen` TEXT DEFAULT NULL,
+  `url_imagen` longtext DEFAULT NULL,
   `estado` int(11) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `ganancia_producto` decimal(10,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `productos`
 --
 
-INSERT INTO `productos` (`id_producto`, `id_categoria`, `id_proveedor`, `nombre`, `descripcion`, `precio_compra`, `precio_venta`, `stock_llenos`, `stock_vacios`, `stock_minimo`, `requiere_envase`, `url_imagen`, `estado`, `created_at`, `updated_at`) VALUES
-(3, 1, 3, 'Balón de Gas 10Kg', '', 35.00, 45.00, 141, 0, 10, b'1', '', 1, '2026-05-22 00:50:49', '2026-05-23 22:03:51'),
-(4, 2, 3, 'valvula', '', 35.00, 45.00, 30, 10, 10, b'0', '', 1, '2026-05-22 00:50:53', '2026-05-23 20:05:42'),
-(5, 3, 4, 'Agua 20L', '', 8.00, 10.00, 50, 0, 10, b'1', '', 1, '2026-05-23 00:01:49', '2026-05-23 22:37:16');
+INSERT INTO `productos` (`id_producto`, `id_categoria`, `nombre`, `descripcion`, `precio_compra`, `precio_venta`, `stock_llenos`, `stock_vacios`, `stock_minimo`, `requiere_envase`, `url_imagen`, `estado`, `created_at`, `updated_at`, `ganancia_producto`) VALUES
+(3, 1, 'Balón de Gas 10Kg', '', 35.00, 45.00, 139, 0, 10, b'1', '', 1, '2026-05-22 00:50:49', '2026-06-05 18:47:07', 0.00),
+(4, 2, 'valvula', '', 35.00, 45.00, 30, 10, 10, b'0', '', 1, '2026-05-22 00:50:53', '2026-05-23 20:05:42', 0.00),
+(5, 3, 'Agua 20L', '', 8.00, 10.00, 50, 0, 10, b'1', '', 1, '2026-05-23 00:01:49', '2026-05-23 22:37:16', 0.00);
 
 -- --------------------------------------------------------
 
@@ -635,8 +662,7 @@ ALTER TABLE `perfil_opcion`
 --
 ALTER TABLE `productos`
   ADD PRIMARY KEY (`id_producto`),
-  ADD KEY `fk_productos_categoria` (`id_categoria`),
-  ADD KEY `fk_productos_proveedor` (`id_proveedor`);
+  ADD KEY `fk_productos_categoria` (`id_categoria`);
 
 --
 -- Indices de la tabla `proveedores`
@@ -676,7 +702,7 @@ ALTER TABLE `categorias`
 -- AUTO_INCREMENT de la tabla `clientes`
 --
 ALTER TABLE `clientes`
-  MODIFY `id_cliente` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_cliente` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `compras`
@@ -706,7 +732,7 @@ ALTER TABLE `detalle_compra`
 -- AUTO_INCREMENT de la tabla `detalle_pedido`
 --
 ALTER TABLE `detalle_pedido`
-  MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_stock`
@@ -730,7 +756,7 @@ ALTER TABLE `opciones`
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id_pedido` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_pedido` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `perfiles`
@@ -847,7 +873,6 @@ ALTER TABLE `perfil_opcion`
 -- Filtros para la tabla `productos`
 --
 ALTER TABLE `productos`
-  ADD CONSTRAINT `FK146wfsn2op2nvbfuxae33xbim` FOREIGN KEY (`id_proveedor`) REFERENCES `proveedores` (`id_proveedor`),
   ADD CONSTRAINT `FKdtoa37luoxhhvbicrfiu5ygbj` FOREIGN KEY (`id_categoria`) REFERENCES `categorias` (`id_categoria`);
 
 --
