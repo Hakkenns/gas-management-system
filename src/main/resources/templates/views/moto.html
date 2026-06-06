@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html xmlns:th="http://thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-motorcycle"></i>
+            <strong>Gestión de Motos</strong>
+        </h3>
+
+        <hr>
+
+        <!-- MENSAJE DE ERROR -->
+        <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
+
+        <!-- BOTON NUEVO -->
+        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-moto" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus"></i>
+            Nueva Moto
+        </button>
+
+        <!-- TABLA -->
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+            <tr>
+                <th>ID</th>
+                <th>Placa</th>
+                <th>Marca</th>
+                <th>Modelo</th>
+                <th>Año</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-motos" th:fragment="tablaMotos">
+
+            <!-- VACÍO -->
+            <tr th:if="${#lists.isEmpty(motos)}">
+                <td colspan="7" class="text-center">No hay motos registradas.</td>
+            </tr>
+
+            <!-- LISTAR -->
+            <tr th:each="m : ${motos}">
+                <td th:text="${m.id}"></td>
+                <td><strong th:text="${m.placa}"></strong></td>
+                <td th:text="${m.marca}"></td>
+                <td th:text="${m.modelo}"></td>
+                <td th:text="${m.anio != null ? m.anio : '-'}"></td>
+                <td>
+                    <span class="badge badge-success" th:if="${m.estado == 1}">Activo</span>
+                    <span class="badge badge-danger"  th:if="${m.estado == 0}">Inactivo</span>
+                </td>
+                <td>
+                    <!-- EDITAR -->
+                    <button class="btn btn-warning btn-sm"
+                            th:onclick="'abrirModalEditar(' + ${m.id} + ')'"
+                            title="Editar Moto">
+                        <i class="fas fa-edit"></i>
+                    </button>
+
+                    <!-- ELIMINAR -->
+                    <button class="btn btn-danger btn-sm"
+                            th:onclick="'eliminarMoto(' + ${m.id} + ')'"
+                            title="Eliminar Moto">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+
+            </tbody>
+        </table>
+
+    </div>
+
+    <!-- MODAL MOTO (SIRVE PARA CREAR Y EDITAR) -->
+    <div class="modal fade" id="modal-moto" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark">
+                    <h5 class="modal-title text-white" id="modal-titulo">Moto</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="form-moto" action="/motos" method="post">
+
+                        <div class="form-group">
+                            <label>Placa</label>
+                            <input type="text" class="form-control text-uppercase"
+                                   id="input-placa" name="placa"
+                                   placeholder="Ej: NGA2415 o MV1542"
+                                   maxlength="7" required>
+                            <small class="text-muted">Máximo 7 caracteres. Se guardará sin guiones ni espacios.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Marca</label>
+                            <input type="text" class="form-control"
+                                   id="input-marca" name="marca" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Modelo</label>
+                            <input type="text" class="form-control"
+                                   id="input-modelo" name="modelo" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Año</label>
+                            <input type="number" class="form-control"
+                                   id="input-anio" name="anio"
+                                   min="1900" max="2030">
+                        </div>
+
+                        <div class="text-right">
+                            <button type="submit" class="btn btn-info" id="btn-guardar">Guardar</button>
+                            <button type="button" class="btn btn-secondary"
+                                    data-dismiss="modal">Cancelar</button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR ELIMINAR -->
+    <div class="modal fade" id="modal-eliminar-moto" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+
+                <div class="modal-header bg-danger">
+                    <h5 class="modal-title text-white">Eliminar Moto</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body text-center">
+                    <p>¿Estás seguro de que deseas eliminar esta moto?</p>
+                    <p class="text-muted">Se realizará una desactivación lógica en el sistema.</p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger"
+                            id="btn-confirmar-eliminar-moto">Eliminar</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT CONTROLADOR JS EXCLUSIVO (Arreglado: Colocado antes del cierre del fragmento) -->
+    <script th:src="@{/assets/js/motos.js}" defer></script>
+
+</div> <!-- Cierre del th:fragment="content" -->
+</body>
+</html>

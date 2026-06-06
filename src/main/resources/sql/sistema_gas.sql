@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3307
--- Tiempo de generación: 06-06-2026 a las 02:05:12
+-- Tiempo de generación: 06-06-2026 a las 04:09:44
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.0.30
 
@@ -300,6 +300,17 @@ CREATE TABLE `motos` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `motos`
+--
+
+INSERT INTO `motos` (`id_moto`, `placa`, `marca`, `modelo`, `anio`, `estado`, `created_at`, `updated_at`) VALUES
+(1, 'NGA2415', 'Honda', 'GL125', 2023, 1, '2026-06-05 20:40:08', '2026-06-05 20:48:27'),
+(2, '5421MV', 'Bajaj', 'Pulsar NS200', 2026, 1, '2026-06-05 20:44:50', '2026-06-05 20:48:38'),
+(3, 'NGA2445', 'Honda', 'GL300', 2016, 0, '2026-06-05 20:48:04', '2026-06-05 20:48:45'),
+(4, '5425GHJ', 'Honda', 'Furius 3000', 2026, 1, '2026-06-05 21:04:36', '2026-06-05 21:04:36'),
+(5, 'NGA2223', 'Bajaj', 'modelo1', 2011, 0, '2026-06-05 21:07:12', '2026-06-05 21:07:20');
+
 -- --------------------------------------------------------
 
 --
@@ -329,7 +340,8 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (7, 'Tipos de productos', 'fas fa-box', 'categorias', 1, 4),
 (8, 'Rubros', 'fas fa-tags', 'rubros', 1, 4),
 (9, 'Compras', 'fas fa-shopping-cart', 'compras', 1, NULL),
-(10, 'Ventas', 'fas fa-cash-register', 'ventas', 1, NULL);
+(10, 'Ventas', 'fas fa-cash-register', 'ventas', 1, NULL),
+(11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -514,7 +526,7 @@ CREATE TABLE `usuarios` (
 INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`, `nombre`) VALUES
 (1, 1, 'yogacix5', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 2, NULL, 'yoga'),
 (2, 1, 'admin_zair', 'zair9@gmail.com', '$2a$10$VIUBS8.d7GhLbO3GKmGRLO.okTqHNYKp4F0pec2GCaE6u2PD85qju', '2026-05-15 05:45:50', 1, NULL, 'zair'),
-(3, 2, 'admin_roy', 'roy1@gmail.com', '$2a$10$BRryAWqwzMt1.NkgFP76vO4sM0NCVKfXnYbSwXQcp21N0A34UbgFu', '2026-05-15 05:50:44', 1, NULL, 'royA'),
+(3, 2, 'admin_roy', 'roy1@gmail.com', '$2a$10$gQ1JJxgT0Gr0X8uJ9Hnctux3usU6kpHgPdHNiLFioyrhwlSgGYXiu', '2026-05-15 05:50:44', 1, NULL, 'royA'),
 (4, 4, 'motorizado_abel', 'abelordonez@gmail.com', '$2a$10$qepz3mo6j0A.Y3TNT44zYO.J7A5ncAOczVD7NxbwO98M99G.tDAS2', '2026-05-15 09:05:31', 1, NULL, 'abel');
 
 --
@@ -747,10 +759,16 @@ ALTER TABLE `inventario`
   MODIFY `id_inventario` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `motos`
+--
+ALTER TABLE `motos`
+  MODIFY `id_moto` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
 -- AUTO_INCREMENT de la tabla `opciones`
 --
 ALTER TABLE `opciones`
-  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT de la tabla `pedidos`
