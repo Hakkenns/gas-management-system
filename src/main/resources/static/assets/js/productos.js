@@ -158,7 +158,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const productoId = idInput.value;
             guardarEstadoImagenStaged(productoId);
             
-            alert("La imagen se preparó correctamente y quedará lista para guardar.");
+            alert("La imagen se cargo correctamente");
         };
         reader.readAsDataURL(archivo);
     });
