@@ -1,6 +1,8 @@
 package com.gas.sistema_gas.service.Implement;
 
 import com.gas.sistema_gas.Repository.PerfilRepository;
+import com.gas.sistema_gas.Repository.EmpleadoRepository;
+import com.gas.sistema_gas.Model.Empleado;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,11 +26,16 @@ public class UsuarioServiceImplement implements UsuarioService {
 
     @Autowired
     private UsuarioMapper usuarioMapper;
+
     @Autowired
     private UsuarioRepository usuarioRepository;
+
     @Autowired
     private PerfilRepository perfilRepository;
-    
+
+    @Autowired
+    private EmpleadoRepository empleadoRepository;
+
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
@@ -52,8 +59,14 @@ public class UsuarioServiceImplement implements UsuarioService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de usuario ya existe");
         }
 
+        // 1. Buscar y validar que el empleado exista en la base de datos
+        Empleado empleado = empleadoRepository.findById(createDto.idEmpleado())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado seleccionado no encontrado"));
+
         Usuario usuario = usuarioMapper.toEntity(createDto);
-        usuario.setNombre(createDto.nombre());
+
+        // 2. Asociar el objeto Empleado real a la relación del Usuario
+        usuario.setEmpleado(empleado);
 
         usuario.setPassword(passwordEncoder.encode(usuario.getPassword()));
 
@@ -69,27 +82,26 @@ public class UsuarioServiceImplement implements UsuarioService {
 
     @Override
     @Transactional
-    @SuppressWarnings("unchecked")
     public UsuarioDTO.SimpleResponse updateUser(Long id, UsuarioDTO.Update updateDto) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
         if (!usuario.getCorreo().equalsIgnoreCase(updateDto.correo())) {
             if (usuarioRepository.existsByCorreo(updateDto.correo())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya esta registrado");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
             }
         }
 
         if (!usuario.getUserName().equalsIgnoreCase(updateDto.userName())) {
             if (usuarioRepository.existsByUserName(updateDto.userName())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de usuario ya esta registrado");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre de usuario ya está registrado");
             }
         }
 
         Perfil perfil = perfilRepository.findById(updateDto.idPerfil())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
 
-        usuario.setNombre(updateDto.nombre());
+        // NOTA: Se removió cualquier mutación del nombre aquí para mantener la persistencia limpia y normalizada.
         usuario.setUserName(updateDto.userName());
         usuario.setCorreo(updateDto.correo());
         usuario.setPerfil(perfil);
@@ -128,5 +140,4 @@ public class UsuarioServiceImplement implements UsuarioService {
                 .map(usuarioMapper::toSimpleResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
     }
-
 }

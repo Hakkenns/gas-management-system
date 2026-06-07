@@ -14,14 +14,16 @@ function togglePassword() {
     }
 }
 
-
 // ─── ABRIR MODAL NUEVO ────────────────────────────────────────────────────────
 function abrirModalNuevo() {
-
     document.getElementById('form-usuario').reset();
     document.getElementById('modal-titulo').textContent = 'Nuevo Usuario';
     document.getElementById('form-usuario').action     = '/usuarios';
     document.getElementById('form-usuario').method     = 'post';
+
+    // MOSTRAR SELECTOR: El usuario nuevo requiere asociar obligatoriamente un empleado
+    document.getElementById('wrapper-select-empleado').style.display = 'block';
+    document.getElementById('select-empleado').required = true;
 
     // Resetear ojito
     document.getElementById('input-password').type     = 'password';
@@ -30,10 +32,8 @@ function abrirModalNuevo() {
     $('#modal-usuario').modal('show');
 }
 
-
 // ─── ABRIR MODAL EDITAR ───────────────────────────────────────────────────────
 function abrirModalEditar(id) {
-
     fetch('/usuarios/' + id)
         .then(function(response) {
             if (!response.ok) {
@@ -43,12 +43,15 @@ function abrirModalEditar(id) {
             return response.json();
         })
         .then(function(usuario) {
-
             if (!usuario) return;
 
             document.getElementById('modal-titulo').textContent = 'Editar Usuario';
 
-            document.getElementById('input-nombre').value   = usuario.nombre    || '';
+            // OCULTAR SELECTOR: Al editar, el empleado ya está fijo y no debe cambiarse
+            document.getElementById('wrapper-select-empleado').style.display = 'none';
+            document.getElementById('select-empleado').required = false;
+
+            // Se remueve 'input-nombre' ya que se quitó del HTML de usuarios
             document.getElementById('input-username').value = usuario.userName   || '';
             document.getElementById('input-correo').value   = usuario.correo     || '';
             document.getElementById('input-perfil').value   = usuario.idPerfil   || '';
@@ -71,7 +74,6 @@ function abrirModalEditar(id) {
         });
 }
 
-
 function reloadUsuariosTable() {
     fetch('/usuarios/tabla')
         .then(function(response) {
@@ -91,7 +93,6 @@ function reloadUsuariosTable() {
             alert('No se pudo recargar la tabla de usuarios.');
         });
 }
-
 
 var formUsuario = document.getElementById('form-usuario');
 if (formUsuario) {
@@ -129,10 +130,8 @@ if (formUsuario) {
     });
 }
 
-
 // ─── CAMBIAR ESTADO (ACTIVAR / DESACTIVAR) ────────────────────────────────────
 function cambiarEstado(id, nuevoEstado) {
-
     var mensaje = nuevoEstado === 1
         ? '¿Deseas activar este usuario?'
         : '¿Deseas desactivar este usuario?';
@@ -165,7 +164,6 @@ function cambiarEstado(id, nuevoEstado) {
     });
 }
 
-
 // ─── ELIMINAR USUARIO ─────────────────────────────────────────────────────────
 var idUsuarioAEliminar = null;
 
@@ -176,7 +174,6 @@ function eliminarUsuario(id) {
 
 // Confirmar eliminar desde el modal
 document.getElementById('btn-confirmar-eliminar').addEventListener('click', function() {
-
     if (!idUsuarioAEliminar) return;
 
     fetch('/usuarios/' + idUsuarioAEliminar + '/eliminar', {

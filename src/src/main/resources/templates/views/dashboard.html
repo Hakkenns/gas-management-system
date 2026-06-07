@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <div class="mb-4">
+            <h3>
+                <strong>Bienvenido</strong>,
+                <span id="nombreUsuario">Administrador</span>
+            </h3>
+
+            <p class="text-muted mb-0">
+                Rol:
+                <span id="rolUsuario">Administrador</span>
+            </p>
+        </div>
+
+        <div class="row">
+
+            <div class="col-lg-3 col-md-6 col-12">
+                <div class="small-box bg-info">
+
+                    <div class="inner">
+                        <h3>0</h3>
+                        <p>Ventas hoy</p>
+                    </div>
+
+                    <div class="icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+
+                    <a th:href="@{/ventas}" class="small-box-footer">
+                        Ver más
+                        <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 col-12">
+                <div class="small-box bg-danger">
+
+                    <div class="inner">
+                        <h3>5</h3>
+                        <p>Usuarios activos</p>
+                    </div>
+
+                    <div class="icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+
+                    <a th:href="@{/usuarios}" class="small-box-footer">
+                        Ver usuarios
+                        <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

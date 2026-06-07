@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.ClienteMapper;
@@ -15,6 +16,7 @@ import com.gas.sistema_gas.service.ClienteService;
 
 import jakarta.transaction.Transactional;
 
+@Service
 public class ClienteServiceImplement implements ClienteService{
     
     @Autowired
@@ -36,9 +38,8 @@ public class ClienteServiceImplement implements ClienteService{
     public ClienteDTO.SimpleResponse createClient(ClienteDTO.Create createDto){
 
         // Validamos si el DNI del cliente viene vacío
-        // Si el DNI no es nullo y el dni tampoco esta vacío entrar a la otra condición
-        if(createDto.dni() !=null && !createDto.correo().isBlank()){    
-            if(clienteRepository.existsByDni(createDto.dni())){
+        if (createDto.dni() != null && !createDto.dni().isBlank()) {
+            if (clienteRepository.existsByDni(createDto.dni())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un cliente registrado con ese DNI");
             }
         }
@@ -92,5 +93,14 @@ public class ClienteServiceImplement implements ClienteService{
         return  clienteRepository.findById(id)
                 .map(clienteMapper::toSimpleResponse)
                 .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+    }
+
+    @Override
+    @Transactional
+    public ClienteDTO.SimpleResponse findByDni(String dni){
+        return clienteRepository.findByDni(dni)
+                .filter(cliente -> cliente.getEstado() == 1)
+                .map(clienteMapper::toSimpleResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
     }
 }

@@ -4,20 +4,31 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 public class PedidoDTO {
     
     public record Create(
-        @NotNull(message = "El cliente es obligatorio")
         Long idCliente,
-        @NotNull(message = "El empleado es obligatorio")
+        @Pattern(regexp = "\\d{8}", message = "El DNI debe tener 8 dígitos")
+        String dniCliente,
+        @NotBlank(message = "El nombre del cliente es obligatorio")
+        String nombreCliente,
+        @NotBlank(message = "La dirección del cliente es obligatoria")
+        String direccionCliente,
+        String referenciaCliente,
+        @NotBlank(message = "El teléfono del cliente es obligatorio")
+        @Pattern(regexp = "\\d{9}", message = "El teléfono debe tener 9 dígitos")
+        String telefonoCliente,
         Long idEmpleado,
-        @NotNull(message = "El usuario es obligatorio")
         Long idUsuario,
         @NotNull(message = "El método pago es obligatorio")
         Long idMetodoPago,
+        String numOperacion,
         String observaciones,
+        @NotNull(message = "El detalle de la venta es obligatorio")
         List<DetalleCreate> detalles
     ){}
 
@@ -30,6 +41,7 @@ public class PedidoDTO {
 
     public record SimpleResponse(
         Long idPedido,
+        String codigo,
         LocalDateTime fechaSolicitud,
         String nombreCliente,
         String nombreEmpleado,

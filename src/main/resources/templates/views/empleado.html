@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-user-tie"></i>
+            <strong>Gestión de Empleados</strong>
+        </h3>
+
+        <hr>
+
+        <!-- MENSAJE DE ERROR -->
+        <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
+
+        <!-- BOTON NUEVO -->
+        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-empleado" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus"></i>
+            Nuevo Empleado
+        </button>
+
+        <!-- TABLA -->
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>DNI</th>
+                <th>Teléfono</th>
+                <th>Sueldo Base</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-empleados" th:fragment="tablaEmpleados">
+
+            <!-- VACÍO -->
+            <tr th:if="${#lists.isEmpty(empleados)}">
+                <td colspan="7" class="text-center">No hay empleados registrados.</td>
+            </tr>
+
+            <!-- LISTAR -->
+            <tr th:each="e : ${empleados}">
+                <td th:text="${e.id}"></td>
+                <td><strong th:text="${e.nombre}"></strong></td>
+                <td th:text="${e.dni}"></td>
+                <td th:text="${e.telefono}"></td>
+                <td th:text="${'S/ ' + e.sueldoBase}"></td>
+                <td>
+                    <span class="badge badge-success" th:if="${e.estado == 1}">Activo</span>
+                    <span class="badge badge-danger"  th:if="${e.estado == 0}">Inactivo</span>
+                </td>
+                <td>
+                    <!-- EDITAR -->
+                    <button class="btn btn-warning btn-sm"
+                            th:onclick="'abrirModalEditar(' + ${e.id} + ')'"
+                            title="Editar Empleado">
+                        <i class="fas fa-edit"></i>
+                    </button>
+
+                    <!-- ELIMINAR -->
+                    <button class="btn btn-danger btn-sm"
+                            th:onclick="'eliminarEmpleado(' + ${e.id} + ')'"
+                            title="Eliminar Empleado">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+
+            </tbody>
+        </table>
+
+    </div>
+
+    <!-- MODAL EMPLEADO (SIRVE PARA CREAR Y EDITAR) -->
+    <div class="modal fade" id="modal-empleado" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark">
+                    <h5 class="modal-title text-white" id="modal-titulo">Empleado</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="form-empleado" action="/empleados" method="post">
+
+                        <!-- 1. DNI CON LUPA -->
+                        <div class="form-group mb-3">
+                            <label for="input-dni">DNI</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control"
+                                       id="input-dni" name="dni"
+                                       placeholder="8 dígitos"
+                                       maxlength="8" pattern="\d{8}" required>
+
+                                <div class="input-group-append">
+                                    <button class="btn btn-info" type="button" id="btn-buscar-dni" onclick="buscarDniApi()">
+                                        <span id="icono-buscar"><i class="fas fa-search"></i></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="text-muted">Debe contener exactamente 8 números. Usa la lupa para buscar.</small>
+                        </div>
+
+                        <!-- 2. NOMBRE COMPLETO -->
+                        <div class="form-group">
+                            <label>Nombre Completo</label>
+                            <input type="text" class="form-control"
+                                   id="input-nombre" name="nombre"
+                                   placeholder="Se autocompletará al buscar el DNI" required>
+                        </div>
+
+                        <!-- 3. SUELDO BASE -->
+                        <div class="form-group">
+                            <label>Sueldo Base</label>
+                            <input type="number" class="form-control"
+                                   id="input-sueldo" name="sueldoBase"
+                                   step="0.01" min="0.00" placeholder="0.00" required>
+                        </div>
+
+                        <!-- 4. TELÉFONO (ACTUALIZADO: EMPIEZA CON 9 Y TIENE 9 DÍGITOS) -->
+                        <div class="form-group">
+                            <label>Teléfono</label>
+                            <input type="text" class="form-control"
+                                   id="input-telefono" name="telefono"
+                                   placeholder="Ej: 987654321"
+                                   maxlength="9" pattern="9\d{8}" required>
+                            <small class="text-muted">Debe tener 9 números y comenzar obligatoriamente con el dígito 9.</small>
+                        </div>
+
+                        <div class="text-right">
+                            <button type="submit" class="btn btn-info" id="btn-guardar">Guardar</button>
+                            <button type="button" class="btn btn-secondary"
+                                    data-dismiss="modal">Cancelar</button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR ELIMINAR -->
+    <div class="modal fade" id="modal-eliminar-empleado" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+
+                <div class="modal-header bg-danger">
+                    <h5 class="modal-title text-white">Eliminar Empleado</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body text-center">
+                    <p>¿Estás seguro de que deseas eliminar este empleado?</p>
+                    <p class="text-muted">Se realizará una desactivación lógica en el sistema.</p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger"
+                            id="btn-confirmar-eliminar-empleado">Eliminar</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/assets/js/empleados.js}"></script>
+
+</div> <!-- Cierre del th:fragment="content" -->
+</body>
+</html>

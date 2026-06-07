@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-user-tag"></i>
+            <strong>Gestión de Perfiles</strong>
+        </h3>
+
+        <hr>
+
+        <!-- BOTON NUEVO -->
+        <button id="btn-crear-perfil" class="btn btn-info mb-3" type="button">
+            <i class="fas fa-plus"></i>
+            Nuevo Perfil
+        </button>
+        <!-- TABLA -->
+        <table class="table table-bordered table-striped">
+
+            <thead class="thead-dark">
+
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre de Perfil</th>
+                    <th>Descripción</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="tabla-perfiles" th:fragment="tablaPerfiles">
+
+                <!-- SI NO HAY DATOS -->
+                <tr th:if="${#lists.isEmpty(perfiles)}">
+
+                    <td colspan="5"
+                        class="text-center">
+
+                        No hay perfiles registrados.
+
+                    </td>
+
+                </tr>
+
+                <!-- LISTAR -->
+                <tr th:each="p : ${perfiles}" th:attr="data-id=${p.id}">
+
+                    <td th:text="${p.id}"></td>
+
+                    <td th:text="${p.nombrePerfil}"></td>
+
+                    <td th:text="${p.descripcion}"></td>
+
+                    <td>
+
+                        <span class="badge badge-success"
+                              th:if="${p.estado == 1}">
+                            ACTIVO
+                        </span>
+
+                        <span class="badge badge-danger"
+                              th:if="${p.estado == 0}">
+                            INACTIVO
+                        </span>
+
+                        <span class="badge badge-secondary"
+                              th:if="${p.estado == 2}">
+                            ELIMINADO
+                        </span>
+
+                    </td>
+
+                    <td>
+                        <!-- PERMISOS -->
+                        <button type="button" class="btn btn-info btn-sm btn-permisos-perfil"
+                                th:attr="data-id=${p.id},data-nombre=${p.nombrePerfil}">
+                            <i class="fas fa-key"></i>
+                        </button>
+
+                        <!-- EDITAR -->
+                        <button type="button" class="btn btn-warning btn-sm btn-editar-perfil"
+                                th:attr="data-id=${p.id}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+
+                        <!-- ACTIVAR / DESACTIVAR -->
+                        <button type="button" class="btn btn-success btn-sm btn-cambiar-estado"
+                                th:if="${p.id != 1 and p.estado == 0}"
+                                th:attr="data-id=${p.id},data-estado=${p.estado}">
+                            <i class="fas fa-check"></i>
+                        </button>
+
+                        <button type="button" class="btn btn-secondary btn-sm btn-cambiar-estado"
+                                th:if="${p.id != 1 and p.estado == 1}"
+                                th:attr="data-id=${p.id},data-estado=${p.estado}">
+                            <i class="fas fa-ban"></i>
+                        </button>
+
+                        <!-- ELIMINAR -->
+                        <button type="button" class="btn btn-danger btn-sm btn-eliminar-perfil"
+                                th:if="${p.id != 1 and p.estado != 2}"
+                                th:attr="data-id=${p.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+
+
+
+    <!-- MODAL PERFIL -->
+    <div class="modal fade"
+         id="modal-perfil"
+         tabindex="-1"
+         data-backdrop="false">
+
+        <div class="modal-dialog">
+
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark">
+
+                    <h5 id="modal-titulo-perfil" class="modal-title">
+                        Crear Perfil
+                    </h5>
+
+                    <button type="button"
+                            class="close text-white"
+                            data-dismiss="modal">
+
+                        ×
+
+                    </button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="form-perfil">
+
+                        <input type="hidden"
+                               id="id-perfil"
+                               name="id">
+
+                        <label>
+                            Nombre del Perfil
+                        </label>
+
+                        <input type="text"
+                               class="form-control"
+                               id="nombre-perfil"
+                               name="nombrePerfil">
+
+                        <label class="mt-2">
+                            Descripción
+                        </label>
+
+                        <textarea class="form-control"
+                                  id="descripcion-perfil"
+                                  name="descripcion"></textarea>
+
+                        <div class="modal-footer">
+
+                            <button type="submit"
+                                    class="btn btn-info">
+
+                                Guardar
+
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    data-dismiss="modal"
+                                    id="btn-cancelar-perfil">
+                                Cancelar
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+
+
+        <!-- MODAL PERMISOS -->
+        <div class="modal fade"
+            id="modal-permisos"
+            tabindex="-1"
+            data-backdrop="false">
+
+        <div class="modal-dialog modal-lg">
+
+            <div class="modal-content">
+
+                <div class="modal-body">
+
+                    <h5 class="mb-3">
+                        Asignando Permisos
+                    </h5>
+
+                    <p class="mb-3">
+                        Perfil: <strong id="perm-nombre-perfil"></strong>
+                    </p>
+
+                    <form id="form-permisos-ajax">
+
+                        <input type="hidden" id="perm-id" name="permId">
+
+                        <div class="table-responsive"
+                             style="max-height: 400px; overflow-y: auto;">
+
+                            <table class="table table-sm table-hover table-striped">
+
+                                <thead class="thead-dark">
+
+                                    <tr>
+                                        <th>Opción</th>
+                                    </tr>
+
+                                </thead>
+
+                                <tbody id="perm-lista-opciones">
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                        <div class="mt-3">
+
+                            <button type="submit" class="btn btn-success">
+                                Guardar Permisos
+                            </button>
+
+                            <button type="button" class="btn btn-secondary close-permisos">
+                                Cerrar
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script th:src="@{/assets/js/perfiles.js}" defer></script>
+
+</div>
+
+</body>
+</html>

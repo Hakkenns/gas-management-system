@@ -2,6 +2,7 @@ package com.gas.sistema_gas.controller;
 
 import java.util.Map;
 
+import com.gas.sistema_gas.service.EmpleadoService;
 import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,19 +36,30 @@ public class UsuarioController {
     private PerfilService perfilService;
     @Autowired
     private OpcionService opcionService;
+    @Autowired
+    private EmpleadoService empleadoService;
 
-    // ─── GET: carga la vista ───────────────────────────────────────────
     @GetMapping
     public String usuarios(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+
+        // 1. Lista de usuarios para rellenar la grilla principal
         model.addAttribute("usuarios", usuarioService.listAll());
+
+        // 2. Lista de empleados activos sin cuenta para el primer selector dinámico
+        model.addAttribute("empleadosDisponibles", empleadoService.listEmpleadosSinUsuario());
+
+        // 3. CORRECCIÓN: Restablece la carga de perfiles activos para el segundo selector dinámico
         model.addAttribute("perfiles", perfilService.listActive());
+
+        // 4. Estructura de menú de navegación lateral y layout maestro
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("contenido", "views/usuario");
+
         return "components/layout";
     }
 
-    // ─── GET por ID: retorna JSON para el JS del modal editar ──────────
+    // GET por ID: retorna JSON para el JS del modal editar
     @GetMapping("/{id}")
     @ResponseBody
     public UsuarioDTO.SimpleResponse getById(@PathVariable Long id) {
@@ -126,4 +138,5 @@ public class UsuarioController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("status", "ERROR", "message", message));
     }
+
 }
