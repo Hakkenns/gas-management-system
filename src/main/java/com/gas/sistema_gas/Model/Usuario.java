@@ -17,20 +17,21 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-@Data
-@Entity
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@Entity
 @Table(name = "usuarios")
-
 public class Usuario {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
@@ -41,21 +42,17 @@ public class Usuario {
     @NotBlank(message = "El username es obligatorio")
     private String userName;
 
-    @Column(name = "nombre", nullable = false, length = 150)
-    @NotBlank(message = "El nombre completo es obligatorio")
-    private String nombre;
-
     @Column(nullable = false, length = 255)
     @NotBlank(message = "La contraseña es obligatoria")
     private String password;
 
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
-    
+
     @Column(nullable = false)
     private Integer estado = 1;
 
-    // Relación de Muchos a uno con (Clase perfil)
+    // Relación de Muchos a uno con Perfil
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_perfil", nullable = false)
     private Perfil perfil;
@@ -65,14 +62,13 @@ public class Usuario {
     @Email(message = "Debe proporcionar un formato de correo válido (ejemplo@dominio.com)")
     private String correo;
 
-    // Dentro de la clase Usuario
+    // Relación uno a uno con Empleado (Mantiene la clave foránea id_empleado)
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_empleado") // Asegúrate que esta columna exista en tu DB (tabla usuarios)
+    @JoinColumn(name = "id_empleado")
     private Empleado empleado;
 
     @PrePersist
     protected void onCreate(){
         this.fechaCreacion = LocalDateTime.now();
     }
-
 }

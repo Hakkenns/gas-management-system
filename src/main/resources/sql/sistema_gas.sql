@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3307
--- Tiempo de generación: 06-06-2026 a las 04:09:44
+-- Tiempo de generación: 07-06-2026 a las 03:48:45
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.0.30
 
@@ -216,6 +216,15 @@ CREATE TABLE `empleados` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `empleados`
+--
+
+INSERT INTO `empleados` (`id_empleado`, `dni`, `nombre`, `telefono`, `sueldo_base`, `descuentos`, `estado`, `created_at`, `updated_at`) VALUES
+(2, '70135060', 'YOVANA MAMANI FAIJO', '965456456', 150.00, 0.00, 1, '2026-06-06 19:33:26', '2026-06-06 19:47:05'),
+(3, '73838677', 'ROY AGAPITO VEGAS', '963332114', 122.00, 0.00, 1, '2026-06-06 19:41:08', '2026-06-06 19:57:58'),
+(4, '76195535', 'ALEX AGAPITO VEGAS', '963332166', 250.00, 0.00, 1, '2026-06-06 20:28:56', '2026-06-06 20:28:56');
+
 -- --------------------------------------------------------
 
 --
@@ -341,7 +350,10 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (8, 'Rubros', 'fas fa-tags', 'rubros', 1, 4),
 (9, 'Compras', 'fas fa-shopping-cart', 'compras', 1, NULL),
 (10, 'Ventas', 'fas fa-cash-register', 'ventas', 1, NULL),
-(11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL);
+(11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL),
+(12, 'Empleados', 'fas fa-user-tie', 'empleados', 1, NULL),
+(13, 'Clientes', 'fas fa-user-friends', 'clientes', 1, NULL),
+(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacionMotos', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -416,6 +428,7 @@ CREATE TABLE `perfil_opcion` (
 
 INSERT INTO `perfil_opcion` (`id_perfil`, `id_opcion`) VALUES
 (2, 4),
+(2, 10),
 (4, 4);
 
 -- --------------------------------------------------------
@@ -515,19 +528,20 @@ CREATE TABLE `usuarios` (
   `password` varchar(255) NOT NULL,
   `fecha_creacion` datetime DEFAULT NULL,
   `estado` int(11) NOT NULL,
-  `id_empleado` bigint(20) DEFAULT NULL,
-  `nombre` varchar(150) NOT NULL
+  `id_empleado` bigint(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `usuarios`
 --
 
-INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`, `nombre`) VALUES
-(1, 1, 'yogacix5', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 2, NULL, 'yoga'),
-(2, 1, 'admin_zair', 'zair9@gmail.com', '$2a$10$VIUBS8.d7GhLbO3GKmGRLO.okTqHNYKp4F0pec2GCaE6u2PD85qju', '2026-05-15 05:45:50', 1, NULL, 'zair'),
-(3, 2, 'admin_roy', 'roy1@gmail.com', '$2a$10$gQ1JJxgT0Gr0X8uJ9Hnctux3usU6kpHgPdHNiLFioyrhwlSgGYXiu', '2026-05-15 05:50:44', 1, NULL, 'royA'),
-(4, 4, 'motorizado_abel', 'abelordonez@gmail.com', '$2a$10$qepz3mo6j0A.Y3TNT44zYO.J7A5ncAOczVD7NxbwO98M99G.tDAS2', '2026-05-15 09:05:31', 1, NULL, 'abel');
+INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`) VALUES
+(1, 1, 'yogacix5', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 2, NULL),
+(2, 1, 'admin_zair', 'zair9@gmail.com', '$2a$10$VIUBS8.d7GhLbO3GKmGRLO.okTqHNYKp4F0pec2GCaE6u2PD85qju', '2026-05-15 05:45:50', 1, NULL),
+(4, 4, 'motorizado_abel', 'abelordonez@gmail.com', '$2a$10$qepz3mo6j0A.Y3TNT44zYO.J7A5ncAOczVD7NxbwO98M99G.tDAS2', '2026-05-15 09:05:31', 1, NULL),
+(5, 1, 'admin_roy', 'roy1@gmail.com', '$2a$10$BSd3X.R8bcClmFDB/e8JIOwVE7sesuJJsk1W4IkQ8yQu39NXJRDNq', '2026-06-06 20:14:48', 1, 3),
+(6, 2, 'admin_yovana', 'anonimo1324@ejemplo.com', '$2a$10$LHYMpZtkudvEWJBOg1fYzOzgnUn08rIE3rXORlckY5yukYb.zfgTu', '2026-06-06 20:27:54', 1, 2),
+(7, 2, 'admin_alex', 'anonimo13232324@ejemplo.com', '$2a$10$nJoaLFXMvUkoNkR6Wc5CmOqEXeX2PclRkATw.mWODnk9VeGt//owW', '2026-06-06 20:29:27', 1, 4);
 
 --
 -- Índices para tablas volcadas
@@ -705,6 +719,12 @@ ALTER TABLE `usuarios`
 --
 
 --
+-- AUTO_INCREMENT de la tabla `asignacion_motos`
+--
+ALTER TABLE `asignacion_motos`
+  MODIFY `id_asignacion` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `categorias`
 --
 ALTER TABLE `categorias`
@@ -747,6 +767,12 @@ ALTER TABLE `detalle_pedido`
   MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT de la tabla `empleados`
+--
+ALTER TABLE `empleados`
+  MODIFY `id_empleado` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
 -- AUTO_INCREMENT de la tabla `historial_stock`
 --
 ALTER TABLE `historial_stock`
@@ -768,7 +794,7 @@ ALTER TABLE `motos`
 -- AUTO_INCREMENT de la tabla `opciones`
 --
 ALTER TABLE `opciones`
-  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id_opciones` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `pedidos`
@@ -804,7 +830,7 @@ ALTER TABLE `rubros`
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id_usuario` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_usuario` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- Restricciones para tablas volcadas

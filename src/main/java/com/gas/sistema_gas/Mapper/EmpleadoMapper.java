@@ -17,7 +17,6 @@ public interface EmpleadoMapper {
     @Mapping(target = "updatedAt", ignore = true)
     Empleado toEntity(EmpleadoDTO.Create dto);
 
-    @Mapping(target = "id", ignore = true)
     EmpleadoDTO.SimpleResponse toSimpleResponse(Empleado empleado);
 
 

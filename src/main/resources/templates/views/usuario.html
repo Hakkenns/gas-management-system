@@ -26,62 +26,62 @@
         <!-- TABLA -->
         <table class="table table-bordered table-striped">
             <thead class="thead-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Usuario</th>
-                    <th>Correo</th>
-                    <th>Perfil</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Correo</th>
+                <th>Perfil</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
             </thead>
             <tbody id="tabla-usuarios" th:fragment="tablaUsuarios">
 
-                <!-- VACÍO -->
-                <tr th:if="${#lists.isEmpty(usuarios)}">
-                    <td colspan="7" class="text-center">No hay usuarios registrados.</td>
-                </tr>
+            <!-- VACÍO -->
+            <tr th:if="${#lists.isEmpty(usuarios)}">
+                <td colspan="7" class="text-center">No hay usuarios registrados.</td>
+            </tr>
 
-                <!-- LISTAR -->
-                <tr th:each="u : ${usuarios}">
-                    <td th:text="${u.id}"></td>
-                    <td th:text="${u.nombre}"></td>
-                    <td th:text="${u.userName}"></td>
-                    <td th:text="${u.correo}"></td>
-                    <td th:text="${u.nombrePerfil}"></td>
-                    <td>
-                        <span class="badge badge-success" th:if="${u.estado == 1}">Activo</span>
-                        <span class="badge badge-danger"  th:if="${u.estado == 0}">Inactivo</span>
-                    </td>
-                    <td>
-                        <!-- EDITAR -->
-                        <button class="btn btn-warning btn-sm"
-                                th:onclick="'abrirModalEditar(' + ${u.id} + ')'">
-                            <i class="fas fa-edit"></i>
-                        </button>
+            <!-- LISTAR -->
+            <tr th:each="u : ${usuarios}">
+                <td th:text="${u.id}"></td>
+                <td th:text="${u.nombre}"></td>
+                <td th:text="${u.userName}"></td>
+                <td th:text="${u.correo}"></td>
+                <td th:text="${u.nombrePerfil}"></td>
+                <td>
+                    <span class="badge badge-success" th:if="${u.estado == 1}">Activo</span>
+                    <span class="badge badge-danger"  th:if="${u.estado == 0}">Inactivo</span>
+                </td>
+                <td>
+                    <!-- EDITAR -->
+                    <button class="btn btn-warning btn-sm"
+                            th:onclick="'abrirModalEditar(' + ${u.id} + ')'">
+                        <i class="fas fa-edit"></i>
+                    </button>
 
-                        <!-- ACTIVAR -->
-                        <button class="btn btn-success btn-sm"
-                                th:if="${u.estado == 0}"
-                                th:onclick="'cambiarEstado(' + ${u.id} + ', 1)'">
-                            <i class="fas fa-check"></i>
-                        </button>
+                    <!-- ACTIVAR -->
+                    <button class="btn btn-success btn-sm"
+                            th:if="${u.estado == 0}"
+                            th:onclick="'cambiarEstado(' + ${u.id} + ', 1)'">
+                        <i class="fas fa-check"></i>
+                    </button>
 
-                        <!-- DESACTIVAR -->
-                        <button class="btn btn-secondary btn-sm"
-                                th:if="${u.estado == 1}"
-                                th:onclick="'cambiarEstado(' + ${u.id} + ', 0)'">
-                            <i class="fas fa-ban"></i>
-                        </button>
+                    <!-- DESACTIVAR -->
+                    <button class="btn btn-secondary btn-sm"
+                            th:if="${u.estado == 1}"
+                            th:onclick="'cambiarEstado(' + ${u.id} + ', 0)'">
+                        <i class="fas fa-ban"></i>
+                    </button>
 
-                        <!-- ELIMINAR -->
-                        <button class="btn btn-danger btn-sm"
-                                th:onclick="'eliminarUsuario(' + ${u.id} + ')'">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
+                    <!-- ELIMINAR -->
+                    <button class="btn btn-danger btn-sm"
+                            th:onclick="'eliminarUsuario(' + ${u.id} + ')'">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
 
             </tbody>
         </table>
@@ -102,32 +102,38 @@
 
                     <form id="form-usuario" action="/usuarios" method="post">
 
-                        <div class="form-group">
-                            <label>Nombre Completo</label>
-                            <input type="text" class="form-control"
-                                   id="input-nombre" name="nombre">
+                        <!-- SELECCIONAR EMPLEADO SIN USUARIO (NUEVO) -->
+                        <div class="form-group mb-3" id="wrapper-select-empleado">
+                            <label for="select-empleado">Seleccionar Empleado</label>
+                            <select class="form-control" id="select-empleado" name="idEmpleado">
+                                <option value="" disabled selected>-- Seleccione un empleado sin cuenta --</option>
+                                <option th:each="emp : ${empleadosDisponibles}"
+                                        th:value="${emp.id}"
+                                        th:text="${emp.nombre}">
+                                </option>
+                            </select>
+                            <small class="text-muted">Solo figuran empleados activos sin usuario asignado.</small>
                         </div>
 
                         <div class="form-group">
                             <label>Usuario</label>
                             <input type="text" class="form-control"
-                                   id="input-username" name="userName">
+                                   id="input-username" name="userName" required>
                         </div>
 
                         <div class="form-group">
                             <label>Correo</label>
                             <input type="email" class="form-control"
-                                   id="input-correo" name="correo">
+                                   id="input-correo" name="correo" required>
                         </div>
 
-                        <div class="form-group">
-                            <label>Perfil</label>
-                            <select class="form-control"
-                                    id="input-perfil" name="idPerfil">
+                        <div class="form-group mb-3">
+                            <label for="input-perfil">Perfil</label>
+                            <select class="form-control" id="input-perfil" name="idPerfil" required>
                                 <option value="">Seleccione un perfil</option>
-                                <option th:each="p : ${perfiles}"
-                                        th:value="${p.id}"
-                                        th:text="${p.nombrePerfil}">
+                                <option th:each="per : ${perfiles}"
+                                        th:value="${per.id}"
+                                        th:text="${per.nombrePerfil}">
                                 </option>
                             </select>
                         </div>
@@ -141,13 +147,11 @@
                                        id="input-password"
                                        name="password"
                                        placeholder="Dejar vacío para mantener la actual">
-                                <div class="input-group-append">
-                                    <button class="btn btn-outline-secondary"
-                                            type="button"
-                                            onclick="togglePassword()">
-                                        <i class="fas fa-eye" id="icono-password"></i>
-                                    </button>
-                                </div>
+                                <button class="btn btn-outline-secondary"
+                                        type="button"
+                                        onclick="togglePassword()">
+                                    <i class="fas fa-eye" id="icono-password"></i>
+                                </button>
                             </div>
                             <small class="text-muted">
                                 Solo completa este campo si deseas cambiar la contraseña.
