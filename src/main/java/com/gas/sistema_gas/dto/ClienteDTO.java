@@ -38,6 +38,7 @@ public class ClienteDTO {
         String telefono,
         String direccion,
         String referencia,
+        String correo,
         Integer estado
     ){}
 

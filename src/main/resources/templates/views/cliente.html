@@ -28,6 +28,7 @@
                 <th>Nombre / Razón Social</th>
                 <th>DNI</th>
                 <th>Teléfono</th>
+                <th>Correo</th>
                 <th>Dirección</th>
                 <th>Estado</th>
                 <th>Acciones</th>
@@ -44,6 +45,7 @@
                 <td><strong th:text="${c.nombre()}"></strong></td>
                 <td th:text="${c.dni() != null && !c.dni().isEmpty() ? c.dni() : '---'}"></td>
                 <td th:text="${c.telefono()}"></td>
+                <td th:text="${c.correo()}"></td>
                 <td th:text="${c.direccion()}"></td>
                 <td>
                     <span class="badge badge-success" th:if="${c.estado() == 1}">Activo</span>
