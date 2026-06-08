@@ -77,10 +77,32 @@ public class CompraController {
     public ResponseEntity<List<Map<String, Object>>> getDetalleByCompra(@PathVariable Long id) {
         List<DetalleCompra> detalles = compraService.listDetallesByCompraId(id);
         List<Map<String, Object>> res = detalles.stream().map(d -> {
+            var producto = d.getProducto();
+            var capacidad = producto.getCapacidad();
+            var unidad = producto.getUnidadMedida();
+            String unidadLabel = "";
+            if ("KG".equals(unidad)) unidadLabel = " kg";
+            else if ("L".equals(unidad)) unidadLabel = " L";
+            else if ("M".equals(unidad)) unidadLabel = " m";
+            String nombreCompleto = producto.getNombre();
+            if (capacidad != null) {
+                nombreCompleto = nombreCompleto + " - " + capacidad + unidadLabel;
+            }
+            
+            var cantidadBD = java.math.BigDecimal.valueOf(d.getCantidad());
+            var precio = d.getPrecioCostoUnitario();
+            
+            if ("M".equals(unidad) && capacidad != null && capacidad.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                cantidadBD = cantidadBD.divide(capacidad, 2, java.math.RoundingMode.HALF_UP);
+                precio = precio.multiply(capacidad);
+            }
+            
             Map<String, Object> m = new HashMap<>();
-            m.put("producto", d.getProducto().getNombre());
-            m.put("cantidad", d.getCantidad());
-            m.put("precio", d.getPrecioCostoUnitario());
+            m.put("producto", nombreCompleto);
+            m.put("cantidad", cantidadBD);
+            m.put("precio", precio);
+            m.put("unidad", unidad);
+            m.put("capacidad", capacidad);
             return m;
         }).toList();
         return ResponseEntity.ok(res);

@@ -12,6 +12,8 @@ public class ProductoDTO {
         boolean requiereEnvase,
         @NotNull(message = "La categoría es obligatoria")
         Long idCategoria,
+        BigDecimal capacidad,
+        String unidadMedida,
         @NotNull(message = "La ganancia del producto es obligatoria")
         @DecimalMin(value = "0.00", message = "La ganancia no puede ser negativa")
         BigDecimal gananciaProducto,
@@ -19,8 +21,8 @@ public class ProductoDTO {
         @Min(value = 0, message = "El stock de vacíos no puede ser negativo")
         Integer stockVacios,
         @NotNull(message = "El stock mínimo es obligatorio")
-        @Min(value = 0, message = "El stock mínimo no puede ser negativo")
-        Integer stockMinimo
+        @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
+        BigDecimal stockMinimo
     ){}
 
     public record SimpleResponse(
@@ -30,13 +32,15 @@ public class ProductoDTO {
         String urlImagen,
         Long idCategoria,
         String nombreCategoria,
+        BigDecimal capacidad,
+        String unidadMedida,
         BigDecimal precioCompra,
         BigDecimal gananciaProducto,
         BigDecimal precioVenta,
         boolean requiereEnvase,
-        Integer stockLlenos,
+        BigDecimal stockLlenos,
         Integer stockVacios,
-        Integer stockMinimo,
+        BigDecimal stockMinimo,
         Integer estado
     ){}
 
@@ -44,6 +48,8 @@ public class ProductoDTO {
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
         String descripcion,
+        BigDecimal capacidad,
+        String unidadMedida,
         @NotNull(message = "La ganancia del producto es obligatoria")
         @DecimalMin(value = "0.00")
         BigDecimal gananciaProducto,
@@ -54,8 +60,8 @@ public class ProductoDTO {
         @Min(value = 0, message = "El stock de vacíos no puede ser negativo")
         Integer stockVacios,
         @NotNull(message = "El stock mínimo es obligatorio")
-        @Min(value = 0, message = "El stock mínimo no puede ser negativo")
-        Integer stockMinimo,
+        @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
+        BigDecimal stockMinimo,
         Integer estado
     ){}
 }

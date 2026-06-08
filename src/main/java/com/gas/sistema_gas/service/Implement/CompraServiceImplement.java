@@ -1,5 +1,6 @@
 package com.gas.sistema_gas.service.Implement;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,24 +65,39 @@ public class CompraServiceImplement implements CompraService {
 
         Compra compraGuardada = compraRepository.save(compra);
 
-        // Procesar la lista de productos agregados
+                // Procesar la lista de productos agregados
         for (CompraDTO.DetalleItem item : dto.detalles()) {
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            // 🛢️ LÓGICA DE NEGOCIO: Actualizamos automáticamente el Almacén de Llenos
-            producto.setStockLlenos(producto.getStockLlenos() + item.cantidad());
+            // 🛢️ LÓGICA DE NEGOCIO: Convertimos item.cantidad() a BigDecimal antes de sumar con .add()
+            BigDecimal cantidadComprada = BigDecimal.valueOf(item.cantidad());
+            producto.setStockLlenos(producto.getStockLlenos().add(cantidadComprada));
+
+            // Actualizar precio de compra y precio de venta según la compra
+            if (item.precioCostoUnitario() != null) {
+                producto.setPrecioCompra(item.precioCostoUnitario());
+                BigDecimal ganancia = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
+                producto.setPrecioVenta(item.precioCostoUnitario().add(ganancia));
+            }
+
             productoRepository.save(producto);
 
             // Guardar fila en detalle_compra
             DetalleCompra detalle = new DetalleCompra();
             detalle.setCompra(compraGuardada);
             detalle.setProducto(producto);
-            detalle.setCantidad(item.cantidad());
+            
+            // Si en tu entidad DetalleCompra cambiaste cantidad a BigDecimal, usa:
+            // detalle.setCantidad(cantidadComprada);
+            // Si aún es Integer (temporalmente), usa la línea de abajo:
+            detalle.setCantidad(item.cantidad()); 
+            
             detalle.setPrecioCostoUnitario(item.precioCostoUnitario());
 
             detalleCompraRepository.save(detalle);
         }
+
 
         return compraMapper.toSimpleResponse(compraGuardada);
     }
@@ -94,6 +110,37 @@ public class CompraServiceImplement implements CompraService {
         if (compra.getSituacion() != null && compra.getSituacion() == 2) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La compra ya está anulada");
         }
+
+        // Obtener todos los detalles de esta compra
+        List<DetalleCompra> detalles = detalleCompraRepository.findByCompraId(idCompra);
+
+        // Revertir cambios en productos
+        for (DetalleCompra detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            
+            // Restar la cantidad que se agregó al stock
+            BigDecimal cantidadComprada = BigDecimal.valueOf(detalle.getCantidad());
+            producto.setStockLlenos(producto.getStockLlenos().subtract(cantidadComprada));
+
+            // Verificar si hay otras compras activas (no anuladas) de este producto
+            long otrasCompras = detalleCompraRepository.countByProductoIdAndCompraIdNotAndCompraSituacionNot(
+                    producto.getId(), idCompra, 2);
+
+            // Si no hay otras compras, resetear precios
+            if (otrasCompras == 0) {
+                producto.setPrecioCompra(BigDecimal.ZERO);
+                // Precio venta = ganancia (sin precio de compra, solo la ganancia)
+                BigDecimal ganancia = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
+                producto.setPrecioVenta(ganancia);
+            }
+
+            productoRepository.save(producto);
+            
+            // Eliminar el detalle de esta compra
+            detalleCompraRepository.delete(detalle);
+        }
+
+        // Marcar la compra como anulada
         compra.setSituacion(2);
         Compra compraActualizada = compraRepository.save(compra);
         return compraMapper.toSimpleResponse(compraActualizada);

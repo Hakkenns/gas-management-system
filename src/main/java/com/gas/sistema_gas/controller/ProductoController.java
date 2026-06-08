@@ -37,12 +37,12 @@ public class ProductoController {
     @GetMapping
     public String productos(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
-        
+
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("productos", productoService.listAll());
-        
+
         // Alimentamos los combos selectores del modal
-        model.addAttribute("categorias", categoriaService.listAll()); 
+        model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("contenido", "views/productos");
         return "components/layout";
     }
@@ -54,7 +54,7 @@ public class ProductoController {
         return "views/productos :: tablaProductos";
     }
 
-    //Obtener datos de un producto por ID para cargar el modal de edición
+    // Obtener datos de un producto por ID para cargar el modal de edición
     @GetMapping("/{id}")
     @ResponseBody
     public ProductoDTO.SimpleResponse getById(@PathVariable Long id) {
@@ -65,12 +65,12 @@ public class ProductoController {
     @PostMapping
     @ResponseBody
     public Map<String, Object> guardarProducto(@Valid ProductoDTO.Create productoDto,
-                                               BindingResult result,
-                                               @RequestParam(required = false) String id,
-                                               @RequestParam(name = "archivoImagen", required = false) MultipartFile archivoImagen,
-                                               @RequestParam(name = "imagenBase64", required = false) String imagenBase64,
-                                               @RequestParam(name = "quitarImagen", required = false) Boolean quitarImagen) {
-        
+            BindingResult result,
+            @RequestParam(required = false) String id,
+            @RequestParam(name = "archivoImagen", required = false) MultipartFile archivoImagen,
+            @RequestParam(name = "imagenBase64", required = false) String imagenBase64,
+            @RequestParam(name = "quitarImagen", required = false) Boolean quitarImagen) {
+
         // Validaciones del DTO anotadas con @NotBlank, @NotNull, etc.
         if (result.hasErrors()) {
             String message = result.getAllErrors().get(0).getDefaultMessage();
@@ -89,13 +89,20 @@ public class ProductoController {
                 productoService.updateProduct(productoId, new ProductoDTO.Update(
                         productoDto.nombre(),
                         productoDto.descripcion(),
+
+                        productoDto.capacidad(),
+                        productoDto.unidadMedida(),
+
                         productoDto.gananciaProducto(),
+
                         productoDto.requiereEnvase(),
+
                         productoDto.idCategoria(),
+
                         productoDto.stockVacios(),
                         productoDto.stockMinimo(),
-                        1 // Estado por defecto activo al editar
-                ), archivoImagen, imagenBase64, quitarImagen);
+
+                        1), archivoImagen, imagenBase64, quitarImagen);
             }
             return Map.of("status", "OK");
         } catch (Exception e) {

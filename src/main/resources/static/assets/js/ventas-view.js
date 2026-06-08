@@ -145,8 +145,26 @@ $(function() {
     // Abrir modal de búsqueda de productos
     $('#btn-buscar-producto').on('click', function() {
         $('#input-buscar-nombre').val('');
-        $('#select-buscar-categoria').val('');
         $('#tabla-busqueda-productos tbody tr').show();
+
+        // Si el select de categorías está vacío (solo opción por defecto), poblarlo desde las filas
+        const selectCat = $('#select-buscar-categoria');
+        if (selectCat.length && selectCat.find('option').length <= 1) {
+            const seen = {};
+            selectCat.find('option:gt(0)').remove();
+            $('#tabla-busqueda-productos tbody tr').each(function() {
+                const row = $(this);
+                const catId = row.data('categoria');
+                const catName = row.find('td').eq(1).text().trim();
+                if (catId != null && catId !== '' && !seen[String(catId)]) {
+                    seen[String(catId)] = true;
+                    selectCat.append($('<option>').val(catId).text(catName));
+                }
+            });
+        }
+
+        // Reset category filter
+        if (selectCat.length) selectCat.val('');
         $('#modal-buscar-producto').modal('show');
     });
 
@@ -169,10 +187,10 @@ $(function() {
         $('#tabla-busqueda-productos tbody tr').each(function() {
             const row = $(this);
             const nombreRow = (row.find('td').first().text() || '').toLowerCase();
-            const categoriaRow = row.data('categoria') ? String(row.data('categoria')) : '';
+                const categoriaRow = row.data('categoria') != null ? String(row.data('categoria')) : '';
 
-            const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
-            const matchCategoria = !categoria || categoria === '' || categoriaRow === categoria;
+                const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
+                const matchCategoria = !categoria || categoria === '' || String(categoriaRow) === String(categoria);
 
             if (matchNombre && matchCategoria) {
                 row.show();
@@ -198,15 +216,57 @@ $(function() {
         const row = $(this).closest('tr');
         const id = row.data('id');
         const precio = row.data('precio');
-        const nombre = row.find('td').first().text().trim();
+        const nombreData = row.data('nombre');
+        const capacidadData = row.data('capacidad');
+        const unidadData = row.data('unidad');
 
-            if (id) {
-                // Guardar id en el hidden y mostrar nombre en el input visible
-                $('#select-producto').val(id);
-                $('#input-producto-nombre').val(nombre);
-                $('#select-precio').val(formatMoney(precio));
-                $('#modal-buscar-producto').modal('hide');
+        // Fallback a atributos si jQuery.data no encuentra valores
+        const nombre = (nombreData !== undefined && nombreData !== null) ? String(nombreData).trim() : row.attr('data-nombre') || row.find('td').first().text().trim();
+        const capacidad = (capacidadData !== undefined && capacidadData !== null) ? capacidadData : row.attr('data-capacidad');
+        const unidad = (unidadData !== undefined && unidadData !== null) ? unidadData : row.attr('data-unidad');
+
+        function unidadLabel(u) {
+            if (!u) return '';
+            if (u === 'KG') return 'kg';
+            if (u === 'L') return 'L';
+            if (u === 'M') return 'm';
+            if (u === 'NO_APLICA' || u === 'NO APLICA') return '';
+            return u;
+        }
+
+        if (id) {
+            const labelUnidad = unidadLabel(unidad);
+            let displayName = nombre;
+            const capVal = (capacidad !== undefined && capacidad !== null && String(capacidad).trim() !== '') ? String(capacidad).trim() : '';
+            if (capVal !== '') {
+                displayName = `${nombre} - ${capVal}${labelUnidad ? ' ' + labelUnidad : ''}`;
             }
+
+            // Guardar datos ocultos para la conversión
+            try { $('#select-producto').val(id); } catch (err) {}
+            try { $('#input-producto-nombre').val(displayName); } catch (err) {}
+            try { $('#select-precio').val(formatMoney(precio)); } catch (err) {}
+            try { $('#select-unidad').val(unidad); } catch (err) {}
+            try { $('#select-capacidad').val(capVal); } catch (err) {}
+
+            // Mostrar/ocultar campos según el tipo de unidad
+            if (unidad === 'M' && capVal !== '') {
+                $('#contenedor-metros-rollo').show();
+                $('#select-metros-rollo').val(capVal);
+                $('#label-cantidad').text('¿Cuántos Rollos?');
+                $('#label-precio').text('Precio por Rollo');
+            } else {
+                $('#contenedor-metros-rollo').hide();
+                $('#label-cantidad').text('Cantidad');
+                $('#label-precio').text('Precio Costo');
+            }
+
+            // Reset cantidad y precio
+            $('#select-cantidad').val(1);
+            $('#select-precio').val('');
+
+            $('#modal-buscar-producto').modal('hide');
+        }
     });
 
     $('#select-metodo').on('change', function() {

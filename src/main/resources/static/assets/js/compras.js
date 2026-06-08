@@ -43,9 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     tbody.innerHTML = "";
                     data.forEach(item => {
                         const tr = document.createElement("tr");
+                        const cantidadText = item.unidad === 'M' ? `${item.cantidad} rollos` : `${item.cantidad} unidades`;
                         tr.innerHTML = `
                             <td>${item.producto}</td>
-                            <td>${item.cantidad} unidades</td>
+                            <td>${cantidadText}</td>
                             <td>S/ ${parseFloat(item.precio).toFixed(2)}</td>
                         `;
                         tbody.appendChild(tr);
@@ -84,17 +85,30 @@ document.addEventListener("DOMContentLoaded", () => {
     // Añadir artículo al listado interno del modal
     document.getElementById("btn-agregar-lista").addEventListener("click", () => {
         const selectProd = document.getElementById("select-producto");
+        const inputNombreProd = document.getElementById("input-producto-nombre");
+        const inputUnidad = document.getElementById("select-unidad");
+        const inputCapacidad = document.getElementById("select-capacidad");
         const inputCant = document.getElementById("select-cantidad");
         const inputPrecio = document.getElementById("select-precio");
 
-        const idProducto = selectProd.value;
-        const nombreProducto = selectProd.options[selectProd.selectedIndex].text;
-        const cantidad = parseInt(inputCant.value, 10);
-        const precio = parseFloat(inputPrecio.value);
+        const idProducto = selectProd ? selectProd.value : '';
+        const nombreProducto = inputNombreProd && inputNombreProd.value ? inputNombreProd.value : (selectProd && selectProd.options ? selectProd.options[selectProd.selectedIndex].text : '');
+        const unidad = inputUnidad ? inputUnidad.value : '';
+        const capacidad = inputCapacidad ? parseFloat(inputCapacidad.value) : 0;
+        let cantidad = parseFloat(inputCant.value);
+        let precio = parseFloat(inputPrecio.value);
 
         if (!idProducto || cantidad < 1 || isNaN(precio) || precio <= 0) {
             alert("Seleccione un artículo e ingrese cantidades/precios correctos.");
             return;
+        }
+
+        // Conversión automática si es unidad 'M' (metros/rollos)
+        if (unidad === 'M' && capacidad > 0) {
+            // rollos × metros/rollo = cantidad total en metros
+            cantidad = cantidad * capacidad;
+            // precio/rollo ÷ metros/rollo = precio unitario por metro
+            precio = precio / capacidad;
         }
 
         const duplicado = arrayDetalles.find(item => item.idProducto === idProducto);
@@ -104,9 +118,15 @@ document.addEventListener("DOMContentLoaded", () => {
             arrayDetalles.push({ idProducto, nombreProducto, cantidad, precioCostoUnitario: precio });
         }
 
-        selectProd.value = "";
+        if (selectProd) selectProd.value = "";
+        if (inputNombreProd) inputNombreProd.value = "";
+        if (inputUnidad) inputUnidad.value = "";
+        if (inputCapacidad) inputCapacidad.value = "";
         inputCant.value = "1";
         inputPrecio.value = "";
+        document.getElementById("label-cantidad").innerText = "Cantidad";
+        document.getElementById("label-precio").innerText = "Precio Costo";
+        document.getElementById("contenedor-metros-rollo").style.display = "none";
 
         renderizarFilas();
     });

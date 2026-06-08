@@ -10,7 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 @Data
 @Entity
 @NoArgsConstructor
@@ -19,12 +19,12 @@ import lombok.NoArgsConstructor;
 @Table(name = "productos")
 
 public class Producto {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
     @Column(name = "id_producto")
-    private Long id; 
+    private Long id;
 
     @Column(nullable = false, length = 100)
     @NotBlank(message = "El nombre del producto es obligatorio")
@@ -53,20 +53,24 @@ public class Producto {
     private BigDecimal precioVenta;
 
     // --- MANEJO DE STOCK SEGÚN TU SQL ---
-    @Column(name = "stock_llenos", nullable = false)
+        // --- MANEJO DE STOCK OPTIMIZADO (SOPORTA METROS Y BALONES) ---
+    @Column(name = "stock_llenos", nullable = false, precision = 10, scale = 2)
     @NotNull(message = "El stock de llenos es obligatorio")
-    @Min(value = 0, message = "El stock no puede ser negativo")
-    private Integer stockLlenos = 0;
+    @DecimalMin(value = "0.00", message = "El stock no puede ser negativo")
+    private BigDecimal stockLlenos = BigDecimal.ZERO;
 
+    @Column(name = "stock_minimo", nullable = false, precision = 10, scale = 2)
+    @NotNull(message = "El stock mínimo es obligatorio")
+    @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
+    private BigDecimal stockMinimo = BigDecimal.ZERO;
+    
+    // El stock de envases vacíos se queda igual (Integer) porque el gas/agua se cuenta por unidades de envase enteras
     @Column(name = "stock_vacios", nullable = false)
     @NotNull(message = "El stock de vacíos es obligatorio")
     @Min(value = 0, message = "El stock no puede ser negativo")
     private Integer stockVacios = 0;
+    
 
-    @Column(name = "stock_minimo", nullable = false)
-    @NotNull(message = "El stock mínimo es obligatorio")
-    @Min(value = 0, message = "El stock mínimo no puede ser negativo")
-    private Integer stockMinimo = 0;
     // ------------------------------------
 
     @Column(name = "requiere_envase", nullable = false)
@@ -80,7 +84,11 @@ public class Producto {
     @NotNull(message = "La categoría es obligatoria")
     private Categoria categoria;
 
- 
+    @Column(name = "capacidad", precision = 5, scale = 2)
+    private BigDecimal capacidad;
+
+    @Column(name = "unidad_medida", length = 5)
+    private String unidadMedida;
 
     // Auditoría
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)

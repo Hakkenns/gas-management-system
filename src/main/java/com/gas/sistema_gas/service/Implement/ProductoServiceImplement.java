@@ -38,13 +38,12 @@ public class ProductoServiceImplement implements ProductoService {
         private ProductoRepository productoRepository;
         @Autowired
         private CategoriaRepository categoriaRepository;
-       
 
         @Override
         @Transactional
         public List<ProductoDTO.SimpleResponse> listAll() {
                 return productoRepository.findAll().stream()
-                                .filter(p -> p.getEstado() != 2)                                
+                                .filter(p -> p.getEstado() != 2)
                                 .map(productoMapper::toSimpleResponse)
                                 .collect(Collectors.toList());
         }
@@ -62,7 +61,8 @@ public class ProductoServiceImplement implements ProductoService {
 
         @Override
         @Transactional
-        public ProductoDTO.SimpleResponse createProduct(ProductoDTO.Create createDto, MultipartFile archivoImagen, String imagenBase64) {
+        public ProductoDTO.SimpleResponse createProduct(ProductoDTO.Create createDto, MultipartFile archivoImagen,
+                        String imagenBase64) {
 
                 // Convertir Dto a entidad
                 Producto producto = productoMapper.toEntity(createDto);
@@ -74,103 +74,112 @@ public class ProductoServiceImplement implements ProductoService {
 
                 // Si la categoria existe la asignamos al producto
                 producto.setCategoria(categoria);
-                
-                // Establecer valores por defecto para campos bloqueados
-                producto.setPrecioCompra(BigDecimal.ZERO);  // Vendrá de Compras
-                producto.setGananciaProducto(createDto.gananciaProducto());
-                producto.setPrecioVenta(BigDecimal.ZERO);   // Se calcula después
-                producto.setStockLlenos(0);                 // Vendrá de Compras
-                producto.setStockVacios(createDto.stockVacios() != null ? createDto.stockVacios() : 0);
-                producto.setStockMinimo(createDto.stockMinimo() != null ? createDto.stockMinimo() : 0);
+                producto.setCapacidad(createDto.capacidad());
+                producto.setUnidadMedida(createDto.unidadMedida());
 
-                                String imagenUrl = null;
-                                if (imagenBase64 != null && !imagenBase64.isBlank()) {
-                                        imagenUrl = almacenarImagenDesdeBase64(imagenBase64);
-                                } else {
-                                        imagenUrl = almacenarImagen(archivoImagen);
-                                }
-                                if (imagenUrl != null) {
-                                        producto.setUrlImagen(imagenUrl);
-                                }
+                
+                producto.setPrecioCompra(BigDecimal.ZERO); // Vendrá de Compras
+                producto.setGananciaProducto(createDto.gananciaProducto());
+                producto.setPrecioVenta(BigDecimal.ZERO); // Se calcula después
+                
+                // Pasamos BigDecimal.ZERO en lugar del número entero 0
+                producto.setStockLlenos(BigDecimal.ZERO); 
+                
+                // El stock de vacíos se queda igual porque en tu entidad sigue siendo Integer
+                producto.setStockVacios(createDto.stockVacios() != null ? createDto.stockVacios() : 0);
+                producto.setStockMinimo(createDto.stockMinimo() != null ? createDto.stockMinimo() : BigDecimal.ZERO);
+                String imagenUrl = null;
+                if (imagenBase64 != null && !imagenBase64.isBlank()) {
+                        imagenUrl = almacenarImagenDesdeBase64(imagenBase64);
+                } else {
+                        imagenUrl = almacenarImagen(archivoImagen);
+                }
+                if (imagenUrl != null) {
+                        producto.setUrlImagen(imagenUrl);
+                }
 
                 // Al final guardamos y retornamos una respuesta simple SimpleResponse
                 return productoMapper.toSimpleResponse(productoRepository.save(producto));
         }
 
-                @Override
-                @Transactional
-                public ProductoDTO.SimpleResponse updateProduct(Long id, ProductoDTO.Update updateDto, MultipartFile archivoImagen) {
-                                return updateProduct(id, updateDto, archivoImagen, null, false);
+        @Override
+        @Transactional
+        public ProductoDTO.SimpleResponse updateProduct(Long id, ProductoDTO.Update updateDto,
+                        MultipartFile archivoImagen) {
+                return updateProduct(id, updateDto, archivoImagen, null, false);
+        }
+
+        @Override
+        @Transactional
+        public ProductoDTO.SimpleResponse updateProduct(Long id, ProductoDTO.Update updateDto,
+                        MultipartFile archivoImagen, String imagenBase64, Boolean quitarImagen) {
+
+                // Verificamos que el producto exista
+                Producto producto = productoRepository.findById(id)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "El producto no existe"));
+
+                productoMapper.updateEntityFromDto(updateDto, producto);
+                producto.setCapacidad(updateDto.capacidad());
+                producto.setUnidadMedida(updateDto.unidadMedida());
+
+                // Actualizar ganancia y recalcular precio de venta
+                producto.setGananciaProducto(updateDto.gananciaProducto());
+                if (producto.getPrecioCompra() != null
+                                && producto.getPrecioCompra().compareTo(BigDecimal.ZERO) > 0
+                                && producto.getGananciaProducto() != null) {
+                        producto.setPrecioVenta(producto.getPrecioCompra().add(updateDto.gananciaProducto()));
+                } else {
+                        producto.setPrecioVenta(BigDecimal.ZERO);
                 }
 
-                @Override
-                @Transactional
-                public ProductoDTO.SimpleResponse updateProduct(Long id, ProductoDTO.Update updateDto, MultipartFile archivoImagen, String imagenBase64, Boolean quitarImagen) {
+                // Modificamos las relaciones si se cambian
+                Categoria categoria = categoriaRepository.findById(updateDto.idCategoria())
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "La categoria no existe"));
+                producto.setCategoria(categoria);
 
-                                // Verificamos que el producto exista
-                                Producto producto = productoRepository.findById(id)
-                                                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                                                                "El producto no existe"));
+                // Actualizar stock vacíos (solo si corresponde)
+                producto.setStockVacios(updateDto.stockVacios() != null ? updateDto.stockVacios() : 0);
+                producto.setStockMinimo(updateDto.stockMinimo() != null ? updateDto.stockMinimo() : BigDecimal.ZERO);
 
-                                productoMapper.updateEntityFromDto(updateDto, producto);
-
-                                // Actualizar ganancia y recalcular precio de venta
-                                producto.setGananciaProducto(updateDto.gananciaProducto());
-                                if (producto.getPrecioCompra() != null
-                                                && producto.getPrecioCompra().compareTo(BigDecimal.ZERO) > 0
-                                                && producto.getGananciaProducto() != null) {
-                                        producto.setPrecioVenta(producto.getPrecioCompra().add(updateDto.gananciaProducto()));
-                                } else {
-                                        producto.setPrecioVenta(BigDecimal.ZERO);
-                                }
-
-                                // Modificamos las relaciones si se cambian
-                                Categoria categoria = categoriaRepository.findById(updateDto.idCategoria())
-                                                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                                                                "La categoria no existe"));
-                                producto.setCategoria(categoria);
-
-                                // Actualizar stock vacíos (solo si corresponde)
-                                producto.setStockVacios(updateDto.stockVacios() != null ? updateDto.stockVacios() : 0);
-                                producto.setStockMinimo(updateDto.stockMinimo() != null ? updateDto.stockMinimo() : 0);
-
-                                // Manejo de quitar imagen
-                                if (quitarImagen != null && quitarImagen.booleanValue()) {
-                                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
-                                                eliminarImagenAnterior(producto.getUrlImagen());
-                                        }
-                                        producto.setUrlImagen(null);
-                                }
-
-                                // Nuevas imágenes desde base64 o multipart
-                                if (imagenBase64 != null && !imagenBase64.isBlank()) {
-                                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
-                                                eliminarImagenAnterior(producto.getUrlImagen());
-                                        }
-                                        producto.setUrlImagen(almacenarImagenDesdeBase64(imagenBase64));
-                                } else if (archivoImagen != null && !archivoImagen.isEmpty()) {
-                                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
-                                                eliminarImagenAnterior(producto.getUrlImagen());
-                                        }
-                                        producto.setUrlImagen(almacenarImagen(archivoImagen));
-                                }
-
-                                // retornamos una simple respuesta y guardamos los cambios
-                                return productoMapper.toSimpleResponse(productoRepository.save(producto));
+                // Manejo de quitar imagen
+                if (quitarImagen != null && quitarImagen.booleanValue()) {
+                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
+                                eliminarImagenAnterior(producto.getUrlImagen());
+                        }
+                        producto.setUrlImagen(null);
                 }
 
-                @Override
-                @Transactional
-                public void removeImage(Long id) {
-                                Producto producto = productoRepository.findById(id)
-                                                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                                                                "El producto no existe"));
-                                if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
-                                        eliminarImagenAnterior(producto.getUrlImagen());
-                                }
-                                producto.setUrlImagen(null);
-                                productoRepository.save(producto);
+                // Nuevas imágenes desde base64 o multipart
+                if (imagenBase64 != null && !imagenBase64.isBlank()) {
+                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
+                                eliminarImagenAnterior(producto.getUrlImagen());
+                        }
+                        producto.setUrlImagen(almacenarImagenDesdeBase64(imagenBase64));
+                } else if (archivoImagen != null && !archivoImagen.isEmpty()) {
+                        if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
+                                eliminarImagenAnterior(producto.getUrlImagen());
+                        }
+                        producto.setUrlImagen(almacenarImagen(archivoImagen));
                 }
+
+                // retornamos una simple respuesta y guardamos los cambios
+                return productoMapper.toSimpleResponse(productoRepository.save(producto));
+        }
+
+        @Override
+        @Transactional
+        public void removeImage(Long id) {
+                Producto producto = productoRepository.findById(id)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "El producto no existe"));
+                if (producto.getUrlImagen() != null && producto.getUrlImagen().startsWith("/images/")) {
+                        eliminarImagenAnterior(producto.getUrlImagen());
+                }
+                producto.setUrlImagen(null);
+                productoRepository.save(producto);
+        }
 
         private String almacenarImagen(MultipartFile archivoImagen) {
                 if (archivoImagen == null || archivoImagen.isEmpty()) {
@@ -224,7 +233,8 @@ public class ProductoServiceImplement implements ProductoService {
         }
 
         private String almacenarImagenDesdeBase64(String base64Data) {
-                if (base64Data == null || base64Data.isBlank()) return null;
+                if (base64Data == null || base64Data.isBlank())
+                        return null;
                 try {
                         String data = base64Data;
                         String extension = "";
@@ -286,12 +296,12 @@ public class ProductoServiceImplement implements ProductoService {
                                                 "El producto no existe"));
         }
 
-        //SimpleResponse findById(Long id)
+        // SimpleResponse findById(Long id)
         @Override
-    @Transactional
-    public List<ProductoDTO.SimpleResponse> listLowStock(){
-        return productoRepository.findProductosSinStock().stream()
-                .map(productoMapper::toSimpleResponse)
-                .collect(Collectors.toList());
-    }
+        @Transactional
+        public List<ProductoDTO.SimpleResponse> listLowStock() {
+                return productoRepository.findProductosSinStock().stream()
+                                .map(productoMapper::toSimpleResponse)
+                                .collect(Collectors.toList());
+        }
 }

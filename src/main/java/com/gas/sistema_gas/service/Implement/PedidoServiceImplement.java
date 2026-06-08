@@ -171,12 +171,14 @@ public class PedidoServiceImplement implements PedidoService {
                     ? item.precioUnitario()
                     : producto.getPrecioVenta();
 
-            if (producto.getStockLlenos() < item.cantidad()) {
+            BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
+            
+            if (producto.getStockLlenos().compareTo(cantidadSolicitada) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Stock insuficiente para " + producto.getNombre());
             }
 
-            producto.setStockLlenos(producto.getStockLlenos() - item.cantidad());
+            producto.setStockLlenos(producto.getStockLlenos().subtract(cantidadSolicitada));
             productoRepository.save(producto);
 
             DetallePedido detalle = new DetallePedido();
@@ -234,9 +236,14 @@ public class PedidoServiceImplement implements PedidoService {
 
         for (DetallePedido detalle : detalles) {
             Producto producto = detalle.getProducto();
-            producto.setStockLlenos(producto.getStockLlenos() + detalle.getCantidad());
+            
+            // 📈 SUMA DE STOCK: Convertimos la cantidad del detalle a BigDecimal y usamos .add()
+            BigDecimal cantidadADevolver = BigDecimal.valueOf(detalle.getCantidad());
+            producto.setStockLlenos(producto.getStockLlenos().add(cantidadADevolver));
+            
             productoRepository.save(producto);
         }
+
 
         pedido.setEstadoPedido("ANULADO");
         pedidoRepository.save(pedido);

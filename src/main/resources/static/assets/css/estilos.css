@@ -117,14 +117,27 @@ h1 {
     margin-bottom: 8px;
 }
 
-.form-admin input[type="text"],
-.form-admin input[type="number"],
+/* Campos de entrada del formulario administrativo */
+.form-admin input, 
+.form-admin select, 
 .form-admin textarea {
     width: 100%;
     padding: 10px;
     margin-bottom: 15px;
     border: 1px solid #ddd;
     border-radius: 4px;
+    box-sizing: border-box; /* Asegura que el padding no deforme el ancho */
+}
+
+/* Opciones bloqueadas de unidad de medida */
+.opcion-bloqueada {
+    color: #6c757d;
+    background-color: #e9ecef;
+}
+
+.form-control option.opcion-bloqueada {
+    color: #6c757d;
+    background-color: #e9ecef;
 }
 
 .form-admin button {
@@ -132,12 +145,11 @@ h1 {
 }
 
 /* Bootstrap maneja los estilos de modal; evitar sobreescrituras aquí. */
-
 :root {
   --main-header-height: 57px;
 }
-/* Estilos para el sidebar */
 
+/* Estilos para el sidebar */
 .brand-link {
   display: flex;
   flex-direction: column;
@@ -156,6 +168,33 @@ h1 {
   max-height: 80px;
   width: auto;
   margin-top: 0.5rem;
+}
+
+body.sidebar-collapse .main-sidebar {
+  width: 80px !important;
+}
+
+body.sidebar-collapse .main-sidebar .sidebar {
+  overflow: hidden;
+}
+
+body.sidebar-collapse .main-sidebar .brand-link .brand-text,
+body.sidebar-collapse .main-sidebar .nav-sidebar .nav-link p {
+  opacity: 0;
+  visibility: hidden;
+  width: 0;
+}
+
+body.sidebar-collapse .main-sidebar .nav-sidebar .nav-link {
+  text-align: center;
+}
+
+body.sidebar-collapse .main-sidebar:hover .brand-link .brand-text,
+body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
+  opacity: 1;
+  visibility: visible;
+  width: auto;
+  transition: opacity 0.15s ease;
 }
 
 .content-wrapper {
