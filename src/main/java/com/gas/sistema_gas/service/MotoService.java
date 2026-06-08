@@ -10,4 +10,5 @@ public interface MotoService {
     MotoDTO.SimpleResponse updateMoto(Long id, MotoDTO.Update updateDto);
     void deleteMoto(Long id);
     MotoDTO.SimpleResponse findById(Long id);
+    List<MotoDTO.SimpleResponse> listDisponibles();
 }

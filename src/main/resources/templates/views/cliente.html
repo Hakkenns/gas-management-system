@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html xmlns:th="http://thymeleaf.org">
+
+<body>
+
+<div th:fragment="content">
+
+    <div class="content p-3">
+
+        <h3>
+            <i class="fas fa-users"></i>
+            <strong>Gestión de Clientes</strong>
+        </h3>
+
+        <hr>
+
+        <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
+
+        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-cliente" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus"></i>
+            Nuevo Cliente
+        </button>
+
+        <table class="table table-bordered table-striped">
+            <thead class="thead-dark">
+            <tr>
+                <th>ID</th>
+                <th>Nombre / Razón Social</th>
+                <th>DNI</th>
+                <th>Teléfono</th>
+                <th>Dirección</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-clientes" th:fragment="tablaClientes">
+
+            <tr th:if="${#lists.isEmpty(clientes)}">
+                <td colspan="7" class="text-center">No hay clientes registrados.</td>
+            </tr>
+
+            <tr th:each="c : ${clientes}">
+                <td th:text="${c.id()}"></td>
+                <td><strong th:text="${c.nombre()}"></strong></td>
+                <td th:text="${c.dni() != null && !c.dni().isEmpty() ? c.dni() : '---'}"></td>
+                <td th:text="${c.telefono()}"></td>
+                <td th:text="${c.direccion()}"></td>
+                <td>
+                    <span class="badge badge-success" th:if="${c.estado() == 1}">Activo</span>
+                    <span class="badge badge-danger"  th:if="${c.estado() == 0}">Inactivo</span>
+                </td>
+                <td>
+                    <button class="btn btn-info btn-sm"
+                            th:onclick="'verCliente(' + ${c.id()} + ')'"
+                            title="Ver Detalles">
+                        <i class="fas fa-eye"></i>
+                    </button>
+
+                    <button class="btn btn-warning btn-sm"
+                            th:onclick="'abrirModalEditar(' + ${c.id()} + ')'"
+                            title="Editar Cliente">
+                        <i class="fas fa-edit"></i>
+                    </button>
+
+                    <button class="btn btn-danger btn-sm"
+                            th:onclick="'eliminarCliente(' + ${c.id()} + ')'"
+                            title="Eliminar Cliente">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+
+            </tbody>
+        </table>
+
+    </div>
+
+    <div class="modal fade" id="modal-cliente" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <div class="modal-header bg-dark">
+                    <h5 class="modal-title text-white" id="modal-titulo">Cliente</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="form-cliente" action="/clientes" method="post">
+
+                        <div class="form-group mb-3">
+                            <label for="input-dni">DNI (Opcional)</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control"
+                                       id="input-dni" name="dni"
+                                       placeholder="8 dígitos (Opcional)"
+                                       maxlength="8"
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                                <div class="input-group-append">
+                                    <button class="btn btn-info" type="button" id="btn-buscar-dni" onclick="buscarDniApi()">
+                                        <span id="icono-buscar"><i class="fas fa-search"></i></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="text-muted">Si cuenta con DNI, digítelo y use la lupa para rellenar el nombre.</small>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="input-nombre">Nombre / Razón Social</label>
+                            <input type="text" class="form-control"
+                                   id="input-nombre" name="nombre"
+                                   placeholder="Nombre o 'Cliente Varios'">
+                            <small class="text-muted">Dejar vacío para registrar automáticamente como "Cliente Varios / Anónimo".</small>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="input-telefono">Teléfono</label>
+                            <input type="text" class="form-control"
+                                   id="input-telefono" name="telefono"
+                                   placeholder="Ej: 987654321"
+                                   maxlength="9" pattern="9\d{8}" required>
+                            <small class="text-muted">Obligatorio. Debe iniciar con 9 y tener 9 dígitos numéricos.</small>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="input-direccion">Dirección de Entrega</label>
+                            <input type="text" class="form-control"
+                                   id="input-direccion" name="direccion"
+                                   placeholder="Av. Las Magnolias 123 - Urb..." required>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="input-referencia">Referencia</label>
+                            <input type="text" class="form-control"
+                                   id="input-referencia" name="referencia"
+                                   placeholder="Frente al parque o portón azul">
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="input-correo">Correo Electrónico</label>
+                            <input type="email" class="form-control"
+                                   id="input-correo" name="correo"
+                                   placeholder="cliente@correo.com">
+                        </div>
+
+                        <div class="text-right">
+                            <button type="submit" class="btn btn-info" id="btn-guardar">Guardar</button>
+                            <button type="button" class="btn btn-secondary"
+                                    data-dismiss="modal">Cancelar</button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-ver-cliente" tabindex="-1" data-backdrop="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info">
+                    <h5 class="modal-title text-white"><i class="fas fa-user"></i> Detalles del Cliente</h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th style="width: 35%">Nombre / R.S.:</th>
+                            <td id="view-nombre" class="font-weight-bold text-uppercase"></td>
+                        </tr>
+                        <tr>
+                            <th>DNI:</th>
+                            <td id="view-dni"></td>
+                        </tr>
+                        <tr>
+                            <th>Teléfono:</th>
+                            <td id="view-telefono"></td>
+                        </tr>
+                        <tr>
+                            <th>Dirección:</th>
+                            <td id="view-direccion"></td>
+                        </tr>
+                        <tr>
+                            <th>Referencia:</th>
+                            <td id="view-referencia" class="text-muted font-italic"></td>
+                        </tr>
+                        <tr>
+                            <th>Correo:</th>
+                            <td id="view-correo"></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/assets/js/clientes.js}"></script>
+
+</div> </body>
+</html>

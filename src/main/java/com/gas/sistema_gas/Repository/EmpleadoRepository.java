@@ -25,4 +25,8 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
     @Query(value = "SELECT e.* FROM empleados e WHERE e.estado = 1 AND e.id_empleado NOT IN (SELECT u.id_empleado FROM usuarios u WHERE u.id_empleado IS NOT NULL)", nativeQuery = true)
     List<Empleado> findEmpleadosSinUsuario();
 
+    @Query("SELECT e FROM Empleado e WHERE e.id NOT IN " +
+            "(SELECT a.empleado.id FROM AsignacionMoto a WHERE a.estado = 'ACTIVA')")
+    List<Empleado> findEmpleadosDisponibles();
+
 }

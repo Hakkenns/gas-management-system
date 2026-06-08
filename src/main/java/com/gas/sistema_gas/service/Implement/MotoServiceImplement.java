@@ -22,6 +22,15 @@ public class MotoServiceImplement implements MotoService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<MotoDTO.SimpleResponse> listDisponibles() {
+        return motoRepository.findMotosDisponibles()
+                .stream()
+                .map(motoMapper::toSimpleResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<MotoDTO.SimpleResponse> listMoto(){
         return motoRepository.findAll()
                 .stream()

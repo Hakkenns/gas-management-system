@@ -15,8 +15,6 @@ import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.dto.EmpleadoDTO;
 import com.gas.sistema_gas.service.EmpleadoService;
 
-
-
 @Service
 public class EmpleadoServiceImplement implements EmpleadoService {
 
@@ -25,6 +23,18 @@ public class EmpleadoServiceImplement implements EmpleadoService {
 
     @Autowired
     private EmpleadoMapper empleadoMapper;
+
+    @Override
+    @Transactional(readOnly = true) // Añadido para optimizar las lecturas en la base de datos
+    public List<EmpleadoDTO.SimpleResponse> listDisponibles() {
+        // 1. Buscamos las entidades usando la query del Repositorio
+        List<Empleado> empleados = empleadoRepository.findEmpleadosDisponibles();
+
+        // 2. CORREGIDO: Usamos MapStruct para transformar la lista de manera segura y limpia
+        return empleados.stream()
+                .map(empleadoMapper::toSimpleResponse)
+                .collect(Collectors.toList());
+    }
 
     @Override
     @Transactional(readOnly = true)     // útil para optimizar el rendimiento de lectura
