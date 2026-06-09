@@ -103,6 +103,7 @@ $(function() {
     }
 
     function renderizarFilas() {
+        const isMotorizado = $('#session-perfil-id').val() == '4';
         const tbody = $('#tabla-filas-venta').empty();
         detallesVenta.forEach((item, index) => {
             const subtotal = item.cantidad * item.precioUnitario;
@@ -112,7 +113,7 @@ $(function() {
                     <td>${item.cantidad}</td>
                     <td>S/ ${formatMoney(item.precioUnitario)}</td>
                     <td>S/ ${formatMoney(subtotal)}</td>
-                    <td class="text-center">
+                    <td class="text-center col-quitar-producto" ${isMotorizado ? 'style="display:none;"' : ''}>
                         <button type="button" class="btn btn-danger btn-sm btn-remover-item" data-index="${index}">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -122,6 +123,11 @@ $(function() {
             tbody.append(tr);
         });
         actualizarTotal();
+        if(isMotorizado) {
+            $('th.col-quitar-producto').hide();
+        } else {
+            $('th.col-quitar-producto').show();
+        }
     }
 
     $('#btn-crear-venta').on('click', function() {
@@ -138,6 +144,7 @@ $(function() {
         $('#input-dni-cliente').val('');
         $('#select-motorizado').val('');
         actualizarCamposMetodoPago();
+        $('#select-estado-pedido').val('PENDIENTE');
 
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
             .then(r => r.json())
@@ -187,6 +194,23 @@ $(function() {
                 // Llenar datos de la venta
                 $('#select-motorizado').val(data.idEmpleado || '');
                 $('#input-observaciones').val(data.observaciones || '');
+                $('#select-estado-pedido').val(data.estadoPedido || 'PENDIENTE');
+
+                // Bloquear UI si es Motorizado
+                const perfilId = $('#session-perfil-id').val();
+                if (perfilId == '4') {
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
+                    $('#btn-buscar-cliente').hide();
+                    $('#select-motorizado').prop('disabled', true);
+                    $('#input-observaciones').prop('readonly', true);
+                    $('#card-agregar-productos').hide();
+                } else {
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
+                    $('#btn-buscar-cliente').show();
+                    $('#select-motorizado').prop('disabled', false);
+                    $('#input-observaciones').prop('readonly', false);
+                    $('#card-agregar-productos').show();
+                }
 
                 // Llenar detalles de productos
                 data.detalles.forEach(detalle => {
@@ -483,6 +507,7 @@ $(function() {
             idEmpleado: idMotorizado,
             idMetodoPago: parseInt($('#select-metodo').val(), 10) || null,
             numOperacion: numOperacion,
+            estadoPedido: $('#select-estado-pedido').val(),
             pagos: pagosVenta.map(pago => ({
                 idMetodoPago: pago.idMetodoPago,
                 monto: pago.monto,
@@ -497,7 +522,7 @@ $(function() {
         };
 
         const btnSubmit = $(this).find('button[type="submit"]');
-        btnSubmit.prop('disabled', true).text('Registrando...');
+        btnSubmit.prop('disabled', true).text('Guardando...');
 
         $.ajax({
             url: '/ventas',
@@ -520,7 +545,7 @@ $(function() {
                 alert(message);
             },
             complete: function() {
-                btnSubmit.prop('disabled', false).text('Registrar Venta');
+                btnSubmit.prop('disabled', false).text('Guardar Venta');
             }
         });
     });

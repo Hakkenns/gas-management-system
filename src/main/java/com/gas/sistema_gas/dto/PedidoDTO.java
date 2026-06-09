@@ -26,6 +26,7 @@ public class PedidoDTO {
         Long idMetodoPago,
         String numOperacion,
         String observaciones,
+        String estadoPedido,
         List<PagoCreate> pagos,
         @NotNull(message = "El detalle de la venta es obligatorio")
         List<DetalleCreate> detalles
@@ -76,6 +77,7 @@ public class PedidoDTO {
         String referenciaCliente,
         Long idEmpleado,
         String observaciones,
+        String estadoPedido,
         List<DetalleResponse> detalles,
         List<PagoResponse> pagos
     ){}

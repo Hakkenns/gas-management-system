@@ -80,6 +80,7 @@
                     <div class="modal-body">
                         <form id="form-venta">
                             <input type="hidden" id="input-id-pedido">
+                            <input type="hidden" id="session-perfil-id" th:value="${session.usuarioPerfilId}">
                             <div class="row">
                                 <div class="form-group col-md-4">
                                     <label>DNI del cliente (opcional)</label>
@@ -144,6 +145,13 @@
                                     <label>Código de Venta</label>
                                     <input type="text" class="form-control" id="input-codigo" placeholder="NV001-0001" readonly>
                                 </div>
+                                <div class="form-group col-md-4">
+                                    <label>Estado del Pedido</label>
+                                    <select class="form-control" id="select-estado-pedido">
+                                        <option value="PENDIENTE">PENDIENTE</option>
+                                        <option value="ENTREGADO">ENTREGADO (COMPLETADO)</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -151,7 +159,7 @@
                                 <textarea id="input-observaciones" class="form-control" rows="2" placeholder="Opcional"></textarea>
                             </div>
 
-                            <div class="card border-secondary mt-3">
+                            <div class="card border-secondary mt-3" id="card-agregar-productos">
                                 <div class="card-header bg-secondary text-white py-2">Agregar productos al detalle</div>
                                 <div class="card-body row align-items-end py-3">
                                     <div class="form-group col-md-5 mb-0">
@@ -190,7 +198,7 @@
                                             <th width="15%">Cantidad</th>
                                             <th width="20%">P. Unitario</th>
                                             <th width="20%">Subtotal</th>
-                                            <th width="10%">Quitar</th>
+                                            <th width="10%" class="col-quitar-producto">Quitar</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tabla-filas-venta"></tbody>
@@ -224,7 +232,7 @@
                             </div>
 
                             <div class="text-right mt-4">
-                                <button type="submit" class="btn btn-info">Registrar Venta</button>
+                                <button type="submit" class="btn btn-info" id="btn-submit-venta">Guardar Venta</button>
                                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                             </div>
                         </form>

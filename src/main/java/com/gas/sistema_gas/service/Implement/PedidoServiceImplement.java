@@ -161,6 +161,12 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setMontoTotal(BigDecimal.ZERO);
         // Actualizar campos desde el DTO
         pedido.setObservaciones(createDto.observaciones());
+        if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
+            pedido.setEstadoPedido(createDto.estadoPedido());
+            if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
+                pedido.setFechaEntrega(LocalDateTime.now());
+            }
+        }
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
@@ -258,6 +264,9 @@ public class PedidoServiceImplement implements PedidoService {
             MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
             pedidoGuardado.setMetodoPago(metodoPagoPrincipal);
             pedidoGuardado.setNumOperacion(pagoPrincipal.numOperacion());
+            pedidoGuardado.setEstadoPago("PAGADO");
+        } else {
+            pedidoGuardado.setEstadoPago("PENDIENTE");
         }
 
         return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
@@ -359,6 +368,7 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.getCliente().getReferencia(),
             pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
             pedido.getObservaciones(),
+            pedido.getEstadoPedido(),
             detallesDto,
             pagosDto
         );
