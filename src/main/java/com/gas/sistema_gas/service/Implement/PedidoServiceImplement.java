@@ -30,6 +30,7 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.ClienteDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.dto.PedidoDTO.EditResponse;
 import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.service.PedidoService;
 
@@ -76,7 +77,30 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe agregar al menos un detalle de venta");
         }
 
-        Pedido pedido = pedidoMapper.toEntity(createDto);
+        Pedido pedido;
+        if (createDto.idPedido() != null) {
+            // Lógica de Actualización
+            pedido = pedidoRepository.findById(createDto.idPedido())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El pedido a editar no fue encontrado"));
+
+            // Revertir stock de productos
+            List<DetallePedido> detallesAnteriores = detalleRepository.findByPedido_Id(pedido.getId());
+            for (DetallePedido detalle : detallesAnteriores) {
+                Producto producto = detalle.getProducto();
+                BigDecimal cantidadDevolver = BigDecimal.valueOf(detalle.getCantidad());
+                producto.setStockLlenos(producto.getStockLlenos().add(cantidadDevolver));
+                productoRepository.save(producto);
+            }
+
+            // Eliminar detalles y pagos anteriores
+            detalleRepository.deleteAll(detallesAnteriores);
+            pedidoPagoRepository.deleteAll(pedidoPagoRepository.findByPedido_Id(pedido.getId()));
+
+        } else {
+            // Lógica de Creación
+            pedido = pedidoMapper.toEntity(createDto);
+            pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
+        }
 
         // 1. Validar Relaciones
         Cliente cliente;
@@ -125,8 +149,7 @@ public class PedidoServiceImplement implements PedidoService {
             empleado = usuario.getEmpleado();
         }
 
-        // 2. Generar código definitivo de venta
-        pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
+        // 2. Asignar datos al pedido
         pedido.setCliente(cliente);
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
@@ -136,6 +159,8 @@ public class PedidoServiceImplement implements PedidoService {
         // Inicializar valores monetarios para evitar errores de validación en el primer save
         pedido.setSubtotal(BigDecimal.ZERO);
         pedido.setMontoTotal(BigDecimal.ZERO);
+        // Actualizar campos desde el DTO
+        pedido.setObservaciones(createDto.observaciones());
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
@@ -294,5 +319,48 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
         return pedidoMapper.toSimpleResponse(pedido);
+    }
+
+    @Override
+    @Transactional
+    public PedidoDTO.EditResponse getEditData(Long id) {
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        List<DetallePedido> detalles = detalleRepository.findByPedido_Id(id);
+        List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(id);
+
+        List<PedidoDTO.DetalleResponse> detallesDto = detalles.stream().map(det ->
+            new PedidoDTO.DetalleResponse(
+                det.getProducto().getId(),
+                det.getProducto().getNombre(),
+                det.getCantidad(),
+                det.getPrecioUnitario()
+            )
+        ).collect(Collectors.toList());
+
+        List<PedidoDTO.PagoResponse> pagosDto = pagos.stream().map(pago ->
+            new PedidoDTO.PagoResponse(
+                pago.getMetodoPago().getId(),
+                pago.getMetodoPago().getNombre(),
+                pago.getMonto(),
+                pago.getNumOperacion()
+            )
+        ).collect(Collectors.toList());
+
+        return new PedidoDTO.EditResponse(
+            pedido.getId(),
+            pedido.getCodigo(),
+            pedido.getCliente().getId(),
+            pedido.getCliente().getDni(),
+            pedido.getCliente().getNombre(),
+            pedido.getCliente().getTelefono(),
+            pedido.getCliente().getDireccion(),
+            pedido.getCliente().getReferencia(),
+            pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
+            pedido.getObservaciones(),
+            detallesDto,
+            pagosDto
+        );
     }
 }

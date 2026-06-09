@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Pattern;
 public class PedidoDTO {
     
     public record Create(
+        Long idPedido,
         Long idCliente,
         @Pattern(regexp = "^$|\\d{8}", message = "El DNI debe tener 8 dígitos")
         String dniCliente,
@@ -62,6 +63,35 @@ public class PedidoDTO {
         String estadoPago,
         String numOperacion,
         String observaciones
+    ){}
+
+    public record EditResponse(
+        Long idPedido,
+        String codigo,
+        Long idCliente,
+        String dniCliente,
+        String nombreCliente,
+        String telefonoCliente,
+        String direccionCliente,
+        String referenciaCliente,
+        Long idEmpleado,
+        String observaciones,
+        List<DetalleResponse> detalles,
+        List<PagoResponse> pagos
+    ){}
+
+    public record DetalleResponse(
+        Long idProducto,
+        String nombreProducto,
+        Integer cantidad,
+        BigDecimal precioUnitario
+    ){}
+
+    public record PagoResponse(
+        Long idMetodoPago,
+        String metodoNombre,
+        BigDecimal monto,
+        String numOperacion
     ){}
 
     /*

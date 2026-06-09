@@ -11,4 +11,5 @@ public interface PedidoService {
     PedidoDTO.SimpleResponse updateOrder(Long id, PedidoDTO.Update updateDto); 
     void deleteOrder(Long id);
     PedidoDTO.SimpleResponse findById(Long id);
+    PedidoDTO.EditResponse getEditData(Long id);
 }

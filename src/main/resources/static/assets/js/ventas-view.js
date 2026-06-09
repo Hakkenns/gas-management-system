@@ -133,6 +133,7 @@ $(function() {
         $('#txt-total-general').text('0.00');
         $('#txt-total-pagado').text('0.00');
 
+        $('#input-id-pedido').val(''); // Limpiar ID de pedido para asegurar que es una creación
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
         $('#select-motorizado').val('');
@@ -150,6 +151,69 @@ $(function() {
             })
             .finally(() => {
                 $('#modal-venta').modal('show');
+            });
+    });
+
+    $(document).on('click', '.btn-editar-venta', function() {
+        const ventaId = $(this).data('id');
+        if (!ventaId) return;
+
+        fetch(`/ventas/editar/${ventaId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('No se pudo cargar los datos de la venta para editar.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Resetear el formulario y los arrays
+                $('#form-venta')[0].reset();
+                detallesVenta = [];
+                pagosVenta = [];
+
+                // Llenar datos del pedido
+                $('#input-id-pedido').val(data.idPedido);
+                $('#input-codigo').val(data.codigo);
+                $('.modal-title').text('Editar Venta: ' + data.codigo);
+
+                // Llenar datos del cliente
+                $('#input-id-cliente').val(data.idCliente);
+                $('#input-dni-cliente').val(data.dniCliente);
+                $('#input-nombre-cliente').val(data.nombreCliente);
+                $('#input-telefono-cliente').val(data.telefonoCliente);
+                $('#input-direccion-cliente').val(data.direccionCliente);
+                $('#input-referencia-cliente').val(data.referenciaCliente);
+
+                // Llenar datos de la venta
+                $('#select-motorizado').val(data.idEmpleado || '');
+                $('#input-observaciones').val(data.observaciones || '');
+
+                // Llenar detalles de productos
+                data.detalles.forEach(detalle => {
+                    detallesVenta.push({
+                        idProducto: detalle.idProducto,
+                        nombreProducto: detalle.nombreProducto,
+                        cantidad: detalle.cantidad,
+                        precioUnitario: detalle.precioUnitario
+                    });
+                });
+
+                // Llenar pagos
+                data.pagos.forEach(pago => {
+                    pagosVenta.push({
+                        idMetodoPago: pago.idMetodoPago,
+                        metodoNombre: pago.metodoNombre,
+                        monto: pago.monto,
+                        numOperacion: pago.numOperacion
+                    });
+                });
+
+                renderizarFilas();
+                renderizarPagos();
+                $('#modal-venta').modal('show');
+            })
+            .catch(error => {
+                alert(error.message);
             });
     });
 
@@ -409,6 +473,7 @@ $(function() {
         }
 
         const payload = {
+            idPedido: parseInt($('#input-id-pedido').val(), 10) || null,
             idCliente: clientId,
             dniCliente: dniCliente,
             nombreCliente: nombreCliente,

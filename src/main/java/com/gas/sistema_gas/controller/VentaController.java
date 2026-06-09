@@ -99,6 +99,13 @@ public class VentaController {
         }
     }
 
+    @GetMapping("/editar/{id}")
+    @ResponseBody
+    public ResponseEntity<PedidoDTO.EditResponse> datosParaEditar(@PathVariable Long id) {
+        PedidoDTO.EditResponse response = pedidoService.getEditData(id);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/cliente")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> buscarClientePorDni(@RequestParam String dni) {
