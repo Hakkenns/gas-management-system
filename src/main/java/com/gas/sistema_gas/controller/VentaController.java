@@ -127,6 +127,14 @@ public class VentaController {
             return Map.of("status", "ERROR", "message", "No se ha identificado al usuario logueado");
         }
 
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        if (perfilId != null && perfilId == 4L && pedidoDto.idPedido() != null) {
+            PedidoDTO.SimpleResponse pedidoExistente = pedidoService.findById(pedidoDto.idPedido());
+            if (!"PENDIENTE".equalsIgnoreCase(pedidoExistente.estadoPedido())) {
+                return Map.of("status", "ERROR", "message", "Acceso denegado: El pedido ya está completado y no puede ser modificado.");
+            }
+        }
+
         try {
             pedidoService.createOrder(pedidoDto, idUsuarioLogueado);
             return Map.of("status", "OK");
