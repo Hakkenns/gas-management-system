@@ -21,12 +21,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import com.gas.sistema_gas.Model.AsignacionMoto;
 import com.gas.sistema_gas.Model.DetallePedido;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
+import com.gas.sistema_gas.Repository.AsignacionMotoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.service.ClienteService;
 import com.gas.sistema_gas.service.EmpleadoService;
@@ -69,6 +72,9 @@ public class VentaController {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private AsignacionMotoRepository asignacionMotoRepository;
+
     @GetMapping
     public String ventas(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
@@ -89,12 +95,19 @@ public class VentaController {
             }
         }
 
+        // Obtener solo los motorizados que tienen una moto activa asignada en este momento
+        List<Empleado> motorizadosActivos = asignacionMotoRepository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(a -> a.getEstado() == AsignacionMoto.EstadoAsignacion.ACTIVA)
+                .map(AsignacionMoto::getEmpleado)
+                .distinct()
+                .collect(Collectors.toList());
+
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("ventas", ventasList);
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
-        model.addAttribute("motorizados", empleadoService.listDisponibles());
+        model.addAttribute("motorizados", motorizadosActivos);
         model.addAttribute("contenido", "views/ventas");
         return "components/layout";
     }
