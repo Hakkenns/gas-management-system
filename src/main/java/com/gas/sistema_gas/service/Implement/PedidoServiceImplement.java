@@ -72,6 +72,14 @@ public class PedidoServiceImplement implements PedidoService {
 
     @Override
     @Transactional
+    public long countSalesToday() {
+        LocalDateTime inicio = LocalDateTime.now().toLocalDate().atStartOfDay();
+        LocalDateTime fin = inicio.plusDays(1).minusNanos(1);
+        return pedidoRepository.countByEstadoPedidoAndFechaSolicitudBetween("ENTREGADO", inicio, fin);
+    }
+
+    @Override
+    @Transactional
     public PedidoDTO.SimpleResponse createOrder(PedidoDTO.Create createDto, Long idUsuarioLogueado) {
         if (createDto.detalles() == null || createDto.detalles().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe agregar al menos un detalle de venta");

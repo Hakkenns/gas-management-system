@@ -6,13 +6,21 @@ import org.springframework.ui.Model;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
 
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.OpcionService;
+import com.gas.sistema_gas.service.PedidoService;
 
 @Controller
 public class DashboardController {
 
     @Autowired
     private OpcionService opcionService;
+
+    @Autowired
+    private PedidoService pedidoService;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
 
     /**
      * GET: Ruta principal redirige al dashboard
@@ -21,6 +29,8 @@ public class DashboardController {
     public String home(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
+        model.addAttribute("ventasHoyCount", pedidoService.countSalesToday());
+        model.addAttribute("usuariosActivosCount", usuarioRepository.countByEstado(1));
         model.addAttribute("contenido", "views/dashboard");
         return "components/layout";
     }
@@ -30,7 +40,8 @@ public class DashboardController {
 
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-
+        model.addAttribute("ventasHoyCount", pedidoService.countSalesToday());
+        model.addAttribute("usuariosActivosCount", usuarioRepository.countByEstado(1));
         model.addAttribute("contenido", "views/dashboard");
 
         return "components/layout";

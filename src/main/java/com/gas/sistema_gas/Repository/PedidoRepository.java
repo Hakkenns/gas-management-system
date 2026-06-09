@@ -26,6 +26,10 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     @Query("SELECT p FROM Pedido p WHERE p.fechaSolicitud BETWEEN :inicio AND :fin")
     List<Pedido> findPedidosByRangoFechas(@Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
 
+    // Conteo de ventas completadas del día actual
+    @Query("SELECT COUNT(p) FROM Pedido p WHERE p.estadoPedido = :estadoPedido AND p.fechaSolicitud BETWEEN :inicio AND :fin")
+    long countByEstadoPedidoAndFechaSolicitudBetween(@Param("estadoPedido") String estadoPedido, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
     // Obtener el último código generado para poder crear el siguiente (correlativo)
     @Query("SELECT MAX(p.codigo) FROM Pedido p")
     String findLastCodigo();

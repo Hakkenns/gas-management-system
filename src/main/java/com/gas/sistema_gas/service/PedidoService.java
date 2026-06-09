@@ -12,4 +12,5 @@ public interface PedidoService {
     void deleteOrder(Long id);
     PedidoDTO.SimpleResponse findById(Long id);
     PedidoDTO.EditResponse getEditData(Long id);
+    long countSalesToday();
 }

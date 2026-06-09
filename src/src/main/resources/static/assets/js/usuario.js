@@ -98,6 +98,16 @@ if (formUsuario) {
     formUsuario.addEventListener('submit', function(event) {
         event.preventDefault();
 
+        var correoInput = document.getElementById('input-correo');
+        var correo = correoInput ? correoInput.value.trim() : '';
+        var correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!correo || !correoValido.test(correo)) {
+            alert('Ingrese un correo electrónico válido.');
+            if (correoInput) correoInput.focus();
+            return;
+        }
+
         var url = formUsuario.action;
         var data = new URLSearchParams(new FormData(formUsuario)).toString();
 

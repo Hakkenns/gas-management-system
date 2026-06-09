@@ -335,11 +335,13 @@ $(function() {
         const id = row.data('id');
         const precio = row.data('precio');
         const nombreData = row.data('nombre');
+        const categoriaData = row.data('categoria');
         const capacidadData = row.data('capacidad');
         const unidadData = row.data('unidad');
 
         // Fallback a atributos si jQuery.data no encuentra valores
         const nombre = (nombreData !== undefined && nombreData !== null) ? String(nombreData).trim() : row.attr('data-nombre') || row.find('td').first().text().trim();
+        const categoria = (categoriaData !== undefined && categoriaData !== null) ? categoriaData : row.attr('data-categoria');
         const capacidad = (capacidadData !== undefined && capacidadData !== null) ? capacidadData : row.attr('data-capacidad');
         const unidad = (unidadData !== undefined && unidadData !== null) ? unidadData : row.attr('data-unidad');
 
@@ -366,6 +368,18 @@ $(function() {
             try { $('#select-precio').val(formatMoney(precio)); } catch (err) {}
             try { $('#select-unidad').val(unidad); } catch (err) {}
             try { $('#select-capacidad').val(capVal); } catch (err) {}
+            try { $('#select-categoria').val(categoria); } catch (err) {}  // Agregar categoría
+
+            // Ajustar paso y mínimo del precio en el modal de compras
+            try {
+                const precioInput = $('#select-precio');
+                precioInput.attr('step', '0.10');
+                let minPrecio = 0.10;
+                if (categoria === '1' || categoria === 1) minPrecio = 50;
+                if (categoria === '2' || categoria === 2) minPrecio = 200;
+                if (categoria === '3' || categoria === 3) minPrecio = 8;
+                precioInput.attr('min', minPrecio.toFixed(2));
+            } catch (err) {}
 
             // Mostrar/ocultar campos según el tipo de unidad
             if (unidad === 'M' && capVal !== '') {
@@ -379,9 +393,9 @@ $(function() {
                 $('#label-precio').text('Precio Costo');
             }
 
-            // Reset cantidad y precio
+            // Reset cantidad, pero mantener el precio cargado para que pueda modificarse
             $('#select-cantidad').val(1);
-            $('#select-precio').val('');
+            $('#select-cantidad').attr('step', '1');
 
             $('#modal-buscar-producto').modal('hide');
         }

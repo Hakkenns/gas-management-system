@@ -1,6 +1,8 @@
 package com.gas.sistema_gas.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -19,6 +21,7 @@ import com.gas.sistema_gas.service.ProductoService;
 import com.gas.sistema_gas.service.CategoriaService;
 
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 @RequestMapping("/productos")
@@ -32,6 +35,9 @@ public class ProductoController {
 
     @Autowired
     private CategoriaService categoriaService; // Para llenar el select de categorías
+
+    @Autowired
+    private Validator validator;
 
     // Vista principal: Carga la plantilla base con el menú y los selectores
     @GetMapping
@@ -86,7 +92,7 @@ public class ProductoController {
             if (productoId == null) {
                 productoService.createProduct(productoDto, archivoImagen, imagenBase64);
             } else {
-                productoService.updateProduct(productoId, new ProductoDTO.Update(
+                ProductoDTO.Update updateDto = new ProductoDTO.Update(
                         productoDto.nombre(),
                         productoDto.descripcion(),
 
@@ -102,7 +108,15 @@ public class ProductoController {
                         productoDto.stockVacios(),
                         productoDto.stockMinimo(),
 
-                        1), archivoImagen, imagenBase64, quitarImagen);
+                        1);
+
+                Set<ConstraintViolation<ProductoDTO.Update>> violations = validator.validate(updateDto);
+                if (!violations.isEmpty()) {
+                    String message = violations.iterator().next().getMessage();
+                    return Map.of("status", "ERROR", "message", message);
+                }
+
+                productoService.updateProduct(productoId, updateDto, archivoImagen, imagenBase64, quitarImagen);
             }
             return Map.of("status", "OK");
         } catch (Exception e) {

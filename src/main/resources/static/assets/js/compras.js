@@ -88,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const inputNombreProd = document.getElementById("input-producto-nombre");
         const inputUnidad = document.getElementById("select-unidad");
         const inputCapacidad = document.getElementById("select-capacidad");
+        const inputCategoria = document.getElementById("select-categoria");
         const inputCant = document.getElementById("select-cantidad");
         const inputPrecio = document.getElementById("select-precio");
 
@@ -95,14 +96,34 @@ document.addEventListener("DOMContentLoaded", () => {
         const nombreProducto = inputNombreProd && inputNombreProd.value ? inputNombreProd.value : (selectProd && selectProd.options ? selectProd.options[selectProd.selectedIndex].text : '');
         const unidad = inputUnidad ? inputUnidad.value : '';
         const capacidad = inputCapacidad ? parseFloat(inputCapacidad.value) : 0;
-        let cantidad = parseFloat(inputCant.value);
+        const categoria = inputCategoria ? parseInt(inputCategoria.value) : null;
+        const cantidadRaw = inputCant.value;
+        let cantidad = parseFloat(cantidadRaw);
         let precio = parseFloat(inputPrecio.value);
 
-        if (!idProducto || cantidad < 1 || isNaN(precio) || precio <= 0) {
-            alert("Seleccione un artículo e ingrese cantidades/precios correctos.");
+        if (!idProducto || isNaN(cantidad) || cantidad < 1 || !Number.isInteger(cantidad) || isNaN(precio) || precio <= 0) {
+            alert("Seleccione un artículo e ingrese una cantidad entera y un precio válido.");
             return;
         }
 
+        // Verificar que el precio se ingrese en incrementos de S/0.10
+        const precioCentimos = Math.round(precio * 100);
+        if (precioCentimos % 10 !== 0) {
+            alert("El precio debe incrementarse de S/0.10 en S/0.10.");
+            return;
+        }
+
+        // Validar precio mínimo según categoría
+        const preciosMinimos = {
+            1: 50,    // Gas Doméstico: mínimo S/50
+            2: 200,   // Accesorios: mínimo S/200 (especialmente rollos)
+            3: 8      // Agua: mínimo S/8
+        };
+        const precioMinimo = preciosMinimos[categoria] || 0.10;
+        if (precio < precioMinimo) {
+            alert(`El precio mínimo para esta categoría es S/${precioMinimo.toFixed(2)}.`);
+            return;
+        }
         // Conversión automática si es unidad 'M' (metros/rollos)
         if (unidad === 'M' && capacidad > 0) {
             // rollos × metros/rollo = cantidad total en metros
@@ -122,6 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (inputNombreProd) inputNombreProd.value = "";
         if (inputUnidad) inputUnidad.value = "";
         if (inputCapacidad) inputCapacidad.value = "";
+        if (inputCategoria) inputCategoria.value = "";
         inputCant.value = "1";
         inputPrecio.value = "";
         document.getElementById("label-cantidad").innerText = "Cantidad";

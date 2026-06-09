@@ -28,6 +28,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const ID_ACCESORIOS = 2;
     const ID_AGUA = 3;
 
+    // Reglas de capacidad y ganancia
+    const CAPACIDAD_MIN_KG = 10;
+    const CAPACIDAD_MIN_L = 20;
+    const CAPACIDAD_MIN_M = 50;
+    const GANANCIA_MIN = 1.00;
+    const GANANCIA_STEP = 0.10;
+
     // Elementos del formulario - Imagen
     const archivoImagenInput = document.getElementById("producto-archivo-imagen");
     const btnAgregarImagen = document.getElementById("btn-agregar-imagen");
@@ -227,17 +234,100 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         }
     }
+
+    function actualizarRestriccionesCapacidad() {
+        const unidad = unidadMedidaSelect.value;
+
+        if (unidad === "KG") {
+            capacidadInput.step = "1";
+            capacidadInput.min = CAPACIDAD_MIN_KG;
+            capacidadInput.required = true;
+            capacidadInput.placeholder = "Ejemplo: 10";
+        } else if (unidad === "L") {
+            capacidadInput.step = "1";
+            capacidadInput.min = CAPACIDAD_MIN_L;
+            capacidadInput.required = true;
+            capacidadInput.placeholder = "Ejemplo: 20";
+        } else if (unidad === "M") {
+            capacidadInput.step = "0.01";
+            capacidadInput.min = CAPACIDAD_MIN_M;
+            capacidadInput.required = true;
+            capacidadInput.placeholder = "Ejemplo: 50.00";
+        } else {
+            capacidadInput.step = "0.01";
+            capacidadInput.min = "0";
+            capacidadInput.required = false;
+            capacidadInput.placeholder = "";
+        }
+    }
+
+    function validarProducto() {
+        const unidad = unidadMedidaSelect.value;
+        const capacidadValor = capacidadInput.value ? parseFloat(capacidadInput.value) : null;
+        const gananciaValor = parseFloat(gananciaProductoInput.value);
+
+        if (unidad === "KG") {
+            if (capacidadValor === null || capacidadInput.value.trim() === "") {
+                return "La capacidad en KG es obligatoria.";
+            }
+            if (!Number.isInteger(capacidadValor)) {
+                return "La capacidad en KG debe ser un número entero.";
+            }
+            if (capacidadValor < CAPACIDAD_MIN_KG) {
+                return `La capacidad mínima en KG es ${CAPACIDAD_MIN_KG}.`;
+            }
+        }
+
+        if (unidad === "L") {
+            if (capacidadValor === null || capacidadInput.value.trim() === "") {
+                return "La capacidad en litros es obligatoria.";
+            }
+            if (!Number.isInteger(capacidadValor)) {
+                return "La capacidad en litros debe ser un número entero.";
+            }
+            if (capacidadValor < CAPACIDAD_MIN_L) {
+                return `La capacidad mínima en litros es ${CAPACIDAD_MIN_L}.`;
+            }
+        }
+
+        if (unidad === "M") {
+            if (capacidadValor === null || capacidadInput.value.trim() === "") {
+                return "La capacidad en metros es obligatoria.";
+            }
+            if (capacidadValor < CAPACIDAD_MIN_M) {
+                return `La capacidad mínima en metros es ${CAPACIDAD_MIN_M}.`;
+            }
+        }
+
+        if (unidad === "NO_APLICA" && capacidadInput.value.trim() !== "") {
+            return "No debe ingresar capacidad cuando la unidad de medida es No aplica.";
+        }
+
+        if (Number.isNaN(gananciaValor) || gananciaValor < GANANCIA_MIN) {
+            return `La ganancia mínima permitida es S/${GANANCIA_MIN.toFixed(2)}.`;
+        }
+
+        const gananciaCentavos = Math.round((gananciaValor + Number.EPSILON) * 100);
+        if (gananciaCentavos % Math.round(GANANCIA_STEP * 100) !== 0) {
+            return `La ganancia debe aumentar en incrementos de S/${GANANCIA_STEP.toFixed(2)}.`;
+        }
+
+        return null;
+    }
+
     categoriaSelect.addEventListener("change", () => {
 
         actualizarVisibilidadStockVacios();
 
         actualizarVisibilidadCampos();
+        actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
     });
 
     unidadMedidaSelect.addEventListener("change", function () {
         controlarCapacidadPorUnidad();
+        actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
     });
@@ -466,6 +556,8 @@ document.addEventListener("DOMContentLoaded", function () {
         btnAgregarImagen.classList.remove("btn-success");
         btnAgregarImagen.classList.add("btn-secondary");
         btnLimpiarImagen.click(); // Limpiar imagen
+        actualizarVisibilidadCampos();
+        actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
         $("#modal-producto").modal("show");
@@ -474,6 +566,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // 3. ENVÍO DEL FORMULARIO POR AJAX
     form.addEventListener("submit", function (e) {
         e.preventDefault();
+
+        const error = validarProducto();
+        if (error) {
+            alert("Atención: " + error);
+            return;
+        }
 
         const formData = new FormData(form);
         if (!requiereEnvaseCheckbox.checked) {

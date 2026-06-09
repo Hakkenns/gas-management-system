@@ -15,7 +15,7 @@ public class ProductoDTO {
         BigDecimal capacidad,
         String unidadMedida,
         @NotNull(message = "La ganancia del producto es obligatoria")
-        @DecimalMin(value = "0.00", message = "La ganancia no puede ser negativa")
+        @DecimalMin(value = "1.00", message = "La ganancia mínima es S/1.00")
         BigDecimal gananciaProducto,
         @NotNull(message = "El stock de vacíos es obligatorio")
         @Min(value = 0, message = "El stock de vacíos no puede ser negativo")
@@ -23,7 +23,46 @@ public class ProductoDTO {
         @NotNull(message = "El stock mínimo es obligatorio")
         @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
         BigDecimal stockMinimo
-    ){}
+    ){
+        @AssertTrue(message = "La capacidad debe respetar las reglas según unidad: KG >= 10 entero, L >= 20 entero, M >= 50 con decimales permitidos.")
+        public boolean isCapacidadValida() {
+            return validarCapacidad(capacidad, unidadMedida);
+        }
+
+        @AssertTrue(message = "La ganancia debe ser al menos S/1.00 y en incrementos de S/0.10.")
+        public boolean isGananciaValida() {
+            return validarGanancia(gananciaProducto);
+        }
+
+        private static boolean validarCapacidad(BigDecimal capacidad, String unidadMedida) {
+            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("NO_APLICA")) {
+                return capacidad == null;
+            }
+            if (capacidad == null) {
+                return false;
+            }
+
+            switch (unidadMedida) {
+                case "KG":
+                    return capacidad.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+                            && capacidad.compareTo(BigDecimal.valueOf(10)) >= 0;
+                case "L":
+                    return capacidad.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+                            && capacidad.compareTo(BigDecimal.valueOf(20)) >= 0;
+                case "M":
+                    return capacidad.compareTo(BigDecimal.valueOf(50)) >= 0;
+                default:
+                    return capacidad.compareTo(BigDecimal.ZERO) >= 0;
+            }
+        }
+
+        private static boolean validarGanancia(BigDecimal ganancia) {
+            if (ganancia == null || ganancia.compareTo(BigDecimal.valueOf(1.00)) < 0) {
+                return false;
+            }
+            return ganancia.remainder(BigDecimal.valueOf(0.10)).compareTo(BigDecimal.ZERO) == 0;
+        }
+    }
 
     public record SimpleResponse(
         Long id, 
@@ -51,7 +90,7 @@ public class ProductoDTO {
         BigDecimal capacidad,
         String unidadMedida,
         @NotNull(message = "La ganancia del producto es obligatoria")
-        @DecimalMin(value = "0.00")
+        @DecimalMin(value = "1.00", message = "La ganancia mínima es S/1.00")
         BigDecimal gananciaProducto,
         boolean requiereEnvase,
         @NotNull
@@ -63,5 +102,44 @@ public class ProductoDTO {
         @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
         BigDecimal stockMinimo,
         Integer estado
-    ){}
+    ){
+        @AssertTrue(message = "La capacidad debe respetar las reglas según unidad: KG >= 10 entero, L >= 20 entero, M >= 50 con decimales permitidos.")
+        public boolean isCapacidadValida() {
+            return validarCapacidad(capacidad, unidadMedida);
+        }
+
+        @AssertTrue(message = "La ganancia debe ser al menos S/1.00 y en incrementos de S/0.10.")
+        public boolean isGananciaValida() {
+            return validarGanancia(gananciaProducto);
+        }
+
+        private static boolean validarCapacidad(BigDecimal capacidad, String unidadMedida) {
+            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("NO_APLICA")) {
+                return capacidad == null;
+            }
+            if (capacidad == null) {
+                return false;
+            }
+
+            switch (unidadMedida) {
+                case "KG":
+                    return capacidad.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+                            && capacidad.compareTo(BigDecimal.valueOf(10)) >= 0;
+                case "L":
+                    return capacidad.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) == 0
+                            && capacidad.compareTo(BigDecimal.valueOf(20)) >= 0;
+                case "M":
+                    return capacidad.compareTo(BigDecimal.valueOf(50)) >= 0;
+                default:
+                    return capacidad.compareTo(BigDecimal.ZERO) >= 0;
+            }
+        }
+
+        private static boolean validarGanancia(BigDecimal ganancia) {
+            if (ganancia == null || ganancia.compareTo(BigDecimal.valueOf(1.00)) < 0) {
+                return false;
+            }
+            return ganancia.remainder(BigDecimal.valueOf(0.10)).compareTo(BigDecimal.ZERO) == 0;
+        }
+    }
 }
