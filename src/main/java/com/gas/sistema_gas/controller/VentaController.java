@@ -26,6 +26,7 @@ import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.service.ClienteService;
+import com.gas.sistema_gas.service.EmpleadoService;
 import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.service.OpcionService;
 import com.gas.sistema_gas.service.PedidoService;
@@ -54,6 +55,9 @@ public class VentaController {
     private MetodoPagoService metodoPagoService;
 
     @Autowired
+    private EmpleadoService empleadoService;
+
+    @Autowired
     private DetallePedidoRepository detallePedidoRepository;
 
     @Autowired
@@ -67,6 +71,7 @@ public class VentaController {
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
+        model.addAttribute("motorizados", empleadoService.listDisponibles());
         model.addAttribute("contenido", "views/ventas");
         return "components/layout";
     }

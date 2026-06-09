@@ -189,7 +189,7 @@ public class PedidoServiceImplement implements PedidoService {
         pedidoGuardado.setMontoTotal(montoAcumulado);
 
         List<PedidoDTO.PagoCreate> pagosDto = createDto.pagos();
-        if (pagosDto == null || pagosDto.isEmpty()) {
+        if ((pagosDto == null || pagosDto.isEmpty()) && createDto.idMetodoPago() != null) {
             pagosDto = List.of(new PedidoDTO.PagoCreate(
                     createDto.idMetodoPago(),
                     montoAcumulado,
@@ -197,44 +197,48 @@ public class PedidoServiceImplement implements PedidoService {
             ));
         }
 
+        if (pagosDto == null) {
+            pagosDto = List.of();
+        }
+
         BigDecimal totalPagos = BigDecimal.ZERO;
-        for (PedidoDTO.PagoCreate pagoDto : pagosDto) {
-            if (pagoDto == null || pagoDto.idMetodoPago() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cada pago debe incluir un método de pago");
-            }
-            if (pagoDto.monto() == null || pagoDto.monto().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto de cada pago debe ser mayor a cero");
-            }
-            MetodoPago pagoMetodo = metodoPagoRepository.findById(pagoDto.idMetodoPago())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
-            String numOperacionPago = pagoDto.numOperacion();
-            if (numOperacionPago != null && numOperacionPago.isBlank()) {
-                numOperacionPago = null;
-            }
-            if (pagoMetodo.getNombre() != null && (
-                    pagoMetodo.getNombre().equalsIgnoreCase("yape") ||
-                    pagoMetodo.getNombre().equalsIgnoreCase("plin")
-            ) && (numOperacionPago == null || numOperacionPago.isEmpty())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "El número de operación es obligatorio para Yape y Plin");
-            }
-
-            PedidoPago pago = new PedidoPago();
-            pago.setPedido(pedidoGuardado);
-            pago.setMetodoPago(pagoMetodo);
-            pago.setMonto(pagoDto.monto());
-            pago.setNumOperacion(numOperacionPago);
-            pedidoPagoRepository.save(pago);
-
-            totalPagos = totalPagos.add(pagoDto.monto());
-        }
-
-        if (totalPagos.compareTo(montoAcumulado) != 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El total de los pagos debe ser igual al monto total de la venta");
-        }
-
         if (!pagosDto.isEmpty()) {
+            for (PedidoDTO.PagoCreate pagoDto : pagosDto) {
+                if (pagoDto == null || pagoDto.idMetodoPago() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cada pago debe incluir un método de pago");
+                }
+                if (pagoDto.monto() == null || pagoDto.monto().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto de cada pago debe ser mayor a cero");
+                }
+                MetodoPago pagoMetodo = metodoPagoRepository.findById(pagoDto.idMetodoPago())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
+                String numOperacionPago = pagoDto.numOperacion();
+                if (numOperacionPago != null && numOperacionPago.isBlank()) {
+                    numOperacionPago = null;
+                }
+                if (pagoMetodo.getNombre() != null && (
+                        pagoMetodo.getNombre().equalsIgnoreCase("yape") ||
+                        pagoMetodo.getNombre().equalsIgnoreCase("plin")
+                ) && (numOperacionPago == null || numOperacionPago.isEmpty())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El número de operación es obligatorio para Yape y Plin");
+                }
+
+                PedidoPago pago = new PedidoPago();
+                pago.setPedido(pedidoGuardado);
+                pago.setMetodoPago(pagoMetodo);
+                pago.setMonto(pagoDto.monto());
+                pago.setNumOperacion(numOperacionPago);
+                pedidoPagoRepository.save(pago);
+
+                totalPagos = totalPagos.add(pagoDto.monto());
+            }
+
+            if (totalPagos.compareTo(montoAcumulado) != 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El total de los pagos debe ser igual al monto total de la venta");
+            }
+
             PedidoDTO.PagoCreate pagoPrincipal = pagosDto.get(0);
             MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
             pedidoGuardado.setMetodoPago(metodoPagoPrincipal);

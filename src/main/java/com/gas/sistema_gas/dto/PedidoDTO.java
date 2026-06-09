@@ -16,10 +16,8 @@ public class PedidoDTO {
         String dniCliente,
         @NotBlank(message = "El nombre del cliente es obligatorio")
         String nombreCliente,
-        @NotBlank(message = "La dirección del cliente es obligatoria")
         String direccionCliente,
         String referenciaCliente,
-        @NotBlank(message = "El teléfono del cliente es obligatorio")
         @Pattern(regexp = "\\d{9}", message = "El teléfono debe tener 9 dígitos")
         String telefonoCliente,
         Long idEmpleado,

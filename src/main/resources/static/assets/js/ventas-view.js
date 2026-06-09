@@ -135,6 +135,7 @@ $(function() {
 
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
+        $('#select-motorizado').val('');
         actualizarCamposMetodoPago();
 
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
@@ -387,23 +388,20 @@ $(function() {
         const clientId = parseInt($('#input-id-cliente').val(), 10) || null;
         const dniCliente = $('#input-dni-cliente').val().trim() || null;
         const nombreCliente = $('#input-nombre-cliente').val().trim();
-        const direccionCliente = $('#input-direccion-cliente').val().trim();
-        const telefonoCliente = $('#input-telefono-cliente').val().trim();
+        const direccionCliente = $('#input-direccion-cliente').val().trim() || null;
+        const telefonoCliente = $('#input-telefono-cliente').val().trim() || null;
         const referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
+        const idMotorizado = parseInt($('#select-motorizado').val(), 10) || null;
 
-        if (!nombreCliente || !direccionCliente || !telefonoCliente) {
-            alert('Debe completar el nombre, dirección y teléfono del cliente.');
+        if (!nombreCliente) {
+            alert('Debe completar el nombre del cliente.');
             return;
         }
 
         const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
         const numOperacion = $('#input-num-operacion').val().trim() || null;
 
-        if (pagosVenta.length === 0) {
-            if (!$('#select-metodo').val()) {
-                alert('Seleccione un método de pago o agregue al menos un pago.');
-                return;
-            }
+        if (pagosVenta.length === 0 && $('#select-metodo').val()) {
             if ((metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin') && !numOperacion) {
                 alert('El número de operación es obligatorio para Yape y Plin.');
                 return;
@@ -417,6 +415,7 @@ $(function() {
             direccionCliente: direccionCliente,
             telefonoCliente: telefonoCliente,
             referenciaCliente: referenciaCliente,
+            idEmpleado: idMotorizado,
             idMetodoPago: parseInt($('#select-metodo').val(), 10) || null,
             numOperacion: numOperacion,
             pagos: pagosVenta.map(pago => ({
