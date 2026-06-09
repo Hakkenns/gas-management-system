@@ -90,8 +90,8 @@ public class PedidoServiceImplement implements PedidoService {
                         ClienteDTO.Create clienteDto = new ClienteDTO.Create(
                                 createDto.nombreCliente(),
                                 createDto.dniCliente(),
-                                createDto.telefonoCliente(),
-                                createDto.direccionCliente(),
+                                createDto.telefonoCliente() == null ? "" : createDto.telefonoCliente(),
+                                createDto.direccionCliente() == null ? "" : createDto.direccionCliente(),
                                 createDto.referenciaCliente(),
                                 null
                         );
@@ -102,17 +102,11 @@ public class PedidoServiceImplement implements PedidoService {
             if (createDto.nombreCliente() == null || createDto.nombreCliente().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre del cliente es obligatorio");
             }
-            if (createDto.direccionCliente() == null || createDto.direccionCliente().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La dirección del cliente es obligatoria");
-            }
-            if (createDto.telefonoCliente() == null || createDto.telefonoCliente().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El teléfono del cliente es obligatorio");
-            }
             ClienteDTO.Create clienteDto = new ClienteDTO.Create(
                     createDto.nombreCliente(),
                     null,
-                    createDto.telefonoCliente(),
-                    createDto.direccionCliente(),
+                    createDto.telefonoCliente() == null ? "" : createDto.telefonoCliente(),
+                    createDto.direccionCliente() == null ? "" : createDto.direccionCliente(),
                     createDto.referenciaCliente(),
                     null
             );
@@ -129,10 +123,6 @@ public class PedidoServiceImplement implements PedidoService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado"));
         } else if (usuario.getEmpleado() != null) {
             empleado = usuario.getEmpleado();
-        }
-
-        if ((createDto.pagos() == null || createDto.pagos().isEmpty()) && createDto.idMetodoPago() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe indicar al menos un método de pago");
         }
 
         // 2. Generar código definitivo de venta

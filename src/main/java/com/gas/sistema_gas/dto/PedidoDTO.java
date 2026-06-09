@@ -12,13 +12,13 @@ public class PedidoDTO {
     
     public record Create(
         Long idCliente,
-        @Pattern(regexp = "\\d{8}", message = "El DNI debe tener 8 dígitos")
+        @Pattern(regexp = "^$|\\d{8}", message = "El DNI debe tener 8 dígitos")
         String dniCliente,
         @NotBlank(message = "El nombre del cliente es obligatorio")
         String nombreCliente,
         String direccionCliente,
         String referenciaCliente,
-        @Pattern(regexp = "\\d{9}", message = "El teléfono debe tener 9 dígitos")
+        @Pattern(regexp = "^$|\\d{9}", message = "El teléfono debe tener 9 dígitos")
         String telefonoCliente,
         Long idEmpleado,
         Long idUsuario,
