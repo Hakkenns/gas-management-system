@@ -3,6 +3,7 @@ package com.gas.sistema_gas.controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpSession;
 
@@ -22,8 +23,10 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.PedidoPago;
+import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.service.ClienteService;
 import com.gas.sistema_gas.service.EmpleadoService;
@@ -63,11 +66,31 @@ public class VentaController {
     @Autowired
     private PedidoPagoRepository pedidoPagoRepository;
 
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
     @GetMapping
     public String ventas(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+
+        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listAll();
+        
+        // Si es motorizado (perfil 4), solo ve las ventas que tiene asignadas
+        if (perfilId != null && perfilId == 4L && usuarioId != null) {
+            Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+            if (usuario != null && usuario.getEmpleado() != null) {
+                String nombreMoto = usuario.getEmpleado().getNombre();
+                ventasList = ventasList.stream()
+                        .filter(v -> nombreMoto.equals(v.nombreEmpleado()))
+                        .collect(Collectors.toList());
+            } else {
+                ventasList = List.of(); // Si el motorizado no tiene empleado asociado
+            }
+        }
+
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("ventas", pedidoService.listAll());
+        model.addAttribute("ventas", ventasList);
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());

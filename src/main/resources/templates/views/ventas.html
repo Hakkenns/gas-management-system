@@ -11,7 +11,7 @@
             </h3>
             <hr>
 
-            <button id="btn-crear-venta" class="btn btn-info mb-3">
+            <button id="btn-crear-venta" class="btn btn-info mb-3" th:if="${session.usuarioPerfilId != 4}">
                 <i class="fas fa-plus"></i> Nueva venta
             </button>
 
