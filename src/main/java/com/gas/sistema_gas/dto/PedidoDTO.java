@@ -24,10 +24,10 @@ public class PedidoDTO {
         String telefonoCliente,
         Long idEmpleado,
         Long idUsuario,
-        @NotNull(message = "El método pago es obligatorio")
         Long idMetodoPago,
         String numOperacion,
         String observaciones,
+        List<PagoCreate> pagos,
         @NotNull(message = "El detalle de la venta es obligatorio")
         List<DetalleCreate> detalles
     ){}
@@ -37,6 +37,12 @@ public class PedidoDTO {
         Long idProducto,
         Integer cantidad,
         BigDecimal precioUnitario
+    ){}
+
+    public record PagoCreate(
+        Long idMetodoPago,
+        BigDecimal monto,
+        String numOperacion
     ){}
 
     public record SimpleResponse(

@@ -72,9 +72,9 @@ CREATE TABLE `clientes` (
   `id_cliente` bigint(20) NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `dni` varchar(8) DEFAULT NULL,
-  `direccion` varchar(255) NOT NULL,
+  `direccion` varchar(255) NULL,
   `referencia` varchar(150) DEFAULT NULL,
-  `telefono` varchar(255) NOT NULL,
+  `telefono` varchar(255) NULL,
   `correo` varchar(255) DEFAULT NULL,
   `estado` int(11) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -387,13 +387,11 @@ CREATE TABLE `pedidos` (
   `fecha_entrega` datetime(6) DEFAULT NULL,
   `fecha_solicitud` datetime(6) NOT NULL,
   `monto_total` decimal(12,2) NOT NULL,
-  `num_operacion` varchar(50) DEFAULT NULL,
   `observaciones` varchar(255) DEFAULT NULL,
   `subtotal` decimal(12,2) NOT NULL,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `id_cliente` bigint(20) NOT NULL,
   `id_empleado` bigint(20) DEFAULT NULL,
-  `id_metodo` bigint(20) DEFAULT NULL,
   `id_usuario` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -401,8 +399,29 @@ CREATE TABLE `pedidos` (
 -- Volcado de datos para la tabla `pedidos`
 --
 
-INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `num_operacion`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_metodo`, `id_usuario`) VALUES
-(1, 'NV001-0001', '2026-06-05 23:47:07', 'PENDIENTE', 'PENDIENTE', NULL, '2026-06-05 18:47:07.000000', 90.00, NULL, '', 90.00, '2026-06-05 23:47:07', 1, NULL, 1, 2);
+INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`) VALUES
+(1, 'NV001-0001', '2026-06-05 23:47:07', 'PENDIENTE', 'PENDIENTE', NULL, '2026-06-05 18:47:07.000000', 90.00, '', 90.00, '2026-06-05 23:47:07', 1, NULL, 2);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `pedido_pagos`
+--
+
+CREATE TABLE `pedido_pagos` (
+  `id_pago` bigint(20) NOT NULL,
+  `id_pedido` bigint(20) NOT NULL,
+  `id_metodo` bigint(20) NOT NULL,
+  `monto` decimal(12,2) NOT NULL,
+  `num_operacion` varchar(50) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `pedido_pagos`
+--
+
+INSERT INTO `pedido_pagos` (`id_pago`, `id_pedido`, `id_metodo`, `monto`, `num_operacion`) VALUES
+(1, 1, 1, 90.00, NULL);
 
 -- --------------------------------------------------------
 
@@ -701,8 +720,15 @@ ALTER TABLE `pedidos`
   ADD UNIQUE KEY `UKopykg0avndf87lga45wx7l02v` (`codigo`),
   ADD KEY `FKdnomiluem4t3x66t6b9aher47` (`id_cliente`),
   ADD KEY `FKltrtqgh9kyqgjst49dj88e4ra` (`id_empleado`),
-  ADD KEY `FKkak0y959yhogp8xvwashvv14t` (`id_metodo`),
   ADD KEY `FK4a0lfwlpmytywxpwjfa1a3ar2` (`id_usuario`);
+
+--
+-- Indices de la tabla `pedido_pagos`
+--
+ALTER TABLE `pedido_pagos`
+  ADD PRIMARY KEY (`id_pago`),
+  ADD KEY `fk_pago_pedido` (`id_pedido`),
+  ADD KEY `fk_pago_metodo` (`id_metodo`);
 
 --
 -- Indices de la tabla `perfiles`
@@ -837,6 +863,12 @@ ALTER TABLE `pedidos`
   MODIFY `id_pedido` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT de la tabla `pedido_pagos`
+--
+ALTER TABLE `pedido_pagos`
+  MODIFY `id_pago` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT de la tabla `perfiles`
 --
 ALTER TABLE `perfiles`
@@ -937,8 +969,14 @@ ALTER TABLE `opciones`
 ALTER TABLE `pedidos`
   ADD CONSTRAINT `FK4a0lfwlpmytywxpwjfa1a3ar2` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`),
   ADD CONSTRAINT `FKdnomiluem4t3x66t6b9aher47` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`),
-  ADD CONSTRAINT `FKkak0y959yhogp8xvwashvv14t` FOREIGN KEY (`id_metodo`) REFERENCES `metodo_pago` (`id_metodo`),
   ADD CONSTRAINT `FKltrtqgh9kyqgjst49dj88e4ra` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`);
+
+--
+-- Filtros para la tabla `pedido_pagos`
+--
+ALTER TABLE `pedido_pagos`
+  ADD CONSTRAINT `fk_pago_metodo` FOREIGN KEY (`id_metodo`) REFERENCES `metodo_pago` (`id_metodo`),
+  ADD CONSTRAINT `fk_pago_pedido` FOREIGN KEY (`id_pedido`) REFERENCES `pedidos` (`id_pedido`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `perfil_opcion`

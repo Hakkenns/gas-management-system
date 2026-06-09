@@ -17,12 +17,14 @@ import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -52,6 +54,8 @@ public class PedidoServiceImplement implements PedidoService {
     private EmpleadoRepository empleadoRepository;
     @Autowired
     private DetallePedidoRepository detalleRepository;
+    @Autowired
+    private PedidoPagoRepository pedidoPagoRepository;
     @Autowired
     private MetodoPagoRepository metodoPagoRepository;
     @Autowired
@@ -118,8 +122,6 @@ public class PedidoServiceImplement implements PedidoService {
 
         Usuario usuario = usuarioRepository.findById(idUsuarioLogueado)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no existe"));
-        MetodoPago metodoPago = metodoPagoRepository.findById(createDto.idMetodoPago())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
 
         Empleado empleado = null;
         if (createDto.idEmpleado() != null) {
@@ -129,16 +131,8 @@ public class PedidoServiceImplement implements PedidoService {
             empleado = usuario.getEmpleado();
         }
 
-        String numOperacion = createDto.numOperacion();
-        if (numOperacion != null && numOperacion.isBlank()) {
-            numOperacion = null;
-        }
-        if (metodoPago.getNombre() != null && (
-                metodoPago.getNombre().equalsIgnoreCase("yape") ||
-                metodoPago.getNombre().equalsIgnoreCase("plin")
-        ) && (numOperacion == null || numOperacion.isEmpty())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El número de operación es obligatorio para Yape y Plin");
+        if ((createDto.pagos() == null || createDto.pagos().isEmpty()) && createDto.idMetodoPago() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe indicar al menos un método de pago");
         }
 
         // 2. Generar código definitivo de venta
@@ -146,8 +140,6 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setCliente(cliente);
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
-        pedido.setMetodoPago(metodoPago);
-        pedido.setNumOperacion(numOperacion);
         pedido.setFechaSolicitud(LocalDateTime.now());
         pedido.setEstadoPedido("PENDIENTE");
         pedido.setEstadoPago("PENDIENTE");
@@ -195,6 +187,59 @@ public class PedidoServiceImplement implements PedidoService {
 
         pedidoGuardado.setSubtotal(montoAcumulado);
         pedidoGuardado.setMontoTotal(montoAcumulado);
+
+        List<PedidoDTO.PagoCreate> pagosDto = createDto.pagos();
+        if (pagosDto == null || pagosDto.isEmpty()) {
+            pagosDto = List.of(new PedidoDTO.PagoCreate(
+                    createDto.idMetodoPago(),
+                    montoAcumulado,
+                    createDto.numOperacion()
+            ));
+        }
+
+        BigDecimal totalPagos = BigDecimal.ZERO;
+        for (PedidoDTO.PagoCreate pagoDto : pagosDto) {
+            if (pagoDto == null || pagoDto.idMetodoPago() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cada pago debe incluir un método de pago");
+            }
+            if (pagoDto.monto() == null || pagoDto.monto().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto de cada pago debe ser mayor a cero");
+            }
+            MetodoPago pagoMetodo = metodoPagoRepository.findById(pagoDto.idMetodoPago())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
+            String numOperacionPago = pagoDto.numOperacion();
+            if (numOperacionPago != null && numOperacionPago.isBlank()) {
+                numOperacionPago = null;
+            }
+            if (pagoMetodo.getNombre() != null && (
+                    pagoMetodo.getNombre().equalsIgnoreCase("yape") ||
+                    pagoMetodo.getNombre().equalsIgnoreCase("plin")
+            ) && (numOperacionPago == null || numOperacionPago.isEmpty())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El número de operación es obligatorio para Yape y Plin");
+            }
+
+            PedidoPago pago = new PedidoPago();
+            pago.setPedido(pedidoGuardado);
+            pago.setMetodoPago(pagoMetodo);
+            pago.setMonto(pagoDto.monto());
+            pago.setNumOperacion(numOperacionPago);
+            pedidoPagoRepository.save(pago);
+
+            totalPagos = totalPagos.add(pagoDto.monto());
+        }
+
+        if (totalPagos.compareTo(montoAcumulado) != 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El total de los pagos debe ser igual al monto total de la venta");
+        }
+
+        if (!pagosDto.isEmpty()) {
+            PedidoDTO.PagoCreate pagoPrincipal = pagosDto.get(0);
+            MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
+            pedidoGuardado.setMetodoPago(metodoPagoPrincipal);
+            pedidoGuardado.setNumOperacion(pagoPrincipal.numOperacion());
+        }
 
         return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
     }

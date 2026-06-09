@@ -12,4 +12,3 @@ public class SistemaGasApplication {
 		SpringApplication.run(SistemaGasApplication.class, args);
 	}
 }
- 

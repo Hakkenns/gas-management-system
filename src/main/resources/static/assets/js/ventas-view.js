@@ -1,5 +1,6 @@
 $(function() {
     let detallesVenta = [];
+    let pagosVenta = [];
 
     function parseMoney(value) {
         const number = Number(String(value).replace(/[^0-9.-]+/g, '').replace(',', '.'));
@@ -8,6 +9,31 @@ $(function() {
 
     function formatMoney(value) {
         return parseMoney(value).toFixed(2);
+    }
+
+    function renderizarPagos() {
+        const tbody = $('#tabla-pagos').empty();
+        pagosVenta.forEach((pago, index) => {
+            const tr = $(
+                `<tr>
+                    <td>${pago.metodoNombre}</td>
+                    <td>S/ ${formatMoney(pago.monto)}</td>
+                    <td>${pago.numOperacion || ''}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm btn-remover-pago" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`
+            );
+            tbody.append(tr);
+        });
+        actualizarTotalPagos();
+    }
+
+    function actualizarTotalPagos() {
+        const totalPagado = pagosVenta.reduce((sum, pago) => sum + parseMoney(pago.monto), 0);
+        $('#txt-total-pagado').text(formatMoney(totalPagado));
     }
 
     function actualizarCamposMetodoPago() {
@@ -100,9 +126,12 @@ $(function() {
 
     $('#btn-crear-venta').on('click', function() {
         detallesVenta = [];
+        pagosVenta = [];
         $('#form-venta')[0].reset();
         $('#tabla-filas-venta').empty();
+        $('#tabla-pagos').empty();
         $('#txt-total-general').text('0.00');
+        $('#txt-total-pagado').text('0.00');
 
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
@@ -273,6 +302,37 @@ $(function() {
         actualizarCamposMetodoPago();
     });
 
+    $('#btn-agregar-pago').on('click', function() {
+        const metodoId = $('#select-metodo').val();
+        const metodoNombre = $('#select-metodo option:selected').text().trim();
+        const monto = parseMoney($('#input-monto-pago').val());
+        let numOperacion = $('#input-num-operacion').val().trim() || null;
+
+        if (!metodoId) {
+            alert('Seleccione un método de pago para agregar el pago.');
+            return;
+        }
+        if (monto <= 0) {
+            alert('Ingrese un monto de pago válido mayor a cero.');
+            return;
+        }
+        if ((metodoNombre.toLowerCase() === 'yape' || metodoNombre.toLowerCase() === 'plin') && !numOperacion) {
+            alert('El número de operación es obligatorio para Yape y Plin.');
+            return;
+        }
+
+        pagosVenta.push({
+            idMetodoPago: parseInt(metodoId, 10),
+            metodoNombre: metodoNombre,
+            monto: monto,
+            numOperacion: numOperacion
+        });
+
+        $('#input-monto-pago').val('');
+        $('#input-num-operacion').val('');
+        renderizarPagos();
+    });
+
     $('#btn-agregar-detalle').on('click', function() {
         const idProducto = $('#select-producto').val();
         const nombreProducto = $('#input-producto-nombre').val();
@@ -310,6 +370,12 @@ $(function() {
         renderizarFilas();
     });
 
+    $(document).on('click', '.btn-remover-pago', function() {
+        const index = $(this).data('index');
+        pagosVenta.splice(index, 1);
+        renderizarPagos();
+    });
+
     $('#form-venta').on('submit', function(e) {
         e.preventDefault();
 
@@ -333,9 +399,15 @@ $(function() {
         const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
         const numOperacion = $('#input-num-operacion').val().trim() || null;
 
-        if ((metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin') && !numOperacion) {
-            alert('El número de operación es obligatorio para Yape y Plin.');
-            return;
+        if (pagosVenta.length === 0) {
+            if (!$('#select-metodo').val()) {
+                alert('Seleccione un método de pago o agregue al menos un pago.');
+                return;
+            }
+            if ((metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin') && !numOperacion) {
+                alert('El número de operación es obligatorio para Yape y Plin.');
+                return;
+            }
         }
 
         const payload = {
@@ -345,8 +417,13 @@ $(function() {
             direccionCliente: direccionCliente,
             telefonoCliente: telefonoCliente,
             referenciaCliente: referenciaCliente,
-            idMetodoPago: parseInt($('#select-metodo').val(), 10),
+            idMetodoPago: parseInt($('#select-metodo').val(), 10) || null,
             numOperacion: numOperacion,
+            pagos: pagosVenta.map(pago => ({
+                idMetodoPago: pago.idMetodoPago,
+                monto: pago.monto,
+                numOperacion: pago.numOperacion
+            })),
             observaciones: $('#input-observaciones').val(),
             detalles: detallesVenta.map(item => ({
                 idProducto: parseInt(item.idProducto, 10),
@@ -396,13 +473,14 @@ $(function() {
 
         $.getJSON(`/ventas/detalle/${ventaId}`)
             .done(function(data) {
-                if (!Array.isArray(data) || data.length === 0) {
+                const detalles = Array.isArray(data) ? data : data.detalles || [];
+                if (!Array.isArray(detalles) || detalles.length === 0) {
                     $('#detalle-venta-sin-items').show();
                     $('#modal-detalle-venta').modal('show');
                     return;
                 }
 
-                data.forEach(det => {
+                detalles.forEach(det => {
                     const subtotal = parseMoney(det.subtotal || (det.precioUnitario * det.cantidad));
                     const tr = $('<tr>');
                     tr.append(`<td>${det.producto || ''}</td>`);
@@ -411,6 +489,13 @@ $(function() {
                     tr.append(`<td class="text-right">S/ ${formatMoney(subtotal)}</td>`);
                     $('#detalle-venta-body').append(tr);
                 });
+
+                if (Array.isArray(data.pagos) && data.pagos.length > 0) {
+                    const pagosHtml = data.pagos.map(pago => `
+                        <div><strong>${pago.metodo}:</strong> S/ ${formatMoney(pago.monto)}${pago.numOperacion ? ' (' + pago.numOperacion + ')' : ''}</div>
+                    `).join('');
+                    $('#detalle-venta-body').append(`<tr><td colspan="4"><strong>Pagos:</strong><br>${pagosHtml}</td></tr>`);
+                }
 
                 $('#modal-detalle-venta').modal('show');
             })
