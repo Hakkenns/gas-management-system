@@ -59,7 +59,9 @@
                             <td th:text="${p.nombre}"></td>
                             <td th:text="${p.nombreCategoria}"></td>
                             <td th:text="${p.capacidad != null ? p.capacidad : '-'}"></td>
-                            <td th:text="${p.unidadMedida == 'KG' ? 'KG' : p.unidadMedida == 'L' ? 'Litros' : p.unidadMedida == 'M' ? 'Metros' : p.unidadMedida == 'NO APLICA' ? 'No Aplica' : '-'}"></td>
+                            <td
+                                th:text="${p.unidadMedida == 'KG' ? 'KG' : p.unidadMedida == 'L' ? 'Litros' : p.unidadMedida == 'M' ? 'Metros' : p.unidadMedida == 'NO APLICA' ? 'No Aplica' : '-'}">
+                            </td>
                             <td th:text="'S/ ' + ${p.precioCompra}"></td>
                             <td th:text="'S/ ' + ${p.precioVenta}"></td>
                             <td th:text="${p.stockLlenos}"></td>
@@ -74,10 +76,24 @@
                                 <span class="badge badge-danger" th:if="${p.estado == 0}">INACTIVO</span>
                             </td>
                             <td>
+                                <!-- CÓDIGO CORREGIDO PARA EL BOTÓN EDITAR -->
                                 <button type="button" class="btn btn-warning btn-xs btn-editar-producto"
-                                    th:data-id="${p.id}" title="Editar">
+                                    th:data-id="${p.id}" th:data-nombre="${p.nombre}"
+                                    th:data-idcategoria="${p.idCategoria}" th:data-capacidad="${p.capacidad}"
+                                    th:data-unidadmedida="${p.unidadMedida}" th:data-preciocompra="${p.precioCompra}"
+                                    th:data-precioventa="${p.precioVenta}" th:data-stockminimo="${p.stockMinimo}"
+                                    th:data-stockvacios="${p.stockVacios}" th:data-requiereenvase="${p.requiereEnvase}"
+                                    title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
+
+                                <!-- 2. NUEVO BOTÓN: Catálogo de Proveedores (Color Morado) -->
+                                <button type="button" class="btn btn-primary btn-xs btn-catalogo-proveedores"
+                                    th:data-id="${p.id}" th:data-nombre="${p.nombre}" title="Asociar Proveedores">
+                                    <i class="fas fa-hands-helping"></i>
+                                </button>
+
+
 
                                 <button type="button" class="btn btn-info btn-xs btn-ver-descripcion"
                                     th:data-id="${p.id}" th:data-descripcion="${p.descripcion}"
@@ -149,81 +165,80 @@
                                     aria-labelledby="tab-datos-tab">
                                     <div class="mt-3">
 
+                                        <!-- FILA 1: CATEGORÍA Y NOMBRE -->
                                         <div class="row mt-2">
                                             <div class="col-md-6 form-group">
-                                                <label>Categoría</label>
-                                                <select class="form-control" id="producto-categoria" name="idCategoria"
-                                                    required>
-                                                    <option value="">-- Seleccione Categoría --</option>
-                                                    <option th:each="c : ${categorias}" th:value="${c.id}"
-                                                        th:text="${c.nombre}">
-                                                    </option>
-                                                </select>
-                                            </div>
-                                            <div class="row">
-                                                <div class="col-md-12 form-group">
-                                                    <label>Nombre del Producto</label>
-                                                    <input type="text" class="form-control" id="producto-nombre"
-                                                        name="nombre" required>
+                                                <label for="producto-categoria-display">Categoría</label>
+                                                <div class="input-group">
+                                                    <!-- Input visual: Volvemos a colocar id="producto-categoria-display" -->
+                                                    <input type="text" class="form-control"
+                                                        id="producto-categoria-display"
+                                                        placeholder="Buscar Categoría..." readonly
+                                                        style="background-color: #fff; cursor: default;">
+
+                                                    <!-- Input oculto: Volvemos a colocar id="producto-categoria" y name="idCategoria" -->
+                                                    <input type="hidden" id="producto-categoria" name="idCategoria"
+                                                        required>
+
+                                                    <!-- Botón de la lupa (Sólido, azul y alineado como querías) -->
+                                                    <div class="input-group-append">
+                                                        <button type="button" class="btn btn-primary"
+                                                            id="btn-buscar-categoria"
+                                                            style="display: flex; align-items: center; justify-content: center; height: 100%; min-width: 42px;">
+                                                            <i class="fas fa-search"></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4 form-group" id="contenedor-capacidad">
 
-                                                <label id="label-capacidad">
-                                                    Capacidad
-                                                </label>
-
-                                                <input type="number" step="0.01" class="form-control"
-                                                    id="producto-capacidad" name="capacidad">
-
-                                            </div>
-
-                                            <div class="col-md-4 form-group" id="contenedor-unidad">
-
-                                                <label>Unidad Medida</label>
-
-                                                <select class="form-control" id="producto-unidadMedida"
-                                                    name="unidadMedida" style="background-color: #f8f9fa;">
-
-                                                    <option value="">-- Seleccione --</option>
-
-                                                    <option value="KG">KG (Kilogramos)</option>
-
-                                                    <option value="L">L (Litros)</option>
-
-                                                    <option value="M">M (Metros)</option>
-
-                                                    <option value="NO_APLICA">No aplica</option>
-
-                                                </select>
-                                                <small class="form-text text-muted" id="info-unidad-bloqueadas" style="display:none;">
-                                                    <em>Algunas opciones están bloqueadas según la categoría</em>
-                                                </small>
-
-                                            </div>
-
-                                            <div class="col-md-4 form-group">
-
-                                                <label>Ganancia del Producto (S/.)</label>
-
-                                                <input type="number" step="0.10" class="form-control"
-                                                    id="producto-gananciaProducto" name="gananciaProducto" value="1.00"
-                                                    min="1.00" required>
-
-                                                <small class="form-text text-muted" id="info-ganancia-por">Precio de ganancia por unidad</small>
-
+                                            <div class="col-md-6 form-group">
+                                                <label for="producto-nombre">Nombre del Producto</label>
+                                                <input type="text" class="form-control" id="producto-nombre"
+                                                    name="nombre" required>
                                             </div>
                                         </div>
 
+                                        <!-- FILA 2: [CAPACIDAD] [UNIDAD] [GANANCIA] COMPARTIENDO LA MISMA LÍNEA -->
+                                        <div class="row mt-2">
+                                            <!-- 1. Capacidad Dinámica (col-md-4) -->
+                                            <!-- Nota: Envolvemos solo esta columna para que al ocultarse, los otros dos campos se acomoden solos -->
+                                            <div class="col-md-4 form-group" id="contenedor-capacidad"
+                                                style="display: none;">
+                                                <label id="label-capacidad" for="producto-capacidad">Capacidad /
+                                                    Medida</label>
+                                                <input type="number" step="0.01" class="form-control"
+                                                    id="producto-capacidad" name="capacidad">
+                                            </div>
+
+                                            <!-- 2. Unidad de Medida (col-md-4) -->
+                                            <div class="col-md-4 form-group" id="contenedor-unidad">
+                                                <label for="producto-unidadMedida">Unidad de Medida</label>
+                                                <input type="text" class="form-control" id="producto-unidadMedida"
+                                                    name="unidadMedida" readonly>
+                                            </div>
+
+                                            <!-- 3. Ganancia del Producto (col-md-4) -->
+                                            <div class="col-md-4 form-group">
+                                                <label for="producto-gananciaProducto">Ganancia (S/.)</label>
+                                                <input type="number" step="0.10" class="form-control"
+                                                    id="producto-gananciaProducto" name="gananciaProducto" value="1.00"
+                                                    min="1.00" required>
+                                                <small class="form-text text-muted" id="info-ganancia-por">Por
+                                                    unidad</small>
+                                            </div>
+                                        </div>
+
+
+
+                                        <!-- FILA 4: PRECIOS (Se mantiene tu lógica igual de aquí en adelante) -->
                                         <div class="row mt-2">
                                             <div class="col-md-6 form-group">
                                                 <label>Precio Compra (S/.)</label>
                                                 <input type="number" step="0.01" class="form-control"
                                                     id="producto-precioCompra" name="precioCompra" value="0.00"
                                                     disabled>
-                                                <small class="text-muted">Campo bloqueado </small>
+                                                <small class="text-muted">Campo bloqueado</small>
                                             </div>
-
                                             <div class="col-md-6 form-group">
                                                 <label>Precio Venta (S/.)</label>
                                                 <input type="number" step="0.01" class="form-control"
@@ -232,15 +247,17 @@
                                             </div>
                                         </div>
 
+
                                         <div class="row mt-2">
                                             <div class="col-md-6 form-group">
                                                 <label>Stock </label>
-                                                <input type="number" step="0.01" class="form-control" id="producto-stockLlenos"
-                                                    name="stockLlenos" value="0" disabled>
+                                                <input type="number" step="0.01" class="form-control"
+                                                    id="producto-stockLlenos" name="stockLlenos" value="0" disabled>
                                                 <small class="text-muted">Campo bloqueado </small>
                                             </div>
 
-                                            <div class="col-md-6 form-group" id="contenedor-stockVacios">
+                                            <div class="col-md-6 form-group" id="contenedor-stockVacios"
+                                                style="display: none;">
                                                 <label>Stock Vacíos (Envases)</label>
                                                 <input type="number" class="form-control" id="producto-stockVacios"
                                                     name="stockVacios" value="0" min="0" required>
@@ -250,16 +267,20 @@
                                         <div class="row mt-2">
                                             <div class="col-md-12 form-group">
                                                 <label>Stock Mínimo</label>
-                                                <input type="number" step="0.01" class="form-control" id="producto-stockMinimo"
-                                                    name="stockMinimo" value="0" min="0" required>
-                                                <small class="form-text text-muted" id="info-stock-minimo">Alerta de stock bajo por unidad</small>
+                                                <input type="number" step="0.01" class="form-control"
+                                                    id="producto-stockMinimo" name="stockMinimo" value="0" min="0"
+                                                    required>
+                                                <small class="form-text text-muted" id="info-stock-minimo">Alerta de
+                                                    stock bajo por unidad</small>
                                             </div>
                                         </div>
 
                                         <div class="row mt-2">
-                                            <div class="col-md-12 form-group">
+                                            <div class="col-md-12 form-group" id="contenedor-requiereEnvase"
+                                                style="display: none;">
                                                 <label>¿Requiere Envase de retorno?</label>
                                                 <div class="custom-control custom-checkbox mt-2">
+                                                    <input type="hidden" name="requiereEnvase" value="false">
                                                     <input type="checkbox" class="custom-control-input"
                                                         id="producto-requiereEnvase" name="requiereEnvase" value="true">
                                                     <label class="custom-control-label"
@@ -336,6 +357,70 @@
             </div>
         </div>
 
+        <!-- Modal Búsqueda de Categorías -->
+        <div class="modal fade" id="modal-buscar-categoria" tabindex="-1" role="dialog" aria-hidden="true"
+            data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title"><i class="fas fa-filter"></i> Buscar Categoría</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row mb-3">
+                            <div class="col-md-7">
+                                <input type="text" id="input-buscar-categoria-nombre" class="form-control"
+                                    placeholder="Buscar por nombre de categoría">
+                            </div>
+                            <div class="col-md-5">
+                                <select id="select-filtro-unidad-medida" class="form-control">
+                                    <option value="">-- Todas las unidades --</option>
+                                    <option value="KG">Kilogramos (KG)</option>
+                                    <option value="L">Litros (L)</option>
+                                    <option value="M">Metros (M)</option>
+                                    <option value="UND">Unidades (UND)</option>
+                                </select>
+                            </div>
+
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="tabla-busqueda-categorias">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Unidad de Medida</th>
+
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="cat : ${categorias}" th:data-id="${cat.id}"
+                                        th:data-nombre="${cat.nombre}" th:data-unidadmedida="${cat.unidadMedida}"
+                                        th:data-requierecapacidad="${cat.requiereCapacidad}"
+                                        th:data-etiquetacapacidad="${cat.etiquetaCapacidad}"
+                                        th:data-manejaenvase="${cat.manejaEnvase}">
+                                        <td th:text="${cat.nombre}"></td>
+                                        <td th:text="${cat.unidadMedida}"></td>
+
+                                        <td>
+                                            <button type="button"
+                                                class="btn btn-sm btn-success btn-seleccionar-categoria">Seleccionar</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal para Ver Detalle -->
         <div class="modal fade" id="modal-descripcion" tabindex="-1" data-backdrop="false">
             <div class="modal-dialog modal-md">
@@ -357,6 +442,83 @@
                 </div>
             </div>
         </div>
+        <!-- ========================================================================= -->
+        <!-- NUEVO MODAL: ASIGNACIÓN DE PROVEEDORES AL CATÁLOGO -->
+        <!-- ========================================================================= -->
+        <div class="modal fade" id="modal-catalogo-proveedores" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog">
+                <div class="modal-content">
+
+                    <!-- CABECERA DEL MODAL -->
+                    <div class="modal-header bg-dark">
+                        <h5 class="modal-title text-white">
+                            <i class="fas fa-hands-helping text-info"></i>
+                            Catálogo: <span id="catalogo-producto-nombre" class="badge badge-info">--</span>
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+
+                    <!-- CUERPO DEL MODAL -->
+                    <div class="modal-body">
+                        <!-- ID oculto del producto seleccionado -->
+                        <input type="hidden" id="catalogo-producto-id">
+
+                        <!-- Buscador rápido interno para no aburrir al usuario -->
+                        <div class="form-group mb-3">
+                            <input type="text" id="input-buscar-proveedor-catalogo" class="form-control"
+                                placeholder="🔍 Escribe para buscar proveedor por nombre o RUC...">
+                        </div>
+
+                        <!-- Tabla de selección con Checkboxes -->
+                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                            <table class="table table-sm table-hover table-striped" id="tabla-proveedores-catalogo">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th width="10%" class="text-center">Seleccionar</th>
+                                        <th>Proveedor</th>
+                                        <th>RUC</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Si la lista inyectada desde el Controller está vacía -->
+                                    <tr th:if="${#lists.isEmpty(proveedores)}">
+                                        <td colspan="3" class="text-center text-muted">
+                                            No hay proveedores registrados en el sistema
+                                        </td>
+                                    </tr>
+
+                                    <!-- Bucle dinámico sobre los proveedores del backend -->
+                                    <tr th:each="prov : ${proveedores}">
+                                        <td class="text-center">
+                                            <!-- Cada checkbox guarda en su 'value' el ID del proveedor -->
+                                            <input type="checkbox" class="check-proveedor-item" th:value="${prov.id}"
+                                                th:id="'check-prov-' + ${prov.id}">
+                                        </td>
+                                        <td>
+                                            <label th:for="'check-prov-' + ${prov.id}" th:text="${prov.nombre}"
+                                                style="cursor: pointer; font-weight: normal; margin-bottom: 0; width: 100%;">
+                                            </label>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted" th:text="${prov.ruc}"></span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- PIE DEL MODAL -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Cerrar
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
 
         <script th:src="@{/assets/js/productos.js}"></script>
 

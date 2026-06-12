@@ -3,7 +3,8 @@ package com.gas.sistema_gas.controller;
 import jakarta.validation.Valid;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor; // <-- Agregamos Lombok para limpiar el amarillo
+
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -19,25 +20,22 @@ import com.gas.sistema_gas.dto.ProductoDTO;
 import com.gas.sistema_gas.service.OpcionService;
 import com.gas.sistema_gas.service.ProductoService;
 import com.gas.sistema_gas.service.CategoriaService;
+import com.gas.sistema_gas.service.ProveedorService; // <-- NUEVO: Tu servicio de proveedores
 
 import java.util.Map;
 import java.util.Set;
 
 @Controller
 @RequestMapping("/productos")
+@RequiredArgsConstructor // <-- 1. Lombok crea el constructor automático eliminando todo el amarillo
 public class ProductoController {
 
-    @Autowired
-    private ProductoService productoService;
-
-    @Autowired
-    private OpcionService opcionService;
-
-    @Autowired
-    private CategoriaService categoriaService; // Para llenar el select de categorías
-
-    @Autowired
-    private Validator validator;
+    // 2. Quitamos todos los @Autowired sueltos y declaramos los servicios como private final
+    private final ProductoService productoService;
+    private final OpcionService opcionService;
+    private final CategoriaService categoriaService;
+    private final ProveedorService proveedorService; // <-- NUEVA CAPA CONECTADA
+    private final Validator validator;
 
     // Vista principal: Carga la plantilla base con el menú y los selectores
     @GetMapping
@@ -46,9 +44,14 @@ public class ProductoController {
 
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("productos", productoService.listAll());
-
-        // Alimentamos los combos selectores del modal
         model.addAttribute("categorias", categoriaService.listAll());
+        
+        // =====================================================================
+        // 🌟 NUEVA LÍNEA: Enviamos los proveedores al Thymeleaf de la pantalla
+        // =====================================================================
+        model.addAttribute("proveedores", proveedorService.listAll()); 
+        // =====================================================================
+        
         model.addAttribute("contenido", "views/productos");
         return "components/layout";
     }
@@ -77,7 +80,6 @@ public class ProductoController {
             @RequestParam(name = "imagenBase64", required = false) String imagenBase64,
             @RequestParam(name = "quitarImagen", required = false) Boolean quitarImagen) {
 
-        // Validaciones del DTO anotadas con @NotBlank, @NotNull, etc.
         if (result.hasErrors()) {
             String message = result.getAllErrors().get(0).getDefaultMessage();
             return Map.of("status", "ERROR", "message", message);
@@ -95,19 +97,13 @@ public class ProductoController {
                 ProductoDTO.Update updateDto = new ProductoDTO.Update(
                         productoDto.nombre(),
                         productoDto.descripcion(),
-
                         productoDto.capacidad(),
                         productoDto.unidadMedida(),
-
                         productoDto.gananciaProducto(),
-
                         productoDto.requiereEnvase(),
-
                         productoDto.idCategoria(),
-
                         productoDto.stockVacios(),
                         productoDto.stockMinimo(),
-
                         1);
 
                 Set<ConstraintViolation<ProductoDTO.Update>> violations = validator.validate(updateDto);
@@ -136,7 +132,7 @@ public class ProductoController {
         }
     }
 
-    // Eliminar producto vía AJAX (Borrado lógico),actualizacion para git
+    // Eliminar producto vía AJAX (Borrado lógico)
     @PostMapping("/{id}/eliminar")
     @ResponseBody
     public Map<String, Object> eliminarProductoAjax(@PathVariable Long id) {

@@ -7,19 +7,27 @@ public class CategoriaDTO {
     public record Create(
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
-        String descripcion
+        String descripcion,
+        @NotBlank(message = "La forma de venta es obligatoria")
+        String tipoUnidad
     ){}
 
     public record SimpleResponse(
         Long id,
         String nombre,
         String descripcion,
-        Integer estado
+        Integer estado,
+        String unidadMedida,
+        Boolean requiereCapacidad,
+        String etiquetaCapacidad,
+        Boolean manejaEnvase
     ){}
 
     public record Update(
         @NotBlank(message = "El nombre es obligatorio")
         String nombre,
-        String descripcion
+        String descripcion,
+        @NotBlank(message = "La forma de venta es obligatoria")
+        String tipoUnidad
     ){}
 }

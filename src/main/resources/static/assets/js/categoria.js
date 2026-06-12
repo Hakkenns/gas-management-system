@@ -4,14 +4,22 @@ document.addEventListener("DOMContentLoaded", function () {
     const idField = document.getElementById("categoria-id");
     const nombreField = document.getElementById("nombre-categoria");
     const descripcionField = document.getElementById("descripcion-categoria");
+    // NUEVO: Capturamos el ComboBox del tipo de unidad
+    const tipoUnidadField = document.getElementById("tipoUnidad");
     const btnCreate = document.getElementById("btn-crear-categoria");
 
-    // Función reutilizable para abrir el modal
-    const openModal = function (title, id = "", nombre = "", descripcion = "") {
+    // Función reutilizable para abrir el modal (ACTUALIZADA con tipoUnidad)
+    const openModal = function (title, id = "", nombre = "", descripcion = "", tipoUnidad = "") {
         modalTitle.textContent = title;
         idField.value = id;
         nombreField.value = nombre;
         descripcionField.value = descripcion;
+
+        // Asignamos el valor al ComboBox. Si viene vacío (nueva categoría), vuelve a la opción por defecto
+        if (tipoUnidadField) {
+            tipoUnidadField.value = tipoUnidad;
+        }
+
         if (window.jQuery && typeof window.jQuery === "function") {
             window.jQuery("#modal-categoria").modal("show");
         }
@@ -26,17 +34,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // LISTENER GLOBAL DE CLICS (Para capturar Editar, Eliminar y Estado)
     document.addEventListener("click", function (e) {
-        
+
         // 1. Cargar datos para Editar
         const editButton = e.target.closest(".btn-editar-categoria");
         if (editButton) {
             const id = editButton.dataset.id || "";
             const nombre = editButton.dataset.nombre || "";
             const descripcion = editButton.dataset.descripcion || "";
-            openModal("Editar Categoría", id, nombre, descripcion);
+            // NUEVO: Capturamos el data-tipounidad inyectado desde Thymeleaf
+            const tipoUnidad = editButton.dataset.tipounidad || "";
+
+            openModal("Editar Categoría", id, nombre, descripcion, tipoUnidad);
         }
 
-        // 2. 🟢 NUEVO: Cambiar Estado (Activar / Inhabilitar)
+        // 2. Cambiar Estado (Activar / Inhabilitar)
         const statusButton = e.target.closest(".btn-cambiar-estado-categoria");
         if (statusButton) {
             const id = statusButton.dataset.id;
@@ -44,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
             CategoriaCambiarEstado(id, nuevoEstado);
         }
 
-        // 3. 🟢 NUEVO: Eliminar Categoría
+        // 3. Eliminar Categoría
         const deleteButton = e.target.closest(".btn-eliminar-categoria");
         if (deleteButton) {
             const id = deleteButton.dataset.id;
@@ -52,7 +63,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    // 🔄 Función para refrescar únicamente el fragmento HTML de la tabla
+    // Función para refrescar únicamente el fragmento HTML de la tabla
     function reloadCategoriasTable() {
         fetch("/categorias/tabla")
             .then(r => {
@@ -60,7 +71,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 return r.text();
             })
             .then(html => {
-                // Asegúrate de que el contenedor de tu tabla en el HTML tenga id="contenedor-tabla-categoria"
                 const container = document.getElementById("contenedor-tabla-categoria");
                 if (container) {
                     container.innerHTML = html;
@@ -91,8 +101,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         if (window.jQuery && typeof window.jQuery === "function") {
                             window.jQuery("#modal-categoria").modal("hide");
                         }
-                        // 🟢 CAMBIO: En lugar de window.location.reload(), refrescamos solo la tabla
-                        reloadCategoriasTable(); 
+                        reloadCategoriasTable();
                     } else {
                         alert(data.message || "Error guardando categoría.");
                     }
@@ -110,7 +119,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // 🟢 NUEVA FUNCIÓN: Cambiar Estado por Fetch asíncrono
+    // Función: Cambiar Estado por Fetch asíncrono
     function CategoriaCambiarEstado(id, estado) {
         const mensaje = estado == 1 ? "¿Deseas activar esta categoría?" : "¿Deseas inhabilitar esta categoría?";
         if (!confirm(mensaje)) return;
@@ -118,32 +127,32 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch(`/categorias/${id}/estado?estado=${estado}`, {
             method: "POST"
         })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === "OK") {
-                reloadCategoriasTable(); // Refresca la tabla al instante
-            } else {
-                alert(data.message || "Error al cambiar el estado");
-            }
-        })
-        .catch(err => console.error("Error:", err));
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === "OK") {
+                    reloadCategoriasTable();
+                } else {
+                    alert(data.message || "Error al cambiar el estado");
+                }
+            })
+            .catch(err => console.error("Error:", err));
     }
 
-    // 🟢 NUEVA FUNCIÓN: Eliminar Categoría por Fetch asíncrono
+    // Función: Eliminar Categoría por Fetch asíncrono
     function CategoriaEliminar(id) {
         if (!confirm("¿Deseas eliminar esta categoría?")) return;
 
         fetch(`/categorias/${id}/eliminar`, {
             method: "POST"
         })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === "OK") {
-                reloadCategoriasTable(); // Refresca la tabla al instante
-            } else {
-                alert(data.message || "Error al eliminar");
-            }
-        })
-        .catch(err => console.error("Error:", err));
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === "OK") {
+                    reloadCategoriasTable();
+                } else {
+                    alert(data.message || "Error al eliminar");
+                }
+            })
+            .catch(err => console.error("Error:", err));
     }
 });

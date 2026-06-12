@@ -36,11 +36,12 @@ public class CategoriaController {
         return "components/layout";
     }
 
-    // 🔄 NUEVA RUTA: Retorna solo el fragmento HTML de la tabla para refrescar con AJAX
+    // 🔄 NUEVA RUTA: Retorna solo el fragmento HTML de la tabla para refrescar con
+    // AJAX
     @GetMapping("/tabla")
     public String tablaCategorias(Model model) {
         model.addAttribute("categorias", categoriaService.listAll());
-        return "views/categoria :: tablaCategorias"; // Asegúrate de que el th:fragment="tablaCategorias" esté en tu HTML
+        return "views/categoria :: tablaCategorias";
     }
 
     @PostMapping
@@ -59,8 +60,10 @@ public class CategoriaController {
         if (id == null) {
             categoriaService.createCategory(categoriaDto);
         } else {
+            // CORREGIDO: Ahora enviamos también el 'tipoUnidad' al actualizar
             categoriaService.updateCategory(id,
-                    new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion()));
+                    new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion(),
+                            categoriaDto.tipoUnidad()));
         }
 
         return "redirect:/categorias";
@@ -69,8 +72,8 @@ public class CategoriaController {
     @PostMapping(value = "/ajax")
     @ResponseBody
     public Map<String, Object> guardarCategoriaAjax(@RequestParam(required = false) Long id,
-                                                     @Valid CategoriaDTO.Create categoriaDto,
-                                                     BindingResult result) {
+            @Valid CategoriaDTO.Create categoriaDto,
+            BindingResult result) {
         if (result.hasErrors()) {
             String message = result.getAllErrors().get(0).getDefaultMessage();
             return Map.of("status", "ERROR", "message", message);
@@ -79,8 +82,10 @@ public class CategoriaController {
         if (id == null) {
             categoriaService.createCategory(categoriaDto);
         } else {
+            // CORREGIDO: Ahora enviamos también el 'tipoUnidad' en la petición por AJAX
             categoriaService.updateCategory(id,
-                    new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion()));
+                    new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion(),
+                            categoriaDto.tipoUnidad()));
         }
 
         return Map.of("status", "OK");

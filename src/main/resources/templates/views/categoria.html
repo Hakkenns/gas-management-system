@@ -21,7 +21,7 @@
             </button>
 
             <div id="contenedor-tabla-categoria" th:fragment="tablaCategorias">
-                
+
                 <table class="table table-bordered table-striped">
 
                     <thead class="thead-dark">
@@ -29,6 +29,7 @@
                             <th>ID</th>
                             <th>Nombre</th>
                             <th>Descripción</th>
+                            <th>Medida Base</th> <!-- Informativo para control del dueño -->
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -37,7 +38,7 @@
                     <tbody>
 
                         <tr th:if="${#lists.isEmpty(categorias)}">
-                            <td colspan="5" class="text-center">
+                            <td colspan="6" class="text-center">
                                 No hay categorías registradas
                             </td>
                         </tr>
@@ -47,6 +48,11 @@
                             <td th:text="${c.id}"></td>
                             <td th:text="${c.nombre}"></td>
                             <td th:text="${c.descripcion}"></td>
+
+                            <!-- Columna visual para ver la unidad configurada internamente -->
+                            <td>
+                                <span class="badge badge-light" th:text="${c.unidadMedida}"></span>
+                            </td>
 
                             <td>
                                 <span class="badge badge-success" th:if="${c.estado == 1}">
@@ -58,8 +64,14 @@
                             </td>
 
                             <td>
+                                <!-- NUEVO: Atributo data-tipounidad calculado dinámicamente según la regla inversa -->
                                 <button type="button" class="btn btn-warning btn-sm btn-editar-categoria"
-                                    th:attr="data-id=${c.id},data-nombre=${c.nombre},data-descripcion=${c.descripcion}">
+                                    th:attr="data-id=${c.id},
+                                             data-nombre=${c.nombre},
+                                             data-descripcion=${c.descripcion},
+                                             data-tipounidad=${c.unidadMedida == 'KG' ? 'POR KILOS (KG)' : 
+                                                              (c.unidadMedida == 'L' ? 'POR LITROS (L)' : 
+                                                              (c.unidadMedida == 'M' ? 'POR METROS (M)' : 'POR UNIDADES / PIEZAS'))}">
                                     <i class="fas fa-edit"></i>
                                 </button>
 
@@ -84,8 +96,9 @@
                     </tbody>
 
                 </table>
-                
-            </div> </div>
+
+            </div>
+        </div>
 
         <div class="modal fade" id="modal-categoria" tabindex="-1" data-backdrop="false">
 
@@ -111,6 +124,17 @@
                             <div class="form-group">
                                 <label>Nombre de Categoría</label>
                                 <input type="text" class="form-control" id="nombre-categoria" name="nombre" required>
+                            </div>
+
+                            <div class="form-group mt-2">
+                                <label for="tipoUnidad" class="form-label">Forma de Venta / Tipo de Unidad</label>
+                                <select class="form-control" id="tipoUnidad" name="tipoUnidad" required>
+                                    <option value="" disabled selected>-- Seleccione una opción --</option>
+                                    <option value="POR UNIDADES / PIEZAS">Por Unidades / Piezas</option>
+                                    <option value="POR KILOS (KG)">Por Kilos (KG)</option>
+                                    <option value="POR LITROS (L)">Por Litros (L)</option>
+                                    <option value="POR METROS (M)">Por Metros (M)</option>
+                                </select>
                             </div>
 
                             <div class="form-group mt-2">

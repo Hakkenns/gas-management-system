@@ -18,7 +18,7 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class CategoriaServiceImplement implements CategoriaService {
-    
+
     @Autowired
     private CategoriaMapper categoriaMapper;
 
@@ -29,7 +29,7 @@ public class CategoriaServiceImplement implements CategoriaService {
     @Transactional
     public List<CategoriaDTO.SimpleResponse> listAll() {
         return categoriaRepository.findAll().stream()
-                .filter(categoria -> categoria.getEstado() != 2) // Excluimos las categorías con estado = 2 (Eliminadas)
+                .filter(categoria -> categoria.getEstado() != 2) // Excluimos estado = 2 (Eliminadas)
                 .map(categoriaMapper::toSimpleResponse)
                 .collect(Collectors.toList());
     }
@@ -42,6 +42,13 @@ public class CategoriaServiceImplement implements CategoriaService {
         }
 
         Categoria categoria = categoriaMapper.toEntity(createDto);
+
+        // =====================================================================
+        // PROCESAMIENTO AUTOMÁTICO DE BANDERAS LÓGICAS (NUEVO)
+        // =====================================================================
+        configurarBanderasPorTipoUnidad(categoria, createDto.tipoUnidad());
+        // =====================================================================
+
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
 
@@ -51,8 +58,23 @@ public class CategoriaServiceImplement implements CategoriaService {
         Categoria categoria = categoriaRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
 
+        // VALIDACIÓN MEJORADA: Permite guardar si es el mismo nombre de este registro,
+        // pero bloquea si intenta usar el nombre de OTRA categoría existente.
+        categoriaRepository.findByNombre(updateDto.nombre()).ifPresent(existente -> {
+            if (!existente.getId().equals(id)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "El nombre de la categoría ya está en uso por otro registro");
+            }
+        });
+
         categoria.setNombre(updateDto.nombre());
         categoria.setDescripcion(updateDto.descripcion());
+
+        // =====================================================================
+        // RECALCULAR BANDERAS POR SI EL USUARIO CAMBIÓ LA FORMA DE VENTA (NUEVO)
+        // =====================================================================
+        configurarBanderasPorTipoUnidad(categoria, updateDto.tipoUnidad());
+        // =====================================================================
 
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
@@ -84,5 +106,44 @@ public class CategoriaServiceImplement implements CategoriaService {
                 .map(categoriaMapper::toSimpleResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
     }
-}
 
+    // =========================================================================
+    // MÉTODO PRIVADO AUXILIAR: Centraliza la lógica del Switch para reutilizarla
+    // =========================================================================
+    private void configurarBanderasPorTipoUnidad(Categoria categoria, String tipoUnidad) {
+        if (tipoUnidad == null) {
+            tipoUnidad = "POR UNIDADES / PIEZAS";
+        }
+
+        switch (tipoUnidad.toUpperCase().trim()) {
+            case "POR KILOS (KG)":
+                categoria.setUnidadMedida("KG");
+                categoria.setRequiereCapacidad(true);
+                categoria.setEtiquetaCapacidad("Capacidad (kg)");
+                categoria.setManejaEnvase(true);
+                break;
+
+            case "POR LITROS (L)":
+                categoria.setUnidadMedida("L");
+                categoria.setRequiereCapacidad(true);
+                categoria.setEtiquetaCapacidad("Contenido (Litros)");
+                categoria.setManejaEnvase(true);
+                break;
+
+            case "POR METROS (M)":
+                categoria.setUnidadMedida("M");
+                categoria.setRequiereCapacidad(true);
+                categoria.setEtiquetaCapacidad("Longitud (Metros)");
+                categoria.setManejaEnvase(false);
+                break;
+
+            case "POR UNIDADES / PIEZAS":
+            default:
+                categoria.setUnidadMedida("UND");
+                categoria.setRequiereCapacidad(false);
+                categoria.setEtiquetaCapacidad(null);
+                categoria.setManejaEnvase(false);
+                break;
+        }
+    }
+}

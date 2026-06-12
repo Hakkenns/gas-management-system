@@ -1,0 +1,24 @@
+package com.gas.sistema_gas.dto;
+
+import jakarta.validation.constraints.NotNull;
+
+public class CatalogoProveedorDTO {
+
+    // 1. Lo que viaja desde la pantalla cuando asocias un producto a un proveedor
+    public record Create(
+        @NotNull(message = "El proveedor es obligatorio")
+        Long idProveedor,
+
+        @NotNull(message = "El producto es obligatorio")
+        Long idProducto
+    ){}
+
+    // 2. La respuesta limpia que el sistema enviará si necesitan listar las uniones
+    public record SimpleResponse(
+        Long idCatalogo,
+        Long idProveedor,
+        String nombreProveedor,
+        Long idProducto,
+        String nombreProducto
+    ){}
+}

@@ -6,11 +6,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const idInput = document.getElementById("producto-id");
     const nombreInput = document.getElementById("producto-nombre");
     const descripcionInput = document.getElementById("producto-descripcion");
+    const categoriaDisplay = document.getElementById("producto-categoria-display");
     const categoriaSelect = document.getElementById("producto-categoria");
     const capacidadInput = document.getElementById("producto-capacidad");
     const unidadMedidaSelect = document.getElementById("producto-unidadMedida");
     const contenedorCapacidad = document.getElementById("contenedor-capacidad");
-    const contenedorUnidad = document.getElementById("contenedor-unidad");
+    const contenedorRequiereEnvase = document.getElementById("contenedor-requiereEnvase");
     const labelCapacidad = document.getElementById("label-capacidad");
     const precioCompraInput = document.getElementById("producto-precioCompra");
     const precioVentaInput = document.getElementById("producto-precioVenta");
@@ -23,18 +24,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const requiereEnvaseCheckbox = document.getElementById("producto-requiereEnvase");
     const contenedorStockVacios = document.getElementById("contenedor-stockVacios");
 
-    // IDs de categorías
-    const ID_GAS = 1;
-    const ID_ACCESORIOS = 2;
-    const ID_AGUA = 3;
-
-    // Reglas de capacidad y ganancia
-    const CAPACIDAD_MIN_KG = 10;
-    const CAPACIDAD_MIN_L = 20;
-    const CAPACIDAD_MIN_M = 50;
-    const GANANCIA_MIN = 1.00;
-    const GANANCIA_STEP = 0.10;
-
     // Elementos del formulario - Imagen
     const archivoImagenInput = document.getElementById("producto-archivo-imagen");
     const btnAgregarImagen = document.getElementById("btn-agregar-imagen");
@@ -43,6 +32,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const textoSinImagen = document.getElementById("texto-sin-imagen");
     const quitarImagenInput = document.getElementById("producto-quitarImagen");
     const imagenBase64Hidden = document.getElementById("producto-imagenBase64");
+
+    // Elementos del modal de búsqueda de categorías
+    const btnBuscarCategoria = document.getElementById("btn-buscar-categoria");
+    const modalBuscarCategoria = document.getElementById("modal-buscar-categoria");
+    const inputBuscarCategoriaNombre = document.getElementById("input-buscar-categoria-nombre");
+    const selectFiltroUnidadMedida = document.getElementById("select-filtro-unidad-medida");
+    const btnFiltrarCategorias = document.getElementById("btn-filtrar-categorias");
+    const tablaBusquedaCategorias = document.getElementById("tabla-busqueda-categorias");
 
     // ============ ALMACENAMIENTO EN MEMORIA DE IMÁGENES STAGED ============
     // Estructura: { productoId: { imagenBase64: "...", quitarImagen: true/false } }
@@ -57,26 +54,14 @@ document.addEventListener("DOMContentLoaded", function () {
     // Mensaje dinámico bajo Ganancia según categoría y unidad
     function actualizarMensajeGanancia() {
         if (!infoGananciaPor) return;
-        const categoriaId = parseInt(categoriaSelect.value);
         const unidad = unidadMedidaSelect.value;
-
-        if (categoriaId === ID_ACCESORIOS && unidad === "M") {
-            infoGananciaPor.innerText = "Precio de ganancia por 1 metro";
-        } else {
-            infoGananciaPor.innerText = "Precio de ganancia por unidad";
-        }
+        infoGananciaPor.innerText = unidad === "M" ? "Precio de ganancia por 1 metro" : "Precio de ganancia por unidad";
     }
 
     function actualizarMensajeStockMinimo() {
         if (!infoStockMinimo) return;
-        const categoriaId = parseInt(categoriaSelect.value);
         const unidad = unidadMedidaSelect.value;
-
-        if (categoriaId === ID_ACCESORIOS && unidad === "M") {
-            infoStockMinimo.innerText = "Alerta de stock bajo por metros";
-        } else {
-            infoStockMinimo.innerText = "Alerta de stock bajo por unidad";
-        }
+        infoStockMinimo.innerText = unidad === "M" ? "Alerta de stock bajo por metros" : "Alerta de stock bajo por unidad";
     }
 
     let imagenesStaged = cargarImagenesStagedDesdeStorage();
@@ -126,207 +111,170 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // ============ MANEJO DE STOCK VACÍOS ============
+    function actualizarVisibilidadCampos() {
+        // Obtener la fila de la categoría seleccionada de la tabla
+        const categoriaId = categoriaSelect.value;
+        if (!categoriaId) {
+            contenedorCapacidad.style.display = "none";
+            contenedorStockVacios.style.display = "none";
+            unidadMedidaSelect.value = "";
+            if (contenedorRequiereEnvase) {
+                contenedorRequiereEnvase.style.display = "none";
+                requiereEnvaseCheckbox.checked = false;
+            }
+            return;
+        }
 
-    function actualizarVisibilidadStockVacios() {
-        const categoriaId = parseInt(categoriaSelect.value);
-        if (categoriaId === ID_ACCESORIOS) {
+        // Buscar la fila en la tabla del modal con el ID seleccionado
+        const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${categoriaId}"]`);
+        if (!filaCategoria) {
+            console.warn("Categoría no encontrada en la tabla");
+            return;
+        }
+
+        // 1. Extraemos las banderas configuradas desde los data attributes
+        const requiereCapacidad = filaCategoria.dataset.requierecapacidad === "true";
+        const etiquetaCapacidad = filaCategoria.dataset.etiquetacapacidad || "Capacidad / Medida";
+        const unidadMedida = filaCategoria.dataset.unidadmedida || "UND";
+        const manejaEnvase = filaCategoria.dataset.manejaenvase === "true";
+
+        // 2. Control del campo Unidad de Medida (Automático y Bloqueado)
+        unidadMedidaSelect.value = unidadMedida;
+
+        // 3. Control de Capacidad Dinámica
+        if (requiereCapacidad) {
+            contenedorCapacidad.style.display = "block";
+            labelCapacidad.innerText = etiquetaCapacidad;
+            capacidadInput.required = true;
+        } else {
+            contenedorCapacidad.style.display = "none";
+            capacidadInput.value = "";
+            capacidadInput.required = false;
+        }
+
+        // 4. Control de Envases Vacíos Dinámico
+        if (manejaEnvase) {
+            contenedorStockVacios.style.display = "block";
+            stockVaciosInput.required = true;
+        } else {
             contenedorStockVacios.style.display = "none";
             stockVaciosInput.value = 0;
             stockVaciosInput.required = false;
-        } else {
-            contenedorStockVacios.style.display = "block";
-            stockVaciosInput.required = true;
-        }
-    }
-
-    function actualizarVisibilidadCampos() {
-        const categoriaId = parseInt(categoriaSelect.value);
-        const infoUnidadBloqueadas = document.getElementById("info-unidad-bloqueadas");
-
-        if (!categoriaId) {
-            contenedorCapacidad.style.display = "none";
-            unidadMedidaSelect.disabled = false;
-            infoUnidadBloqueadas.style.display = "none";
-            habilitarTodasOpciones();
-            return;
         }
 
-        // GAS DOMÉSTICO: Solo KG
-        if (categoriaId === ID_GAS) {
-            unidadMedidaSelect.value = "KG";
-            contenedorCapacidad.style.display = "block";
-            labelCapacidad.innerText = "Capacidad (kg)";
-            infoUnidadBloqueadas.style.display = "block";
-            bloquearOpcionesGas();
+        // 5. Actualizar mensajes informativos de la interfaz
+        if (infoGananciaPor) {
+            infoGananciaPor.innerText = unidadMedida === "M" ? "Precio de ganancia por 1 metro" : "Precio de ganancia por unidad";
         }
-        // AGUA: Solo L
-        else if (categoriaId === ID_AGUA) {
-            unidadMedidaSelect.value = "L";
-            contenedorCapacidad.style.display = "block";
-            labelCapacidad.innerText = "Capacidad (litros)";
-            infoUnidadBloqueadas.style.display = "block";
-            bloquearOpcionesAgua();
-        }
-        // ACCESORIOS: Solo M y NO_APLICA
-        else if (categoriaId === ID_ACCESORIOS) {
-            bloquearOpcionesAccesorios();
-            if (unidadMedidaSelect.value !== "M" && unidadMedidaSelect.value !== "NO_APLICA") {
-                unidadMedidaSelect.value = "NO_APLICA";
-            }
-            infoUnidadBloqueadas.style.display = "block";
-            controlarCapacidadPorUnidad();
-        }
-        else {
-            unidadMedidaSelect.disabled = false;
-            contenedorCapacidad.style.display = "none";
-            infoUnidadBloqueadas.style.display = "none";
-            habilitarTodasOpciones();
-        }
-    }
-
-    // Bloquear solo KG para Gas
-    function bloquearOpcionesGas() {
-        [...unidadMedidaSelect.options].forEach(op => {
-            op.disabled = (op.value !== "" && op.value !== "KG");
-        });
-    }
-
-    // Bloquear solo L para Agua
-    function bloquearOpcionesAgua() {
-        [...unidadMedidaSelect.options].forEach(op => {
-            op.disabled = (op.value !== "" && op.value !== "L");
-        });
-    }
-
-    // Bloquear KG y L para Accesorios
-    function bloquearOpcionesAccesorios() {
-        [...unidadMedidaSelect.options].forEach(op => {
-            op.disabled = (op.value === "KG" || op.value === "L");
-        });
-    }
-
-    // Habilitar todas las opciones
-    function habilitarTodasOpciones() {
-        [...unidadMedidaSelect.options].forEach(op => {
-            op.disabled = false;
-        });
-    }
-
-    // Controlar visibilidad de capacidad según unidad seleccionada
-    function controlarCapacidadPorUnidad() {
-        const categoriaTexto = categoriaSelect.options[categoriaSelect.selectedIndex]?.text?.trim();
-        
-        // Para Gas y Agua, siempre mostrar capacidad
-        if (categoriaTexto === "Gas Domestico" || categoriaTexto === "Bidones de Agua") {
-            contenedorCapacidad.style.display = "block";
-            return;
+        if (infoStockMinimo) {
+            infoStockMinimo.innerText = unidadMedida === "M" ? "Alerta de stock bajo por metros" : "Alerta de stock bajo por unidad";
         }
 
-        // Para Accesorios, mostrar capacidad solo si es Metros
-        if (categoriaTexto === "Accesorios") {
-            if (unidadMedidaSelect.value === "M") {
-                contenedorCapacidad.style.display = "block";
-                labelCapacidad.innerText = "Medida (metros)";
-            } else if (unidadMedidaSelect.value === "NO_APLICA") {
-                contenedorCapacidad.style.display = "none";
-                capacidadInput.value = "";
+        // 6. Mostrar / ocultar el control de envase según el manejo de envases por categoría
+        if (contenedorRequiereEnvase) {
+            if (manejaEnvase) {
+                contenedorRequiereEnvase.style.display = "block";
+            } else {
+                contenedorRequiereEnvase.style.display = "none";
+                requiereEnvaseCheckbox.checked = false;
             }
         }
     }
 
     function actualizarRestriccionesCapacidad() {
-        const unidad = unidadMedidaSelect.value;
-
-        if (unidad === "KG") {
-            capacidadInput.step = "1";
-            capacidadInput.min = CAPACIDAD_MIN_KG;
-            capacidadInput.required = true;
-            capacidadInput.placeholder = "Ejemplo: 10";
-        } else if (unidad === "L") {
-            capacidadInput.step = "1";
-            capacidadInput.min = CAPACIDAD_MIN_L;
-            capacidadInput.required = true;
-            capacidadInput.placeholder = "Ejemplo: 20";
-        } else if (unidad === "M") {
-            capacidadInput.step = "0.01";
-            capacidadInput.min = CAPACIDAD_MIN_M;
-            capacidadInput.required = true;
-            capacidadInput.placeholder = "Ejemplo: 50.00";
-        } else {
-            capacidadInput.step = "0.01";
-            capacidadInput.min = "0";
-            capacidadInput.required = false;
-            capacidadInput.placeholder = "";
-        }
+        actualizarVisibilidadCampos();
     }
 
     function validarProducto() {
-        const unidad = unidadMedidaSelect.value;
-        const capacidadValor = capacidadInput.value ? parseFloat(capacidadInput.value) : null;
-        const gananciaValor = parseFloat(gananciaProductoInput.value);
+        if (!categoriaSelect.value) {
+            alert("Por favor, seleccione una categoría.");
+            return false;
+        }
+        if (!nombreInput.value.trim()) {
+            alert("Por favor, ingrese el nombre del producto.");
+            return false;
+        }
 
-        if (unidad === "KG") {
-            if (capacidadValor === null || capacidadInput.value.trim() === "") {
-                return "La capacidad en KG es obligatoria.";
-            }
-            if (!Number.isInteger(capacidadValor)) {
-                return "La capacidad en KG debe ser un número entero.";
-            }
-            if (capacidadValor < CAPACIDAD_MIN_KG) {
-                return `La capacidad mínima en KG es ${CAPACIDAD_MIN_KG}.`;
+        // Si la categoría requiere capacidad, validamos que no esté vacía o en 0
+        const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${categoriaSelect.value}"]`);
+        if (filaCategoria && filaCategoria.dataset.requierecapacidad === "true") {
+            if (!capacidadInput.value || parseFloat(capacidadInput.value) <= 0) {
+                alert("Por favor, ingrese una capacidad válida mayor a 0.");
+                return false;
             }
         }
 
-        if (unidad === "L") {
-            if (capacidadValor === null || capacidadInput.value.trim() === "") {
-                return "La capacidad en litros es obligatoria.";
-            }
-            if (!Number.isInteger(capacidadValor)) {
-                return "La capacidad en litros debe ser un número entero.";
-            }
-            if (capacidadValor < CAPACIDAD_MIN_L) {
-                return `La capacidad mínima en litros es ${CAPACIDAD_MIN_L}.`;
-            }
-        }
-
-        if (unidad === "M") {
-            if (capacidadValor === null || capacidadInput.value.trim() === "") {
-                return "La capacidad en metros es obligatoria.";
-            }
-            if (capacidadValor < CAPACIDAD_MIN_M) {
-                return `La capacidad mínima en metros es ${CAPACIDAD_MIN_M}.`;
-            }
-        }
-
-        if (unidad === "NO_APLICA" && capacidadInput.value.trim() !== "") {
-            return "No debe ingresar capacidad cuando la unidad de medida es No aplica.";
-        }
-
-        if (Number.isNaN(gananciaValor) || gananciaValor < GANANCIA_MIN) {
-            return `La ganancia mínima permitida es S/${GANANCIA_MIN.toFixed(2)}.`;
-        }
-
-        const gananciaCentavos = Math.round((gananciaValor + Number.EPSILON) * 100);
-        if (gananciaCentavos % Math.round(GANANCIA_STEP * 100) !== 0) {
-            return `La ganancia debe aumentar en incrementos de S/${GANANCIA_STEP.toFixed(2)}.`;
-        }
-
-        return null;
+        return true;
     }
 
-    categoriaSelect.addEventListener("change", () => {
+    // ============ MANEJADORES DEL MODAL DE BÚSQUEDA DE CATEGORÍAS ============
 
-        actualizarVisibilidadStockVacios();
-
-        actualizarVisibilidadCampos();
-        actualizarRestriccionesCapacidad();
-        actualizarMensajeGanancia();
-        actualizarMensajeStockMinimo();
+    // Abrir modal al hacer clic en el botón de búsqueda
+    btnBuscarCategoria.addEventListener("click", function () {
+        // Limpiar filtros
+        inputBuscarCategoriaNombre.value = "";
+        selectFiltroUnidadMedida.value = "";
+        // Mostrar todas las filas
+        tablaBusquedaCategorias.querySelectorAll("tbody tr").forEach(row => {
+            row.style.display = "";
+        });
+        // Abrir modal
+        if (window.jQuery) {
+            jQuery("#modal-buscar-categoria").modal("show");
+        }
     });
 
+    // Filtrar categorías
+    function filtrarCategorias() {
+        const nombreFiltro = inputBuscarCategoriaNombre.value.toLowerCase();
+        const unidadFiltro = selectFiltroUnidadMedida.value;
+
+        tablaBusquedaCategorias.querySelectorAll("tbody tr").forEach(row => {
+            const nombre = row.dataset.nombre.toLowerCase();
+            const unidad = row.dataset.unidadmedida;
+
+            const coincideNombre = nombre.includes(nombreFiltro);
+            const coincideUnidad = !unidadFiltro || unidad === unidadFiltro;
+
+            row.style.display = coincideNombre && coincideUnidad ? "" : "none";
+        });
+    }
+
+    // Eventos para filtrar
+    inputBuscarCategoriaNombre.addEventListener("keyup", filtrarCategorias);
+    inputBuscarCategoriaNombre.addEventListener("change", filtrarCategorias);
+    selectFiltroUnidadMedida.addEventListener("change", filtrarCategorias);
+    // El botón de filtrar puede haber sido eliminado del DOM; añadir handler sólo si existe
+    if (btnFiltrarCategorias) {
+        btnFiltrarCategorias.addEventListener("click", filtrarCategorias);
+    }
+
+    // Seleccionar categoría desde el modal
+    tablaBusquedaCategorias.addEventListener("click", function (e) {
+        const btnSeleccionar = e.target.closest(".btn-seleccionar-categoria");
+        if (btnSeleccionar) {
+            const fila = btnSeleccionar.closest("tr");
+            const categoriaId = fila.dataset.id;
+            const categoriaNombre = fila.dataset.nombre;
+
+            // Llenar el campo de texto y el hidden
+            categoriaDisplay.value = categoriaNombre;
+            categoriaSelect.value = categoriaId;
+
+            // Disparar cambios
+            actualizarVisibilidadCampos();
+            actualizarMensajeGanancia();
+            actualizarMensajeStockMinimo();
+
+            // Cerrar modal
+            if (window.jQuery) {
+                jQuery("#modal-buscar-categoria").modal("hide");
+            }
+        }
+    });
+
+    // Eventos de cambio en unidad de medida
     unidadMedidaSelect.addEventListener("change", function () {
-        controlarCapacidadPorUnidad();
         actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
@@ -356,9 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 previewImagen.src = evento.target.result;
                 previewImagen.style.display = "block";
                 textoSinImagen.style.display = "none";
-                // Actualizar nombre del label
                 document.querySelector(".custom-file-label").innerText = archivo.name;
-                // Al seleccionar un archivo, no lo marcamos como agregado hasta que el usuario presione "Agregar Imagen"
                 quitarImagenInput.value = "false";
             };
             reader.readAsDataURL(archivo);
@@ -379,18 +325,16 @@ document.addEventListener("DOMContentLoaded", function () {
         const archivo = archivoImagenInput.files[0];
         const reader = new FileReader();
         reader.onload = function (evento) {
-            // Guardamos la imagen en base64 en el campo oculto para que quede "staged"
             imagenBase64Hidden.value = evento.target.result;
             quitarImagenInput.value = "false";
             btnAgregarImagen.innerText = "Imagen agregada";
             btnAgregarImagen.classList.remove("btn-secondary");
             btnAgregarImagen.classList.add("btn-success");
 
-            // Guardar estado en memoria
             const productoId = idInput.value;
             guardarEstadoImagenStaged(productoId);
 
-            alert("La imagen se cargo correctamente");
+            alert("La imagen se cargó correctamente");
         };
         reader.readAsDataURL(archivo);
     });
@@ -402,86 +346,78 @@ document.addEventListener("DOMContentLoaded", function () {
         previewImagen.style.display = "none";
         textoSinImagen.style.display = "block";
         document.querySelector(".custom-file-label").innerText = "Seleccionar archivo...";
-        // Marcamos que se eliminará la imagen actual al guardar
         quitarImagenInput.value = "true";
-        // Limpiamos cualquier imagen previamente staged
         imagenBase64Hidden.value = "";
         btnAgregarImagen.innerText = "Agregar Imagen";
         btnAgregarImagen.classList.remove("btn-success");
         btnAgregarImagen.classList.add("btn-secondary");
 
-        // Guardar estado en memoria
         const productoId = idInput.value;
         guardarEstadoImagenStaged(productoId);
     });
 
-    // 1. ESCUCHAR CLICS EN LA TABLA ASÍNCRONA
-    document.getElementById("contenedor-tabla-productos").addEventListener("click", function (e) {
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
 
-        // ✏️ BOTÓN EDITAR
-        const btnEditar = e.target.closest(".btn-editar-producto");
-        if (btnEditar) {
-            const id = btnEditar.dataset.id;
-            modalTitulo.innerText = "Editar Producto";
-            form.reset();
-            // NO llamamos a btnLimpiarImagen.click() aquí para no borrar el estado staged
-            // En su lugar, reseteamos solo los campos visuales
-            archivoImagenInput.value = "";
-            previewImagen.src = "";
-            previewImagen.style.display = "none";
-            textoSinImagen.style.display = "block";
-            document.querySelector(".custom-file-label").innerText = "Seleccionar archivo...";
-            btnAgregarImagen.innerText = "Agregar Imagen";
-            btnAgregarImagen.classList.remove("btn-success");
-            btnAgregarImagen.classList.add("btn-secondary");
-
-            fetch(`/productos/${id}`)
-                .then(response => {
-                    if (!response.ok) throw new Error("No se pudieron cargar los datos");
-                    return response.json();
-                })
-                .then(data => {
-                    idInput.value = data.id;
-                    nombreInput.value = data.nombre;
-                    descripcionInput.value = data.descripcion || "";
-                    precioCompraInput.value = data.precioCompra != null ? data.precioCompra : "0.00";
-                    gananciaProductoInput.value = data.gananciaProducto || 0;
-                    precioVentaInput.value = data.precioVenta != null ? data.precioVenta : "0.00";
-                    stockLlenosInput.value = data.stockLlenos != null ? data.stockLlenos : 0;
-                    stockVaciosInput.value = data.stockVacios != null ? data.stockVacios : 0;
-                    stockMinimoInput.value = data.stockMinimo != null ? data.stockMinimo : 0;
-                    categoriaSelect.value = data.idCategoria || "";
-                    unidadMedidaSelect.value = data.unidadMedida || "";
-                    capacidadInput.value = data.capacidad != null ? data.capacidad : "";
-                    requiereEnvaseCheckbox.checked = data.requiereEnvase === true;
-
-                    // Verificar si hay un estado staged para esta imagen
-                    const tieneEstadoStaged = cargarEstadoImagenStaged(data.id);
-
-                    if (!tieneEstadoStaged) {
-                        // Reset flags de imagen solo si no hay estado staged
-                        quitarImagenInput.value = "false";
-                        imagenBase64Hidden.value = "";
-
-                        // Mostrar imagen existente si la hay
-                        if (data.urlImagen) {
-                            previewImagen.src = data.urlImagen;
-                            previewImagen.style.display = "block";
-                            textoSinImagen.style.display = "none";
-                        }
-                    }
-
-                    actualizarVisibilidadStockVacios();
-                    actualizarVisibilidadCampos();
-                    actualizarMensajeGanancia();
-                    actualizarMensajeStockMinimo();
-                    // Abrir modal usando la instancia jQuery de Bootstrap 4
-                    $("#modal-producto").modal("show");
-                })
-                .catch(err => alert("Error: " + err.message));
+        if (!validarProducto()) {
+            return;
         }
 
-        // 📝️ BOTÓN VER DESCRIPCIÓN
+        const formData = new FormData(form);
+        formData.set("requiereEnvase", requiereEnvaseCheckbox.checked ? "true" : "false");
+
+        fetch("/productos", {
+            method: "POST",
+            body: formData
+        })
+            .then(response => response.json())
+            .then(res => {
+                if (res.status === "OK") {
+                    const productoId = idInput.value;
+                    limpiarEstadoImagenStaged(productoId);
+                    if (window.jQuery) window.jQuery("#modal-producto").modal("hide");
+                    recargarTabla();
+                } else {
+                    alert("Atención: " + res.message);
+                }
+            })
+            .catch(err => alert("Error al procesar la solicitud."));
+    });
+
+    document.addEventListener("click", function (e) {
+        const editButton = e.target.closest(".btn-editar-producto");
+
+        if (editButton) {
+            modalTitulo.textContent = "Editar Producto";
+
+            idInput.value = editButton.dataset.id;
+            nombreInput.value = editButton.dataset.nombre;
+            categoriaSelect.value = editButton.dataset.idcategoria;
+
+            // Llenar el display con el nombre de la categoría
+            const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${editButton.dataset.idcategoria}"]`);
+            if (filaCategoria) {
+                categoriaDisplay.value = filaCategoria.dataset.nombre;
+            }
+
+            precioCompraInput.value = editButton.dataset.preciocompra;
+            precioVentaInput.value = editButton.dataset.precioventa;
+            stockMinimoInput.value = editButton.dataset.stockminimo;
+
+            actualizarVisibilidadCampos();
+
+            if (capacidadInput) capacidadInput.value = editButton.dataset.capacidad || "";
+            if (stockVaciosInput) stockVaciosInput.value = editButton.dataset.stockvacios || 0;
+            requiereEnvaseCheckbox.checked = editButton.dataset.requiereenvase === "true";
+
+            calcularPrecioVenta();
+            cargarEstadoImagenStaged(editButton.dataset.id);
+
+            if (window.jQuery) window.jQuery("#modal-producto").modal("show");
+        }
+    });
+
+    document.getElementById("contenedor-tabla-productos").addEventListener("click", function (e) {
         const btnVerDescripcion = e.target.closest(".btn-ver-descripcion");
         if (btnVerDescripcion) {
             const nombreProducto = btnVerDescripcion.dataset.nombre;
@@ -490,7 +426,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             document.getElementById("modal-descripcion-titulo").innerText = "Detalle - " + nombreProducto;
 
-            // Mostrar ganancia con formato S/ 0.00
             const gananciaSpan = document.getElementById("modal-ganancia-contenido");
             const g = parseFloat(ganancia);
             if (!isNaN(g)) {
@@ -499,12 +434,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 gananciaSpan.innerText = "S/ 0.00";
             }
 
-            // Mostrar descripción (vacío si no existe)
             document.getElementById("modal-descripcion-contenido").innerText = descripcion;
             $("#modal-descripcion").modal("show");
         }
 
-        //BOTÓN CAMBIAR ESTADO (Activar / Inhabilitar)
         const btnEstado = e.target.closest(".btn-estado-producto");
         if (btnEstado) {
             const id = btnEstado.dataset.id;
@@ -522,7 +455,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 .catch(err => alert("Error en el servidor al cambiar estado"));
         }
 
-        // 🗑️ BOTÓN ELIMINAR
         const btnEliminar = e.target.closest(".btn-eliminar-producto");
         if (btnEliminar) {
             const id = btnEliminar.dataset.id;
@@ -540,22 +472,22 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    // 2. BOTON NUEVO PRODUCTO
     document.getElementById("btn-crear-producto").addEventListener("click", function () {
         modalTitulo.innerText = "Nuevo Producto";
         form.reset();
+        categoriaDisplay.value = "";
+        categoriaSelect.value = "";
         idInput.value = "";
         requiereEnvaseCheckbox.checked = false;
         precioCompraInput.value = "0.00";
         precioVentaInput.value = "0.00";
         stockLlenosInput.value = 0;
-        // Inicializamos flags de imagen
         quitarImagenInput.value = "false";
         imagenBase64Hidden.value = "";
         btnAgregarImagen.innerText = "Agregar Imagen";
         btnAgregarImagen.classList.remove("btn-success");
         btnAgregarImagen.classList.add("btn-secondary");
-        btnLimpiarImagen.click(); // Limpiar imagen
+        btnLimpiarImagen.click();
         actualizarVisibilidadCampos();
         actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
@@ -563,42 +495,6 @@ document.addEventListener("DOMContentLoaded", function () {
         $("#modal-producto").modal("show");
     });
 
-    // 3. ENVÍO DEL FORMULARIO POR AJAX
-    form.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        const error = validarProducto();
-        if (error) {
-            alert("Atención: " + error);
-            return;
-        }
-
-        const formData = new FormData(form);
-        if (!requiereEnvaseCheckbox.checked) {
-            formData.set("requiereEnvase", "false");
-        }
-
-        fetch("/productos", {
-            method: "POST",
-            body: formData
-        })
-            .then(response => response.json())
-            .then(res => {
-                if (res.status === "OK") {
-                    // Limpiar estado staged después de guardar exitosamente
-                    const productoId = idInput.value;
-                    limpiarEstadoImagenStaged(productoId);
-
-                    $("#modal-producto").modal("hide"); // Cierra la ventana eliminando el fondo gris
-                    recargarTabla();
-                } else {
-                    alert("Atención: " + res.message);
-                }
-            })
-            .catch(err => alert("Error al procesar la solicitud."));
-    });
-
-    // 4. REFRESCAR LA TABLA
     function recargarTabla() {
         fetch("/productos/tabla")
             .then(response => response.text())
@@ -606,5 +502,175 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("contenedor-tabla-productos").innerHTML = html;
             })
             .catch(err => console.error("Error al refrescar la tabla:", err));
+    }
+
+    // =========================================================================
+    // 🌟 MÓDULO REACTIVO: GESTIÓN DE CATÁLOGO DE PROVEEDORES (NUEVO)
+    // =========================================================================
+    const modalCatalogo = document.getElementById("modal-catalogo-proveedores");
+    const catalogoProdNombre = document.getElementById("catalogo-producto-nombre");
+    const catalogoProdId = document.getElementById("catalogo-producto-id");
+    const inputBuscarProv = document.getElementById("input-buscar-proveedor-catalogo");
+    const checkTodosProv = document.getElementById("check-seleccionar-todos-proveedores");
+    const tablaProvBody = document.querySelector("#tabla-proveedores-catalogo tbody");
+
+    // 1. ESCUCHADOR DE CLICS GLOBAL (Detecta el botón de la lupa de Proveedores)
+    document.addEventListener("click", function (e) {
+        const btnCatalogo = e.target.closest(".btn-catalogo-proveedores");
+        if (btnCatalogo) {
+            const productoId = btnCatalogo.dataset.id;
+            const productoNombre = btnCatalogo.dataset.nombre;
+
+            // Seteamos los datos informativos en el modal
+            if (catalogoProdId) catalogoProdId.value = productoId;
+            if (catalogoProdNombre) catalogoProdNombre.textContent = productoNombre;
+
+            // Reseteamos el buscador y desmarcamos el "Seleccionar Todos" visualmente
+            if (inputBuscarProv) inputBuscarProv.value = "";
+            if (checkTodosProv) checkTodosProv.checked = false;
+
+            // Ponemos todos los checkboxes de la pantalla en falso antes de consultar
+            document.querySelectorAll(".check-proveedor-item").forEach(chk => chk.checked = false);
+
+            // LLAMADA AJAX: Consultamos al backend qué proveedores ya venden este producto
+            fetch("/catalogo-proveedores/listarTodo")
+                .then(r => r.json())
+                .then(data => {
+                    // Filtramos las asociaciones que correspondan exactamente a nuestro productoId
+                    // Nota: Tu SimpleResponse envía idProducto numerico
+                    data.forEach(item => {
+                        if (item.idProducto == productoId) {
+                            const checkbox = document.getElementById(`check-prov-${item.idProveedor}`);
+                            if (checkbox) checkbox.checked = true;
+                        }
+                    });
+                    actualizarEstadoCheckTodos();
+                    ejecutarFiltradoProveedores(); // Muestra la lista limpia
+
+                    // Abrimos el modal por código usando jQuery nativo de tu sistema
+                    if (window.jQuery) {
+                        window.jQuery("#modal-catalogo-proveedores").modal("show");
+                    }
+                })
+                .catch(err => {
+                    console.error("Error cargando catálogo:", err);
+                    alert("No se pudo cargar el catálogo de proveedores actual.");
+                });
+        }
+    });
+
+    // 2. BUSCADOR EN TIEMPO REAL (Filtra proveedores al escribir sin usar botones)
+    if (inputBuscarProv) {
+        inputBuscarProv.addEventListener("input", ejecutarFiltradoProveedores);
+    }
+
+    function ejecutarFiltradoProveedores() {
+        const query = inputBuscarProv.value.toLowerCase().trim();
+        const filas = tablaProvBody.querySelectorAll("tr");
+
+        filas.forEach(fila => {
+            if (fila.cells.length < 3) return; // Salta la fila vacía
+            const nombreProv = fila.cells[1].textContent.toLowerCase();
+            const rucProv = fila.cells[2].textContent.toLowerCase();
+
+            if (nombreProv.includes(query) || rucProv.includes(query)) {
+                fila.style.display = "";
+            } else {
+                fila.style.display = "none";
+            }
+        });
+    }
+
+    // 3. SINCRONIZACIÓN REACTIVA EN TIEMPO REAL (Manejo de Checkboxes individuales)
+    document.addEventListener("change", function (e) {
+        const checkbox = e.target.closest(".check-proveedor-item");
+        if (checkbox) {
+            if (checkbox.dataset.bloqueado === "true") {
+                return;
+            }
+
+            const idProducto = catalogoProdId.value;
+            const idProveedor = checkbox.value;
+            const intentandoMarcar = checkbox.checked;
+            const estadoAnterior = !intentandoMarcar;
+
+            checkbox.dataset.bloqueado = "true";
+            checkbox.disabled = true;
+
+            if (intentandoMarcar) {
+                const formData = new FormData();
+                formData.append("idProducto", idProducto);
+                formData.append("idProveedor", idProveedor);
+
+                fetch("/catalogo-proveedores/asociar", {
+                    method: "POST",
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status !== "OK") {
+                        checkbox.checked = estadoAnterior;
+                        alert(res.message);
+                    }
+                })
+                .catch(() => {
+                    checkbox.checked = estadoAnterior;
+                    alert("Error al intentar comunicar con el servidor.");
+                })
+                .finally(() => {
+                    checkbox.disabled = false;
+                    delete checkbox.dataset.bloqueado;
+                });
+
+            } else {
+                fetch(`/catalogo-proveedores/desasociar?idProveedor=${idProveedor}&idProducto=${idProducto}`, {
+                    method: "POST"
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status !== "OK") {
+                        checkbox.checked = estadoAnterior;
+                        alert(res.message);
+                    }
+                    actualizarEstadoCheckTodos();
+                })
+                .catch(() => {
+                    checkbox.checked = estadoAnterior;
+                    alert("Error de red al desasociar producto.");
+                })
+                .finally(() => {
+                    checkbox.disabled = false;
+                    delete checkbox.dataset.bloqueado;
+                });
+            }
+        }
+    });
+
+    // 4. CONTROL DEL CHECKBOX MAESTRO (Seleccionar / Deseleccionar todos de golpe)
+    if (checkTodosProv) {
+        checkTodosProv.addEventListener("change", function () {
+            const estadoMaestro = checkTodosProv.checked;
+            const checkboxesVisibles = Array.from(tablaProvBody.querySelectorAll("tr"))
+                .filter(tr => tr.style.display !== "none") // Solo actúa sobre los que están filtrados en pantalla
+                .map(tr => tr.querySelector(".check-proveedor-item"))
+                .filter(chk => chk !== null);
+
+            checkboxesVisibles.forEach(chk => {
+                if (chk.checked !== estadoMaestro) {
+                    chk.checked = estadoMaestro;
+                    // Disparamos el evento change programáticamente para que se guarde en la BD solo
+                    chk.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+            });
+        });
+    }
+
+    // Función auxiliar para mantener equilibrado el botón maestro de arriba
+    function actualizarEstadoCheckTodos() {
+        if (!checkTodosProv) return;
+        const checks = Array.from(document.querySelectorAll(".check-proveedor-item"));
+        if (checks.length === 0) { checkTodosProv.checked = false; return; }
+        const todosMarcados = checks.every(chk => chk.checked);
+        checkTodosProv.checked = todosMarcados;
     }
 });

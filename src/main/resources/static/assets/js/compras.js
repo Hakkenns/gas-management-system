@@ -244,6 +244,84 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
+
+    const modalBuscarProducto = document.getElementById("modal-buscar-producto");
+    const cuerpoTablaProductos = document.getElementById("cuerpo-busqueda-productos");
+
+    if (window.jQuery && modalBuscarProducto) {
+        $(modalBuscarProducto).on("show.bs.modal", function (e) {
+            const selectorProveedor = document.getElementById("input-proveedor");
+            const idProveedor = selectorProveedor ? selectorProveedor.value : "";
+
+            if (!idProveedor) {
+                alert("Atención: Por favor, seleccione primero un proveedor para filtrar su catálogo autorizado.");
+                e.preventDefault();
+                return false;
+            }
+
+            if (cuerpoTablaProductos) {
+                cuerpoTablaProductos.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando catálogo autorizado del proveedor...
+                        </td>
+                    </tr>`;
+            }
+
+            fetch(`/catalogo-proveedores/proveedor/${idProveedor}/productos`)
+                .then(response => {
+                    if (!response.ok) throw new Error("Error en el servidor");
+                    return response.json();
+                })
+                .then(productosAutorizados => {
+                    if (!cuerpoTablaProductos) return;
+                    cuerpoTablaProductos.innerHTML = "";
+
+                    if (productosAutorizados.length === 0) {
+                        cuerpoTablaProductos.innerHTML = `
+                            <tr>
+                                <td colspan="4" class="text-center text-danger">
+                                    El proveedor seleccionado no tiene productos asignados en su catálogo.
+                                </td>
+                            </tr>`;
+                        return;
+                    }
+
+                    productosAutorizados.forEach(p => {
+                        const fila = document.createElement("tr");
+                        fila.className = "fila-producto-busqueda";
+                        fila.dataset.id = p.id;
+                        fila.dataset.nombre = p.nombre;
+                        fila.dataset.precio = p.precioVenta;
+                        fila.dataset.categoria = p.categoria ? p.categoria.id : "";
+                        fila.dataset.capacidad = p.capacidad || "";
+                        fila.dataset.unidad = p.unidadMedida || "";
+
+                        let nombreFormateado = p.nombre || "";
+                        if (p.capacidad && p.unidadMedida) {
+                            const sufijoUnidad = p.unidadMedida === "KG" ? " kg" : p.unidadMedida === "L" ? " L" : p.unidadMedida === "M" ? " m" : "";
+                            nombreFormateado += ` - ${p.capacidad}${sufijoUnidad}`;
+                        }
+
+                        fila.innerHTML = `
+                            <td>${nombreFormateado}</td>
+                            <td>${p.categoria ? p.categoria.nombre : "-"}</td>
+                            <td class="text-right">S/ ${parseFloat(p.precioVenta).toFixed(2)}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
+                            </td>
+                        `;
+                        cuerpoTablaProductos.appendChild(fila);
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                    if (cuerpoTablaProductos) {
+                        cuerpoTablaProductos.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar el catálogo.</td></tr>`;
+                    }
+                });
+        });
+    }
 });
 
 function initTablaCompras() {

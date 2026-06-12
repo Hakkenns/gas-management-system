@@ -35,6 +35,21 @@ public class Categoria {
     @Column(nullable = false)
     private Integer estado = 1;
 
+
+    @Column(name = "unidad_medida", nullable = false, length = 10)
+    private String unidadMedida = "UND";
+
+    @Column(name = "requiere_capacidad", nullable = false)
+    private Boolean requiereCapacidad = false;
+
+    @Column(name = "etiqueta_capacidad", length = 50)
+    private String etiquetaCapacidad;
+
+    @Column(name = "maneja_envase", nullable = false)
+    private Boolean manejaEnvase = false;
+
+
+
     // Campos de auditoría según tu SQL
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;

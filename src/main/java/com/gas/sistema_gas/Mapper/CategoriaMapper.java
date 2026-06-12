@@ -13,6 +13,10 @@ public interface CategoriaMapper {
     @Mapping(target = "estado", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "unidadMedida", ignore = true)
+    @Mapping(target = "requiereCapacidad", ignore = true)
+    @Mapping(target = "etiquetaCapacidad", ignore = true)
+    @Mapping(target = "manejaEnvase", ignore = true)
     Categoria toEntity(CategoriaDTO.Create createDto);
 
     CategoriaDTO.SimpleResponse toSimpleResponse(Categoria categoria);
