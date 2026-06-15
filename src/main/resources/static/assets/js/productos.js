@@ -195,16 +195,33 @@ document.addEventListener("DOMContentLoaded", function () {
             return false;
         }
 
-        // Si la categoría requiere capacidad, validamos que no esté vacía o en 0
-        const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${categoriaSelect.value}"]`);
-        if (filaCategoria && filaCategoria.dataset.requierecapacidad === "true") {
-            if (!capacidadInput.value || parseFloat(capacidadInput.value) <= 0) {
-                alert("Por favor, ingrese una capacidad válida mayor a 0.");
+        // Validación estricta de capacidad según unidad de medida
+        const unidadActual = unidadMedidaSelect.value;
+        if (unidadActual === "UND") {
+            capacidadInput.value = "";
+        } else {
+            const capVal = parseFloat(capacidadInput.value) || 0;
+            if (unidadActual === "KG" && capVal < 10) {
+                alert("KG debe ser >= 10");
+                return false;
+            }
+            if (unidadActual === "L" && capVal < 20) {
+                alert("L debe ser >= 20");
+                return false;
+            }
+            if (unidadActual === "M" && capVal < 50) {
+                alert("M debe ser >= 50");
                 return false;
             }
         }
 
         return true;
+    }
+
+    function actualizarGananciaEditable(esEditable) {
+        if (!gananciaProductoInput) return;
+        gananciaProductoInput.readOnly = !esEditable;
+        gananciaProductoInput.style.backgroundColor = esEditable ? "#ffffff" : "#e9ecef";
     }
 
     // ============ MANEJADORES DEL MODAL DE BÚSQUEDA DE CATEGORÍAS ============
@@ -404,6 +421,16 @@ document.addEventListener("DOMContentLoaded", function () {
             precioVentaInput.value = editButton.dataset.precioventa;
             stockMinimoInput.value = editButton.dataset.stockminimo;
 
+            // =====================================================================
+            // 🌟 CORRECCIÓN VISUAL: Inyecta la Ganancia Base real en el modal
+            // =====================================================================
+            if (gananciaProductoInput) {
+                // Lee el datasetganancia que le agregamos al botón amarillo en el HTML
+                const gananciaDato = editButton.dataset.ganancia || "1.00";
+                gananciaProductoInput.value = parseFloat(gananciaDato).toFixed(2);
+            }
+            // =====================================================================
+
             actualizarVisibilidadCampos();
 
             if (capacidadInput) capacidadInput.value = editButton.dataset.capacidad || "";
@@ -413,9 +440,25 @@ document.addEventListener("DOMContentLoaded", function () {
             calcularPrecioVenta();
             cargarEstadoImagenStaged(editButton.dataset.id);
 
-            if (window.jQuery) window.jQuery("#modal-producto").modal("show");
+            fetch(`/inventario-lotes/producto/${editButton.dataset.id}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("No se pudo verificar el historial de lotes.");
+                    }
+                    return response.json();
+                })
+                .then(lotes => {
+                    const tieneLotes = Array.isArray(lotes) && lotes.length > 0;
+                    actualizarGananciaEditable(!tieneLotes);
+                    if (window.jQuery) window.jQuery("#modal-producto").modal("show");
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("No se pudo verificar el historial de compras del producto. Por seguridad, intente nuevamente.");
+                });
         }
     });
+
 
     document.getElementById("contenedor-tabla-productos").addEventListener("click", function (e) {
         const btnVerDescripcion = e.target.closest(".btn-ver-descripcion");
@@ -440,6 +483,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const btnEstado = e.target.closest(".btn-estado-producto");
         if (btnEstado) {
+            if (btnEstado.disabled || btnEstado.classList.contains("disabled")) {
+                e.preventDefault();
+                return false;
+            }
+
             const id = btnEstado.dataset.id;
             const nuevoEstado = btnEstado.dataset.estado;
 
@@ -447,6 +495,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 .then(response => response.json())
                 .then(res => {
                     if (res.status === "OK") {
+                        const toastMensaje = document.getElementById("toast-mensaje");
+                        if (toastMensaje) {
+                            toastMensaje.innerText = nuevoEstado === "1"
+                                ? "El producto ha sido activado correctamente."
+                                : "El producto ha sido inactivado correctamente.";
+                        }
+                        if (window.jQuery) {
+                            window.jQuery("#toast-estado").toast("show");
+                        }
                         recargarTabla();
                     } else {
                         alert("Error al cambiar de estado: " + res.message);
@@ -455,20 +512,36 @@ document.addEventListener("DOMContentLoaded", function () {
                 .catch(err => alert("Error en el servidor al cambiar estado"));
         }
 
-        const btnEliminar = e.target.closest(".btn-eliminar-producto");
-        if (btnEliminar) {
-            const id = btnEliminar.dataset.id;
-            if (confirm("¿Está seguro de que desea eliminar este producto?")) {
-                fetch(`/productos/${id}/eliminar`, { method: "POST" })
-                    .then(response => response.json())
-                    .then(res => {
-                        if (res.status === "OK") {
-                            recargarTabla();
-                        } else {
-                            alert("Error al eliminar: " + res.message);
-                        }
-                    });
-            }
+        const btnEliminar = e.target.closest(".btn-eliminar");
+        // Si el botón está deshabilitado visualmente (gris por historial), cancelamos en seco
+        if (!btnEliminar || btnEliminar.classList.contains("disabled") || btnEliminar.hasAttribute("disabled")) {
+            return;
+        }
+
+        const idProducto = btnEliminar.dataset.id;
+        const nombreProducto = btnEliminar.dataset.nombre;
+
+        if (confirm("¿Está seguro de que desea eliminar el producto: " + nombreProducto + "?")) {
+            fetch(`/productos/${idProducto}/eliminar`, {
+                method: "POST"
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === "OK") {
+                    console.log("Producto eliminado correctamente en la base de datos.");
+                    if (typeof reloadProductosTable === "function") {
+                        reloadProductosTable();
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert("Atención: " + res.message);
+                }
+            })
+            .catch(err => {
+                console.error("Error al eliminar el producto:", err);
+                alert("No se pudo procesar la eliminación del producto.");
+            });
         }
     });
 
@@ -492,6 +565,7 @@ document.addEventListener("DOMContentLoaded", function () {
         actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
+        actualizarGananciaEditable(true);
         $("#modal-producto").modal("show");
     });
 
@@ -606,42 +680,42 @@ document.addEventListener("DOMContentLoaded", function () {
                     method: "POST",
                     body: formData
                 })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.status !== "OK") {
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.status !== "OK") {
+                            checkbox.checked = estadoAnterior;
+                            alert(res.message);
+                        }
+                    })
+                    .catch(() => {
                         checkbox.checked = estadoAnterior;
-                        alert(res.message);
-                    }
-                })
-                .catch(() => {
-                    checkbox.checked = estadoAnterior;
-                    alert("Error al intentar comunicar con el servidor.");
-                })
-                .finally(() => {
-                    checkbox.disabled = false;
-                    delete checkbox.dataset.bloqueado;
-                });
+                        alert("Error al intentar comunicar con el servidor.");
+                    })
+                    .finally(() => {
+                        checkbox.disabled = false;
+                        delete checkbox.dataset.bloqueado;
+                    });
 
             } else {
                 fetch(`/catalogo-proveedores/desasociar?idProveedor=${idProveedor}&idProducto=${idProducto}`, {
                     method: "POST"
                 })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.status !== "OK") {
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.status !== "OK") {
+                            checkbox.checked = estadoAnterior;
+                            alert(res.message);
+                        }
+                        actualizarEstadoCheckTodos();
+                    })
+                    .catch(() => {
                         checkbox.checked = estadoAnterior;
-                        alert(res.message);
-                    }
-                    actualizarEstadoCheckTodos();
-                })
-                .catch(() => {
-                    checkbox.checked = estadoAnterior;
-                    alert("Error de red al desasociar producto.");
-                })
-                .finally(() => {
-                    checkbox.disabled = false;
-                    delete checkbox.dataset.bloqueado;
-                });
+                        alert("Error de red al desasociar producto.");
+                    })
+                    .finally(() => {
+                        checkbox.disabled = false;
+                        delete checkbox.dataset.bloqueado;
+                    });
             }
         }
     });
@@ -673,4 +747,141 @@ document.addEventListener("DOMContentLoaded", function () {
         const todosMarcados = checks.every(chk => chk.checked);
         checkTodosProv.checked = todosMarcados;
     }
+
+    // =========================================================================
+    // 📦 MÓDULO REACTIVO: HISTORIAL DE LOTES Y CAMBIO DE PRECIOS (NUEVO)
+    // =========================================================================
+    const modalDesgloseLotes = document.getElementById("modal-desglose-lotes");
+    const loteProdNombre = document.getElementById("lote-producto-nombre");
+    const loteProdId = document.getElementById("lote-producto-id");
+    const cuerpoTablaLotes = document.getElementById("cuerpo-tabla-lotes");
+
+    document.addEventListener("click", function (e) {
+        const btnVerLotes = e.target.closest(".btn-ver-lotes");
+        if (btnVerLotes) {
+            const productoId = btnVerLotes.dataset.id;
+            const productoNombre = btnVerLotes.dataset.nombre;
+
+            if (loteProdId) loteProdId.value = productoId;
+            if (loteProdNombre) loteProdNombre.textContent = productoNombre;
+
+            if (cuerpoTablaLotes) {
+                cuerpoTablaLotes.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando historial de lotes...
+                        </td>
+                    </tr>`;
+            }
+
+            fetch(`/inventario-lotes/producto/${productoId}`)
+                .then(r => {
+                    if (!r.ok) throw new Error("Error de servidor");
+                    return r.json();
+                })
+                .then(lotes => {
+                    cuerpoTablaLotes.innerHTML = "";
+
+                    if (lotes.length === 0) {
+                        cuerpoTablaLotes.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center text-danger">
+                                    Este producto no registra lotes de inventario (Sin compras).
+                                </td>
+                            </tr>`;
+                        return;
+                    }
+
+                    lotes.forEach(l => {
+                        const fila = document.createElement("tr");
+                        const fechaIngreso = l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "-";
+                        const fechaAjuste = l.updatedAt ? new Date(l.updatedAt).toLocaleDateString() : "-";
+
+                        fila.innerHTML = `
+                            <td><strong>${l.nombreProveedor}</strong></td>
+                            <td>${fechaIngreso}</td>
+                            <td>S/ ${parseFloat(l.precioCompra).toFixed(2)}</td>
+                            <td>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" step="0.10" min="0" class="form-control text-center" 
+                                           value="${parseFloat(l.precioVenta).toFixed(2)}" id="precio-input-${l.id}">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-success btn-guardar-precio-lote" type="button" data-id="${l.id}">
+                                            <i class="fas fa-save"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="badge badge-secondary">${l.cantidadInicial}</span></td>
+                            <td><span class="badge ${l.cantidadActual > 0 ? 'badge-success' : 'badge-danger'}">${l.cantidadActual}</span></td>
+                            <td class="text-muted text-xs">${fechaAjuste}</td>
+                        `;
+                        cuerpoTablaLotes.appendChild(fila);
+                    });
+
+                    if (window.jQuery) {
+                        window.jQuery("#modal-desglose-lotes").modal("show");
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("No se pudo cargar el desglose de lotes del producto.");
+                });
+        }
+    });
+
+    document.addEventListener("click", function (e) {
+        const btnGuardarPrecio = e.target.closest(".btn-guardar-precio-lote");
+        if (btnGuardarPrecio) {
+            const idLote = btnGuardarPrecio.dataset.id;
+            const inputPrecio = document.getElementById(`precio-input-${idLote}`);
+            const nuevoPrecio = inputPrecio ? inputPrecio.value : "";
+
+            if (!nuevoPrecio || parseFloat(nuevoPrecio) < 0) {
+                alert("Por favor, ingrese un precio de venta válido.");
+                return;
+            }
+
+            btnGuardarPrecio.disabled = true;
+
+            const formData = new FormData();
+            formData.append("precioVenta", nuevoPrecio);
+
+            fetch(`/inventario-lotes/${idLote}/actualizar-precio`, {
+                method: "POST",
+                body: formData
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === "OK") {
+                        btnGuardarPrecio.classList.remove("btn-success");
+                        btnGuardarPrecio.classList.add("btn-primary");
+                        setTimeout(() => {
+                            btnGuardarPrecio.classList.remove("btn-primary");
+                            btnGuardarPrecio.classList.add("btn-success");
+                        }, 1000);
+
+                        const productoId = document.getElementById("lote-producto-id")?.value;
+                        if (productoId) {
+                            const filaLote = btnGuardarPrecio.closest("tr");
+                            const precioCompraCelda = filaLote ? filaLote.querySelector("td:nth-child(3)") : null;
+                            if (precioCompraCelda) {
+                                const textoPrecioCompra = precioCompraCelda.textContent.replace(/S\/?\s*/g, "").trim();
+                                const precioCompra = parseFloat(textoPrecioCompra) || 0;
+                                const precioVenta = parseFloat(nuevoPrecio) || 0;
+                                const nuevaGanancia = precioVenta - precioCompra;
+                                const detalleBtn = document.querySelector(`.btn-ver-descripcion[data-id="${productoId}"]`);
+                                if (detalleBtn) {
+                                    detalleBtn.dataset.ganancia = nuevaGanancia.toFixed(2);
+                                }
+                            }
+                        }
+                    } else {
+                        alert("Atención: " + res.message);
+                    }
+                })
+                .catch(() => alert("Error de red al actualizar el precio del lote."))
+                .finally(() => btnGuardarPrecio.disabled = false);
+        }
+    });
 });

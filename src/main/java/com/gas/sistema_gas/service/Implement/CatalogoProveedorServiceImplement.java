@@ -32,7 +32,7 @@ public class CatalogoProveedorServiceImplement implements CatalogoProveedorServi
     @Override
     @Transactional
     public List<CatalogoProveedorDTO.SimpleResponse> listarTodo() {
-        // Estilo limpio usando Streams de Java para transformar toda la lista al formato DTO
+        
         return catalogoProveedorRepository.findAll().stream()
                 .map(catalogoProveedorMapper::toSimpleResponse)
                 .collect(Collectors.toList());

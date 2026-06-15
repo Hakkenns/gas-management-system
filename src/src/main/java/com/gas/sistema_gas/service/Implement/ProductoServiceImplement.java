@@ -23,6 +23,7 @@ import com.gas.sistema_gas.Mapper.ProductoMapper;
 import com.gas.sistema_gas.Model.Categoria;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Repository.CategoriaRepository;
+import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.ProductoDTO;
 import com.gas.sistema_gas.service.ProductoService;
@@ -38,6 +39,8 @@ public class ProductoServiceImplement implements ProductoService {
         private ProductoRepository productoRepository;
         @Autowired
         private CategoriaRepository categoriaRepository;
+        @Autowired
+        private InventarioLoteRepository inventarioLoteRepository;
        
 
         @Override
@@ -259,6 +262,12 @@ public class ProductoServiceImplement implements ProductoService {
                 Producto producto = productoRepository.findById(id)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "El producto no existe"));
+
+                // Verificar historial de lotes antes de la eliminación lógica
+                if (!inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(id).isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "No se puede eliminar el producto porque cuenta con historial de movimientos en el inventario.");
+                }
 
                 // Eliminación Lógica (cambiar estado)
                 producto.setEstado(2);

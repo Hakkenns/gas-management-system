@@ -35,8 +35,9 @@ public class ProductoDTO {
         }
 
         private static boolean validarCapacidad(BigDecimal capacidad, String unidadMedida) {
-            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("NO_APLICA")) {
-                return capacidad == null;
+            // 🌟 CORREGIDO: Si es UND, la capacidad no importa y se aprueba de inmediato
+            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("UND")) {
+                return true; 
             }
             if (capacidad == null) {
                 return false;
@@ -80,6 +81,7 @@ public class ProductoDTO {
         BigDecimal stockLlenos,
         Integer stockVacios,
         BigDecimal stockMinimo,
+        boolean tieneHistorialLotes,
         Integer estado
     ){}
 
@@ -114,8 +116,9 @@ public class ProductoDTO {
         }
 
         private static boolean validarCapacidad(BigDecimal capacidad, String unidadMedida) {
-            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("NO_APLICA")) {
-                return capacidad == null;
+            // 🌟 CORREGIDO: Si es UND, la capacidad no importa y se aprueba de inmediato
+            if (unidadMedida == null || unidadMedida.isBlank() || unidadMedida.equals("UND")) {
+                return true;
             }
             if (capacidad == null) {
                 return false;
@@ -132,7 +135,7 @@ public class ProductoDTO {
                     return capacidad.compareTo(BigDecimal.valueOf(50)) >= 0;
                 default:
                     return capacidad.compareTo(BigDecimal.ZERO) >= 0;
-            }
+                }
         }
 
         private static boolean validarGanancia(BigDecimal ganancia) {

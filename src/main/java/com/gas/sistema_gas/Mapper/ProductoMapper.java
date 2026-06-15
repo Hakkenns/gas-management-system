@@ -23,6 +23,7 @@ public interface ProductoMapper {
     @Mapping(source = "categoria.nombre", target = "nombreCategoria")
     @Mapping(source = "descripcion", target = "descripcion")
     @Mapping(source = "estado", target = "estado")
+    @Mapping(target = "tieneHistorialLotes", constant = "false")
     ProductoDTO.SimpleResponse toSimpleResponse(Producto producto);
 
     //paraupdate esto es el qeui nos esta fallando

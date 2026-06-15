@@ -199,7 +199,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="cuerpo-busqueda-productos">
-                                    <tr th:each="prod : ${productos}" th:data-id="${prod.id}" th:data-nombre="${prod.nombre}" th:data-precio="${prod.precioVenta}" th:data-categoria="${prod.idCategoria}" th:data-capacidad="${prod.capacidad}" th:data-unidad="${prod.unidadMedida}">
+                                    <tr th:each="prod : ${productos}" th:data-id="${prod.id}" th:data-nombre="${prod.nombre}" th:data-precio="${prod.precioVenta}" th:data-categoria="${prod.idCategoria}" th:data-capacidad="${prod.capacidad}" th:data-unidad="${prod.unidadMedida}" th:data-ganancia="${prod.gananciaProducto}">
                                                             <td th:text="${prod.capacidad != null and prod.capacidad != '' ? prod.nombre + ' - ' + prod.capacidad + (prod.unidadMedida == 'KG' ? ' kg' : prod.unidadMedida == 'L' ? ' L' : prod.unidadMedida == 'M' ? ' m' : '') : prod.nombre}"></td>
                                         <td th:text="${prod.nombreCategoria}"></td>
                                         <td class="text-right" th:text="${prod.precioVenta}"></td>

@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById("form-compra");
             form.reset();
             delete form.dataset.editId;
-            
+
             // Autocompletar fecha local actual y bloquear fechas futuras
             const ahora = new Date();
             ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
@@ -55,11 +55,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 })
                 .catch(err => console.error("ERROR CARGANDO DETALLES:", err));
         }
-        
+
         if (e.target.closest('.btn-anular-compra')) {
             const btn = e.target.closest('.btn-anular-compra');
             if (btn.disabled) return; // No hacer nada si está deshabilitado
-            
+
             const id = btn.dataset.id;
             if (!confirm('¿Confirma anular este documento de compra?')) return;
 
@@ -231,6 +231,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     // limpiar modo edición
                     delete form.dataset.editId;
                     reloadComprasTable();
+
+                    // =========================================================================
+                    // IMPORTANTE: El registro de lotes ya ocurre en el backend al guardar la compra.
+                    // No duplicamos envíos desde la interfaz para evitar lotes repetidos.
+                    // =========================================================================
+
                 } else {
                     alert(resp.message || "Error al procesar la compra");
                 }
@@ -293,6 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         fila.dataset.id = p.id;
                         fila.dataset.nombre = p.nombre;
                         fila.dataset.precio = p.precioVenta;
+                        fila.dataset.ganancia = p.gananciaProducto || 0;
                         fila.dataset.categoria = p.categoria ? p.categoria.id : "";
                         fila.dataset.capacidad = p.capacidad || "";
                         fila.dataset.unidad = p.unidadMedida || "";

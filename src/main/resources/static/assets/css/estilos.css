@@ -212,3 +212,39 @@ body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
 .btn-xs i {
   margin-right: 2px;
 }
+
+/* Contenedor flotante superior derecho */
+.contenedor-toast-flotante {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 320px;
+}
+
+/* Caja principal del Toast con borde verde grueso */
+.toast-notificacion-premium {
+    background-color: #f8f9fa !important;
+    border-left: 6px solid #28a745 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+/* Animación matemática de la barrita que se reduce al 0% */
+@keyframes progresoToast {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+.linea-progreso-toast {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    background-color: #28a745; /* El mismo verde de éxito */
+    animation: progresoToast 3500ms linear forwards; /* Sincronizado con el data-delay */
+}
+
+/*DESDE AQUI SERA EL ESTILO DE LA ALERTA*/

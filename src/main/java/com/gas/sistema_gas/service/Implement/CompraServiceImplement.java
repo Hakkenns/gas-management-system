@@ -12,8 +12,10 @@ import com.gas.sistema_gas.Mapper.CompraMapper;
 import com.gas.sistema_gas.Model.*;
 import com.gas.sistema_gas.Repository.*;
 import com.gas.sistema_gas.dto.CompraDTO;
+import com.gas.sistema_gas.dto.InventarioLoteDTO;
 import com.gas.sistema_gas.service.CompraService;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.InventarioLoteService;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -26,6 +28,7 @@ public class CompraServiceImplement implements CompraService {
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private CompraMapper compraMapper;
     @Autowired private CorrelativoService correlativoService;
+    @Autowired private InventarioLoteService inventarioLoteService;
 
     @Override
     @Transactional
@@ -70,32 +73,28 @@ public class CompraServiceImplement implements CompraService {
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            // 🛢️ LÓGICA DE NEGOCIO: Convertimos item.cantidad() a BigDecimal antes de sumar con .add()
+            // 🛢️ LÓGICA DE NEGOCIO: Guardar solo el detalle de compra en la factura.
+            // Toda la cantidad y precios se registran ahora en la tabla de lotes.
             BigDecimal cantidadComprada = BigDecimal.valueOf(item.cantidad());
-            producto.setStockLlenos(producto.getStockLlenos().add(cantidadComprada));
 
-            // Actualizar precio de compra y precio de venta según la compra
-            if (item.precioCostoUnitario() != null) {
-                producto.setPrecioCompra(item.precioCostoUnitario());
-                BigDecimal ganancia = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
-                producto.setPrecioVenta(item.precioCostoUnitario().add(ganancia));
-            }
-
-            productoRepository.save(producto);
-
-            // Guardar fila en detalle_compra
             DetalleCompra detalle = new DetalleCompra();
             detalle.setCompra(compraGuardada);
             detalle.setProducto(producto);
-            
-            // Si en tu entidad DetalleCompra cambiaste cantidad a BigDecimal, usa:
-            // detalle.setCantidad(cantidadComprada);
-            // Si aún es Integer (temporalmente), usa la línea de abajo:
-            detalle.setCantidad(item.cantidad()); 
-            
+            detalle.setCantidad(item.cantidad());
             detalle.setPrecioCostoUnitario(item.precioCostoUnitario());
-
             detalleCompraRepository.save(detalle);
+
+            // Registrar el lote vinculado a este proveedor/producto en el inventario de lotes
+            BigDecimal gananciaBase = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
+            InventarioLoteDTO.Create loteDto = new InventarioLoteDTO.Create(
+                    producto.getId(),
+                    proveedor.getId(),
+                    cantidadComprada,
+                    item.precioCostoUnitario(),
+                    item.precioCostoUnitario().add(gananciaBase),
+                    compraGuardada.getId()
+            );
+            inventarioLoteService.registrarLote(loteDto);
         }
 
 
@@ -114,29 +113,11 @@ public class CompraServiceImplement implements CompraService {
         // Obtener todos los detalles de esta compra
         List<DetalleCompra> detalles = detalleCompraRepository.findByCompraId(idCompra);
 
-        // Revertir cambios en productos
+        // En el nuevo modelo por lotes, los campos estáticos del producto no se deben modificar
+        // al anular una compra. Debemos buscar los lotes nacidos de esta factura y anular su stock.
+        inventarioLoteService.anularLotesCompra(idCompra);
+
         for (DetalleCompra detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            
-            // Restar la cantidad que se agregó al stock
-            BigDecimal cantidadComprada = BigDecimal.valueOf(detalle.getCantidad());
-            producto.setStockLlenos(producto.getStockLlenos().subtract(cantidadComprada));
-
-            // Verificar si hay otras compras activas (no anuladas) de este producto
-            long otrasCompras = detalleCompraRepository.countByProductoIdAndCompraIdNotAndCompraSituacionNot(
-                    producto.getId(), idCompra, 2);
-
-            // Si no hay otras compras, resetear precios
-            if (otrasCompras == 0) {
-                producto.setPrecioCompra(BigDecimal.ZERO);
-                // Precio venta = ganancia (sin precio de compra, solo la ganancia)
-                BigDecimal ganancia = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
-                producto.setPrecioVenta(ganancia);
-            }
-
-            productoRepository.save(producto);
-            
-            // Eliminar el detalle de esta compra
             detalleCompraRepository.delete(detalle);
         }
 

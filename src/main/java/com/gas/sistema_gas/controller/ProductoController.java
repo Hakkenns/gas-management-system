@@ -21,6 +21,7 @@ import com.gas.sistema_gas.service.OpcionService;
 import com.gas.sistema_gas.service.ProductoService;
 import com.gas.sistema_gas.service.CategoriaService;
 import com.gas.sistema_gas.service.ProveedorService; // <-- NUEVO: Tu servicio de proveedores
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.Set;
@@ -139,6 +140,8 @@ public class ProductoController {
         try {
             productoService.deleteProduct(id);
             return Map.of("status", "OK");
+        } catch (ResponseStatusException e) {
+            return Map.of("status", "ERROR", "message", e.getReason());
         } catch (Exception e) {
             return Map.of("status", "ERROR", "message", "No se pudo eliminar el producto.");
         }
