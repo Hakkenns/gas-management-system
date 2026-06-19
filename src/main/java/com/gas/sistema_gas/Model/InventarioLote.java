@@ -42,6 +42,13 @@ public class InventarioLote {
     @Column(name = "cantidad_actual", nullable = false, precision = 10, scale = 2)
     private BigDecimal cantidadActual;
 
+    // 🌟 NUEVO CAMPO: Guarda el tamaño estándar de cada rollo para la manguera (Ej:
+    // 60.00)
+    // Si el producto es gas o agua, este campo simplemente se guardará como null o
+    // 0.00
+    @Column(name = "metros_por_rollo", nullable = true, precision = 10, scale = 2)
+    private BigDecimal metrosPorRollo;
+
     @Column(name = "precio_compra", nullable = false, precision = 10, scale = 2)
     private BigDecimal precioCompra;
 
@@ -51,7 +58,8 @@ public class InventarioLote {
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private LocalDateTime createdAt;
 
-    // Nuevo campo mapeado para controlar la auditoría del cambio de precios por mercado
+    // Nuevo campo mapeado para controlar la auditoría del cambio de precios por
+    // mercado
     @Column(name = "updated_at", nullable = false, updatable = false, insertable = false)
     private LocalDateTime updatedAt;
 }

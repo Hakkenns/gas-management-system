@@ -48,7 +48,7 @@
                             </td>
                         </tr>
 
-                        <tr th:each="p : ${productos}">
+                        <tr th:each="p : ${productos}" th:data-id="${p.id}">
                             <td th:text="${p.id}"></td>
                             <td>
                                 <img th:if="${p.urlImagen != null and p.urlImagen != ''}" th:src="${p.urlImagen}"
@@ -60,9 +60,8 @@
                             <td th:text="${p.nombreCategoria}"></td>
                             <td th:text="${p.capacidad != null ? p.capacidad : '-'}"></td>
                             <td th:text="${p.unidadMedida == 'KG' ? 'KG' : p.unidadMedida == 'L' ? 'Litros' : p.unidadMedida == 'M' ? 'Metros' : p.unidadMedida == 'UND' ? 'UND' : '-'}"></td>
-                            </td>
                             <td th:text="'S/ ' + ${p.precioCompra}"></td>
-                            <td th:text="'S/ ' + ${p.precioVenta}"></td>
+                            <td class="precio-venta" th:text="'S/ ' + ${p.precioVenta}"></td>
                             <td th:text="${p.stockLlenos}"></td>
                             <td th:text="${p.stockVacios}"></td>
                             <td th:text="${p.stockMinimo}"></td>
@@ -95,7 +94,7 @@
 
                                 <!-- NUEVO BOTÓN: VER DESGLOSE DE LOTES DE INVENTARIO -->
                                 <button type="button" class="btn btn-dark btn-xs btn-ver-lotes" th:data-id="${p.id}"
-                                    th:data-nombre="${p.nombre}" title="Ver Lotes de Inventario">
+                                    th:data-nombre="${p.nombre}" th:data-unidadmedida="${p.unidadMedida}" title="Ver Lotes de Inventario">
                                     <i class="fas fa-layer-group"></i>
                                 </button>
 
@@ -123,7 +122,7 @@
                                 </button>
 
                                 <button type="button" 
-                                        th:classappend="${p.stockLlenos > 0} ? 'btn btn-secondary btn-xs disabled' : 'btn btn-danger btn-xs btn-eliminar'"
+                                        th:classappend="${p.stockLlenos > 0} ? 'btn btn-secondary btn-xs disabled btn-eliminar-producto' : 'btn btn-danger btn-xs btn-eliminar-producto'"
                                         th:data-id="${p.id}" 
                                         th:data-nombre="${p.nombre}"
                                         th:disabled="${p.stockLlenos > 0}"
@@ -561,11 +560,12 @@
                                         <th>Proveedor</th>
                                         <th>Fecha Ingreso</th>
                                         <th>Costo Compra</th>
-                                        <th width="20%">Precio Venta (S/.)</th>
-                                        <!-- Un poco más ancho para el campo editable -->
+                                        <th>Precio Venta (S/.)</th>
                                         <th>Stock Inicial</th>
                                         <th>Stock Actual</th>
+                                        <th>Unidad</th>
                                         <th>Último Ajuste</th>
+                                        <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="cuerpo-tabla-lotes">
@@ -602,6 +602,45 @@
                 </div>
                 <!-- 🌟 La línea verde de progreso animada por tu estilos.css -->
                 <div class="linea-progreso-toast"></div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAL SECUNDARIO: DESGLOSE DE ROLLOS DE MANGUERA -->
+        <!-- ========================================================================= -->
+        <div class="modal fade" id="modal-desglose-rollos" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-scroll"></i>
+                            Desglose de Rollos
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-hover table-striped text-center">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>Identificador</th>
+                                        <th>Metros Iniciales</th>
+                                        <th>Metros Actuales</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cuerpo-tabla-rollos">
+                                    <!-- El JS construye las filas de rollos aquí -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Cerrar
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 

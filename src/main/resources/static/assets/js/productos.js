@@ -40,6 +40,29 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectFiltroUnidadMedida = document.getElementById("select-filtro-unidad-medida");
     const btnFiltrarCategorias = document.getElementById("btn-filtrar-categorias");
     const tablaBusquedaCategorias = document.getElementById("tabla-busqueda-categorias");
+    const contenedorTablaProductos = document.getElementById("contenedor-tabla-productos");
+
+    const requiredNodes = [
+        { name: 'form-producto', node: form },
+        { name: 'modal-titulo-producto', node: modalTitulo },
+        { name: 'producto-id', node: idInput },
+        { name: 'producto-nombre', node: nombreInput },
+        { name: 'producto-descripcion', node: descripcionInput },
+        { name: 'producto-categoria', node: categoriaSelect },
+        { name: 'producto-precioCompra', node: precioCompraInput },
+        { name: 'producto-precioVenta', node: precioVentaInput },
+        { name: 'producto-gananciaProducto', node: gananciaProductoInput },
+        { name: 'producto-stockLlenos', node: stockLlenosInput },
+        { name: 'producto-stockVacios', node: stockVaciosInput },
+        { name: 'producto-stockMinimo', node: stockMinimoInput },
+        { name: 'producto-requiereEnvase', node: requiereEnvaseCheckbox },
+        { name: 'contenedor-tabla-productos', node: contenedorTablaProductos }
+    ];
+
+    const missingNodes = requiredNodes.filter(item => !item.node).map(item => item.name);
+    if (missingNodes.length > 0) {
+        console.warn('productos.js: faltan elementos DOM obligatorios:', missingNodes);
+    }
 
     // ============ ALMACENAMIENTO EN MEMORIA DE IMÁGENES STAGED ============
     // Estructura: { productoId: { imagenBase64: "...", quitarImagen: true/false } }
@@ -512,7 +535,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 .catch(err => alert("Error en el servidor al cambiar estado"));
         }
 
-        const btnEliminar = e.target.closest(".btn-eliminar");
+        const btnEliminar = e.target.closest(".btn-eliminar-producto, .btn-eliminar");
         // Si el botón está deshabilitado visualmente (gris por historial), cancelamos en seco
         if (!btnEliminar || btnEliminar.classList.contains("disabled") || btnEliminar.hasAttribute("disabled")) {
             return;
@@ -755,12 +778,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const loteProdNombre = document.getElementById("lote-producto-nombre");
     const loteProdId = document.getElementById("lote-producto-id");
     const cuerpoTablaLotes = document.getElementById("cuerpo-tabla-lotes");
+    const cuerpoTablaRollos = document.getElementById("cuerpo-tabla-rollos");
 
     document.addEventListener("click", function (e) {
         const btnVerLotes = e.target.closest(".btn-ver-lotes");
         if (btnVerLotes) {
             const productoId = btnVerLotes.dataset.id;
             const productoNombre = btnVerLotes.dataset.nombre;
+            const unidadProducto = btnVerLotes.dataset.unidadmedida || "";
 
             if (loteProdId) loteProdId.value = productoId;
             if (loteProdNombre) loteProdNombre.textContent = productoNombre;
@@ -768,7 +793,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (cuerpoTablaLotes) {
                 cuerpoTablaLotes.innerHTML = `
                     <tr>
-                        <td colspan="7" class="text-center text-muted">
+                        <td colspan="8" class="text-center text-muted">
                             <i class="fas fa-spinner fa-spin"></i> Cargando historial de lotes...
                         </td>
                     </tr>`;
@@ -785,7 +810,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (lotes.length === 0) {
                         cuerpoTablaLotes.innerHTML = `
                             <tr>
-                                <td colspan="7" class="text-center text-danger">
+                                <td colspan="9" class="text-center text-danger">
                                     Este producto no registra lotes de inventario (Sin compras).
                                 </td>
                             </tr>`;
@@ -796,25 +821,37 @@ document.addEventListener("DOMContentLoaded", function () {
                         const fila = document.createElement("tr");
                         const fechaIngreso = l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "-";
                         const fechaAjuste = l.updatedAt ? new Date(l.updatedAt).toLocaleDateString() : "-";
+                        const cantidadActual = Number(l.cantidadActual ?? 0);
+                        const cantidadInicial = Number(l.cantidadInicial ?? 0);
+                        let estadoLote = "-";
+                        let acciones = "-";
+                        const capacidadRollo = Number(l.metrosPorRollo ?? 60.00);
+
+                        if (unidadProducto === "M") {
+                            estadoLote = cantidadActual < cantidadInicial
+                                ? '<span class="text-warning"><i class="fas fa-lock-open"></i> Abierto</span>'
+                                : '<span class="text-muted"><i class="fas fa-lock"></i> Sellado</span>';
+
+                            acciones = `<button type="button" class="btn btn-info btn-xs btn-ver-rollos" data-inicial="${l.cantidadInicial}" data-actual="${l.cantidadActual}" data-capacidad="${capacidadRollo}" title="Ver Desglose de Rollos"><i class="fas fa-scroll"></i></button>`;
+                        }
 
                         fila.innerHTML = `
-                            <td><strong>${l.nombreProveedor}</strong></td>
+                            <td>${l.nombreProveedor}</td>
                             <td>${fechaIngreso}</td>
                             <td>S/ ${parseFloat(l.precioCompra).toFixed(2)}</td>
                             <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" step="0.10" min="0" class="form-control text-center" 
-                                           value="${parseFloat(l.precioVenta).toFixed(2)}" id="precio-input-${l.id}">
+                                <div class="input-group input-group-sm" style="max-width: 120px;">
+                                    <input type="number" step="0.10" class="form-control input-precio-lote" value="${parseFloat(l.precioVenta).toFixed(2)}">
                                     <div class="input-group-append">
-                                        <button class="btn btn-success btn-guardar-precio-lote" type="button" data-id="${l.id}">
-                                            <i class="fas fa-save"></i>
-                                        </button>
+                                        <button class="btn btn-success btn-guardar-precio-lote" data-id="${l.id}" type="button"><i class="fas fa-save"></i></button>
                                     </div>
                                 </div>
                             </td>
                             <td><span class="badge badge-secondary">${l.cantidadInicial}</span></td>
-                            <td><span class="badge ${l.cantidadActual > 0 ? 'badge-success' : 'badge-danger'}">${l.cantidadActual}</span></td>
+                            <td><span class="badge ${cantidadActual > 0 ? 'badge-success' : 'badge-danger'}">${l.cantidadActual}</span></td>
+                            <td class="font-weight-bold text-secondary">${unidadProducto}</td>
                             <td class="text-muted text-xs">${fechaAjuste}</td>
+                            <td>${acciones}</td>
                         `;
                         cuerpoTablaLotes.appendChild(fila);
                     });
@@ -828,9 +865,69 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("No se pudo cargar el desglose de lotes del producto.");
                 });
         }
-    });
 
-    document.addEventListener("click", function (e) {
+        const btnVerRollos = e.target.closest(".btn-ver-rollos");
+        if (btnVerRollos) {
+            const totalInicial = Number(btnVerRollos.dataset.inicial || 0);
+            const totalActual = Number(btnVerRollos.dataset.actual || 0);
+            const capacidad = Number(btnVerRollos.dataset.capacidad || 60);
+            const cantidadRollos = Math.max(1, Math.ceil(totalInicial / capacidad));
+
+            // 🧠 FÓRMULA DE RESTA INVERSA: Calculamos cuántos metros se vendieron en total
+            let metrosVendidosTotales = totalInicial - totalActual; // Ej: 120 - 90 = 30 metros vendidos
+            const filas = [];
+
+            for (let index = 1; index <= cantidadRollos; index++) {
+                const inicialRollo = index < cantidadRollos
+                    ? capacidad
+                    : totalInicial - capacidad * (cantidadRollos - 1);
+
+                let actualRollo = inicialRollo; // Cada rollo empieza idealmente lleno
+
+                if (metrosVendidosTotales > 0) {
+                    if (metrosVendidosTotales >= inicialRollo) {
+                        // Caso A: Los metros vendidos consumieron por completo este rollo (se agota a 0)
+                        actualRollo = 0;
+                        metrosVendidosTotales -= inicialRollo;
+                    } else {
+                        // Caso B: Los metros vendidos cortan una parte de este rollo (este es el rollo 'Abierto')
+                        actualRollo = inicialRollo - metrosVendidosTotales;
+                        metrosVendidosTotales = 0;
+                    }
+                } else {
+                    // Caso C: No hay más metros vendidos, el rollo se queda intacto
+                    actualRollo = inicialRollo;
+                }
+
+                let estadoRollo = "-";
+                if (actualRollo === 0) {
+                    estadoRollo = '<span class="text-danger"><i class="fas fa-times-circle"></i> Agotado</span>';
+                } else if (actualRollo < inicialRollo) {
+                    estadoRollo = '<span class="text-warning"><i class="fas fa-lock-open"></i> Abierto</span>';
+                } else {
+                    estadoRollo = '<span class="text-muted"><i class="fas fa-lock"></i> Sellado</span>';
+                }
+
+                filas.push(`
+                    <tr>
+                        <td>Rollo ${index}</td>
+                        <td>${inicialRollo.toFixed(2)}</td>
+                        <td>${actualRollo.toFixed(2)}</td>
+                        <td>${estadoRollo}</td>
+                    </tr>`);
+            }
+
+            if (cuerpoTablaRollos) {
+                cuerpoTablaRollos.innerHTML = filas.join("");
+            }
+
+            if (window.jQuery) {
+                window.jQuery("#modal-desglose-rollos").modal("show");
+            }
+            return;
+        }
+
+    
         const btnGuardarPrecio = e.target.closest(".btn-guardar-precio-lote");
         if (btnGuardarPrecio) {
             const idLote = btnGuardarPrecio.dataset.id;
@@ -873,6 +970,14 @@ document.addEventListener("DOMContentLoaded", function () {
                                 const detalleBtn = document.querySelector(`.btn-ver-descripcion[data-id="${productoId}"]`);
                                 if (detalleBtn) {
                                     detalleBtn.dataset.ganancia = nuevaGanancia.toFixed(2);
+                                }
+                            }
+
+                            const filaProducto = document.querySelector(`tr[data-id="${productoId}"]`);
+                            if (filaProducto) {
+                                const precioVentaCelda = filaProducto.querySelector("td.precio-venta");
+                                if (precioVentaCelda) {
+                                    precioVentaCelda.textContent = `S/ ${parseFloat(nuevoPrecio).toFixed(2)}`;
                                 }
                             }
                         }

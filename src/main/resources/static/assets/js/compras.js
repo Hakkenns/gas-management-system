@@ -56,6 +56,76 @@ document.addEventListener("DOMContentLoaded", () => {
                 .catch(err => console.error("ERROR CARGANDO DETALLES:", err));
         }
 
+        if (e.target.closest('#btn-buscar-proveedor')) {
+            if (window.jQuery) {
+                window.jQuery("#modal-buscar-proveedor").modal("show");
+            }
+        }
+
+        if (e.target.closest('.btn-seleccionar-proveedor')) {
+            const btn = e.target.closest('.btn-seleccionar-proveedor');
+            const row = btn.closest('tr');
+            if (!row) return;
+
+            const id = row.dataset.id || '';
+            const nombre = row.dataset.nombre || '';
+            const ruc = row.dataset.ruc || '';
+            const inputProveedor = document.getElementById('input-proveedor');
+            const displayProveedor = document.getElementById('display-proveedor');
+            if (inputProveedor) inputProveedor.value = id;
+            if (displayProveedor) displayProveedor.value = `${ruc ? ruc + ' - ' : ''}${nombre}`;
+
+            if (window.jQuery) {
+                window.jQuery("#modal-buscar-proveedor").modal("hide");
+            }
+        }
+
+            if (e.target.closest('.btn-seleccionar-producto')) {
+                const btn = e.target.closest('.btn-seleccionar-producto');
+                const row = btn.closest('tr');
+                if (!row) return;
+
+                const idProducto = row.dataset.id || '';
+                const nombreProd = row.dataset.nombre || '';
+                const unidad = row.dataset.unidad || '';
+                const capacidad = row.dataset.capacidad || '';
+                const categoria = row.dataset.categoria || '';
+
+                const inputProveedor = document.getElementById('input-proveedor');
+                const idProveedor = inputProveedor ? inputProveedor.value : '';
+
+                // Rellenar campos del formulario con la info del producto seleccionado
+                const selectProd = document.getElementById('select-producto');
+                const inputNombreProd = document.getElementById('input-producto-nombre');
+                const inputUnidad = document.getElementById('select-unidad');
+                const inputCapacidad = document.getElementById('select-capacidad');
+                const inputCategoria = document.getElementById('select-categoria');
+
+                if (selectProd) selectProd.value = idProducto;
+                if (inputNombreProd) inputNombreProd.value = nombreProd + (capacidad ? (' - ' + capacidad + (unidad === 'KG' ? ' kg' : unidad === 'L' ? ' L' : unidad === 'M' ? ' m' : '')) : '');
+                if (inputUnidad) inputUnidad.value = unidad;
+                if (inputCapacidad) inputCapacidad.value = capacidad;
+                if (inputCategoria) inputCategoria.value = categoria;
+
+                // Pedir el último precio de costo para este producto y proveedor
+                if (idProducto && idProveedor) {
+                    fetch(`/compras/ultimo-costo?idProducto=${encodeURIComponent(idProducto)}&idProveedor=${encodeURIComponent(idProveedor)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            const precio = parseFloat(data.precioCosto) || 0;
+                            const inputPrecio = document.getElementById('select-precio');
+                            const inputCant = document.getElementById('select-cantidad');
+                            if (inputPrecio) inputPrecio.value = precio.toFixed(2);
+                            if (inputCant) inputCant.value = '1';
+                        })
+                        .catch(err => console.error('ERROR OBTENIENDO ULTIMO COSTO:', err));
+                }
+
+                if (window.jQuery) {
+                    window.jQuery('#modal-buscar-producto').modal('hide');
+                }
+            }
+
         if (e.target.closest('.btn-anular-compra')) {
             const btn = e.target.closest('.btn-anular-compra');
             if (btn.disabled) return; // No hacer nada si está deshabilitado
@@ -139,17 +209,6 @@ document.addEventListener("DOMContentLoaded", () => {
             arrayDetalles.push({ idProducto, nombreProducto, cantidad, precioCostoUnitario: precio });
         }
 
-        if (selectProd) selectProd.value = "";
-        if (inputNombreProd) inputNombreProd.value = "";
-        if (inputUnidad) inputUnidad.value = "";
-        if (inputCapacidad) inputCapacidad.value = "";
-        if (inputCategoria) inputCategoria.value = "";
-        inputCant.value = "1";
-        inputPrecio.value = "";
-        document.getElementById("label-cantidad").innerText = "Cantidad";
-        document.getElementById("label-precio").innerText = "Precio Costo";
-        document.getElementById("contenedor-metros-rollo").style.display = "none";
-
         renderizarFilas();
     });
 
@@ -209,8 +268,15 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const idProveedorSeleccionado = parseInt(document.getElementById("input-proveedor").value, 10);
+        if (isNaN(idProveedorSeleccionado) || idProveedorSeleccionado <= 0) {
+            alert('Seleccione un proveedor antes de registrar la compra.');
+            btnSubmit.prop('disabled', false).text('Registrar Ingreso');
+            return;
+        }
+
         const payload = {
-            idProveedor: parseInt(document.getElementById("input-proveedor").value, 10),
+            idProveedor: idProveedorSeleccionado,
             numDocumento: document.getElementById("input-documento").value,
             fechaCompra: fechaCompraValue,
             montoTotal: arrayDetalles.reduce((acc, item) => acc + (item.cantidad * item.precioCostoUnitario), 0),
@@ -328,6 +394,48 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 });
         });
+    }
+
+    const filtroBuscarProveedor = document.getElementById('filtro-buscar-proveedor');
+    if (filtroBuscarProveedor) {
+        filtroBuscarProveedor.addEventListener('input', () => {
+            const textoFiltro = filtroBuscarProveedor.value.trim().toLowerCase();
+            document.querySelectorAll('#tabla-busqueda-proveedores tbody tr').forEach(row => {
+                const textoFila = `${row.dataset.ruc || ''} ${row.dataset.nombre || ''}`.toLowerCase();
+                row.style.display = textoFila.includes(textoFiltro) ? '' : 'none';
+            });
+        });
+    }
+
+    const inputFiltro = document.getElementById('buscar-producto-filtro');
+    const selectCategoria = document.getElementById('select-buscar-categoria');
+
+    function filtrarProductosModal() {
+        const textoBusqueda = (inputFiltro ? inputFiltro.value : '').toLowerCase().trim();
+        const categoriaId = selectCategoria ? selectCategoria.value : '';
+        const filasProductos = document.querySelectorAll('#tabla-busqueda-productos tbody tr');
+
+        filasProductos.forEach(fila => {
+            const nombreProducto = fila.cells[0].textContent.toLowerCase();
+            const categoriaIdAttr = fila.dataset.categoria || '';
+
+            const coincideTexto = nombreProducto.includes(textoBusqueda);
+            const coincideCategoria = categoriaId === '' || categoriaIdAttr === categoriaId;
+
+            if (coincideTexto && coincideCategoria) {
+                fila.style.display = 'table-row';
+            } else {
+                fila.style.display = 'none';
+            }
+        });
+    }
+
+    if (inputFiltro) {
+        inputFiltro.addEventListener('input', filtrarProductosModal);
+    }
+
+    if (selectCategoria) {
+        selectCategoria.addEventListener('change', filtrarProductosModal);
     }
 });
 

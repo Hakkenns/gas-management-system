@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpSession;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 
 @Controller
 @RequestMapping("/compras")
@@ -24,6 +25,8 @@ public class CompraController {
     @Autowired private OpcionService opcionService;
     @Autowired private ProveedorService proveedorService;
     @Autowired private ProductoService productoService;
+    @Autowired private CategoriaService categoriaService;
+    @Autowired private InventarioLoteRepository inventarioLoteRepository;
 
     @GetMapping
     public String compras(Model model, jakarta.servlet.http.HttpSession session) {
@@ -32,6 +35,10 @@ public class CompraController {
         model.addAttribute("compras", compraService.listAll());
         model.addAttribute("proveedores", proveedorService.listAll()); // Para poblar el select de proveedores
         model.addAttribute("productos", productoService.listAll());     // Para poblar el select de productos
+        // Filtrar solo categorías activas (estado == 1)
+        model.addAttribute("categorias", categoriaService.listAll().stream()
+            .filter(cat -> cat.estado() != null && cat.estado() == 1)
+            .collect(java.util.stream.Collectors.toList()));
         model.addAttribute("contenido", "views/compras");
         return "components/layout";
     }
@@ -106,5 +113,16 @@ public class CompraController {
             return m;
         }).toList();
         return ResponseEntity.ok(res);
+    }
+
+    @GetMapping("/ultimo-costo")
+    @ResponseBody
+    public Map<String, Object> getUltimoCosto(@RequestParam Long idProducto, @RequestParam Long idProveedor) {
+        var lotes = inventarioLoteRepository.findUltimoPrecioCosto(idProducto, idProveedor);
+        if (lotes != null && !lotes.isEmpty()) {
+            var precio = lotes.get(0).getPrecioCompra();
+            return Map.of("precioCosto", precio);
+        }
+        return Map.of("precioCosto", 0.00);
     }
 }

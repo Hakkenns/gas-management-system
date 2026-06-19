@@ -140,6 +140,7 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
                 baseResponse.cantidadActual(),
                 baseResponse.precioCompra(),
                 baseResponse.precioVenta(),
+                baseResponse.metrosPorRollo(),
                 lote.getCreatedAt(),
                 lote.getUpdatedAt()
         );

@@ -218,7 +218,13 @@ body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 9999;
+
+}
+
+#modal-buscar-proveedor {
+    z-index: 1060 !important;
+    background-color: transparent !important;
+    background: transparent !important;
     min-width: 320px;
 }
 

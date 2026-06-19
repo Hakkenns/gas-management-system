@@ -20,9 +20,17 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
 
     // CONSULTA PARA EL NUEVO BOTÓN: Trae absolutamente todos los lotes de un producto
     // (incluso los agotados con cantidadActual = 0) para mostrarlos en el historial del modal
-    List<InventarioLote> findByProductoIdOrderByCreatedAtDesc(Long idProducto);
+    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.cantidadActual > 0 ORDER BY il.createdAt ASC")
+    List<InventarioLote> findByProductoIdOrderByCreatedAtDesc(@Param("idProducto") Long idProducto);
+
+    // Preparación del algoritmo de despacho por metros: lotes activos ordenados cronológicamente
+    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.cantidadActual > 0 ORDER BY il.createdAt ASC")
+    List<InventarioLote> findLotesParaDespachoMetros(@Param("idProducto") Long idProducto);
 
     // Buscar lotes asociados a una compra para poder deshacer su inventario si se anula la factura
     List<InventarioLote> findByCompraId(Long idCompra);
+
+    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.proveedor.id = :idProveedor ORDER BY il.createdAt DESC")
+    List<InventarioLote> findUltimoPrecioCosto(@Param("idProducto") Long idProducto, @Param("idProveedor") Long idProveedor);
 }
 

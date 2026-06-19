@@ -28,6 +28,8 @@ public class InventarioLoteDTO {
         @DecimalMin(value = "0.00", message = "El precio de venta no puede ser negativo")
         BigDecimal precioVenta,
 
+        BigDecimal metrosPorRollo,
+
         Long idCompra
     ){}
 
@@ -49,6 +51,7 @@ public class InventarioLoteDTO {
         BigDecimal cantidadActual,
         BigDecimal precioCompra,
         BigDecimal precioVenta,
+        BigDecimal metrosPorRollo,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ){}

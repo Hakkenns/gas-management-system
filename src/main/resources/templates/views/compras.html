@@ -75,14 +75,20 @@
                         <form id="form-compra">
                             <div class="row">
                                 <div class="form-group col-md-4">
-                                    <label>Proveedor</label>
-                                    <select class="form-control" id="input-proveedor" required>
-                                        <option value="">-- Seleccione proveedor --</option>
-                                        <option th:each="p : ${proveedores}" th:value="${p.id}" th:text="${p.nombre}">
-                                        </option>
-                                    </select>
+                                    <label for="display-proveedor">Proveedor</label>
+                                    <div class="input-group">
+                                        <input type="hidden" id="input-proveedor" name="idProveedor">
+                                        <input type="text" id="display-proveedor" class="form-control" placeholder="Seleccionar proveedor..." readonly>
+                                        <div class="input-group-append">
+                                            <button class="btn btn-primary btn-sm" type="button" id="btn-buscar-proveedor"
+                                            style="display: flex; align-items: center; justify-content: center; height: 100%; min-width: 42px;">
+                                                   
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-group col-md-4">
+                                <div class="form-group col-md-3">
                                     <label>Nota de Compra</label>
                                     <input type="text" class="form-control" id="input-documento"
                                         placeholder="Ejem: NC001-0001" readonly required>
@@ -104,9 +110,9 @@
                                             <input type="hidden" id="select-unidad" />
                                             <input type="hidden" id="select-capacidad" />
                                             <input type="hidden" id="select-categoria" />
-                                            <input type="text" class="form-control" id="input-producto-nombre" placeholder="Buscar/Seleccionar producto" readonly style="background-color: #fff; cursor: default;">
+                                            <input type="text" class="form-control" id="input-producto-nombre" placeholder="Seleccionar producto" readonly style="background-color: #fff; cursor: default;">
                                             <div class="input-group-append">
-                                                <button type="button" id="btn-buscar-producto" class="btn btn-primary" title="Buscar producto"  
+                                                <button type="button" id="btn-buscar-producto" class="btn btn-primary btn-sm" title="Buscar producto"  
                                                 style="display: flex; align-items: center; justify-content: center; height: 100%; min-width: 42px;">
                                                     <i class="fas fa-search"></i>
                                                 </button>
@@ -175,16 +181,13 @@
                     <div class="modal-body">
                         <div class="form-row mb-3">
                             <div class="col-md-6">
-                                <input type="text" id="input-buscar-nombre" class="form-control" placeholder="Buscar por nombre">
+                                <input type="text" id="buscar-producto-filtro" class="form-control" placeholder="Buscar por nombre">
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <select id="select-buscar-categoria" class="form-control">
                                     <option value="">-- Todas las categorías --</option>
                                     <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nombre}"></option>
                                 </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button type="button" id="btn-filtrar-productos" class="btn btn-primary btn-block">Filtrar</button>
                             </div>
                         </div>
 
@@ -213,6 +216,47 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modal-buscar-proveedor" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-md modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title font-weight-bold text-secondary">Seleccionar Proveedor</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body p-3">
+                        <div class="input-group input-group-sm mb-3">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-filter"></i></span>
+                            </div>
+                            <input type="text" id="filtro-buscar-proveedor" class="form-control" placeholder="Filtrar por RUC o Razón Social...">
+                        </div>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover" id="tabla-busqueda-proveedores">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>RUC</th>
+                                        <th>Razón Social</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="prov : ${proveedores}" th:data-id="${prov.id}" th:data-nombre="${prov.nombre}" th:data-ruc="${prov.ruc}">
+                                        <td th:text="${prov.ruc}"></td>
+                                        <td th:text="${prov.nombre}"></td>
+                                        <td>
+                                            <button type="button" class="btn btn-xs btn-success btn-seleccionar-proveedor">Seleccionar</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>

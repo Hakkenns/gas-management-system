@@ -15,6 +15,7 @@ public interface InventarioLoteMapper {
     @Mapping(target = "proveedor", ignore = true)
     @Mapping(target = "compra", ignore = true)
     @Mapping(target = "cantidadActual", ignore = true)
+    @Mapping(target = "metrosPorRollo", source = "metrosPorRollo")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     InventarioLote toEntity(InventarioLoteDTO.Create createDto);
@@ -25,5 +26,6 @@ public interface InventarioLoteMapper {
     @Mapping(target = "idProveedor", source = "proveedor.id")
     @Mapping(target = "nombreProducto", ignore = true) // Seteado manualmente en Service
     @Mapping(target = "nombreProveedor", ignore = true) // Seteado manualmente en Service
+    @Mapping(target = "metrosPorRollo", source = "metrosPorRollo")
     InventarioLoteDTO.SimpleResponse toSimpleResponse(InventarioLote lote);
 }

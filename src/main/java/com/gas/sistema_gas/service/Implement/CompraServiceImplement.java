@@ -86,12 +86,21 @@ public class CompraServiceImplement implements CompraService {
 
             // Registrar el lote vinculado a este proveedor/producto en el inventario de lotes
             BigDecimal gananciaBase = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
+            BigDecimal metrosPorRollo = null;
+            if ("M".equals(producto.getUnidadMedida())) {
+                metrosPorRollo = producto.getCapacidad();
+                if (metrosPorRollo == null || metrosPorRollo.compareTo(BigDecimal.ZERO) <= 0) {
+                    metrosPorRollo = BigDecimal.valueOf(60).setScale(2);
+                }
+            }
+
             InventarioLoteDTO.Create loteDto = new InventarioLoteDTO.Create(
                     producto.getId(),
                     proveedor.getId(),
                     cantidadComprada,
                     item.precioCostoUnitario(),
                     item.precioCostoUnitario().add(gananciaBase),
+                    metrosPorRollo,
                     compraGuardada.getId()
             );
             inventarioLoteService.registrarLote(loteDto);
