@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 08-06-2026 a las 22:51:52
+-- Tiempo de generación: 20-06-2026 a las 15:44:04
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -38,6 +38,44 @@ CREATE TABLE `asignacion_motos` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `asignacion_motos`
+--
+
+INSERT INTO `asignacion_motos` (`id_asignacion`, `id_moto`, `id_empleado`, `fecha_asignacion`, `fecha_devolucion`, `estado`, `created_at`, `updated_at`) VALUES
+(1, 4, 5, '2026-06-09 05:03:26', NULL, 'ACTIVA', '2026-06-09 05:03:26', '2026-06-09 05:03:26'),
+(2, 1, 6, '2026-06-09 08:56:39', NULL, 'ACTIVA', '2026-06-09 08:56:39', '2026-06-09 08:56:39');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `catalogo_proveedores`
+--
+
+CREATE TABLE `catalogo_proveedores` (
+  `id_catalogo` bigint(20) NOT NULL,
+  `id_proveedor` bigint(20) NOT NULL,
+  `id_producto` bigint(20) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `catalogo_proveedores`
+--
+
+INSERT INTO `catalogo_proveedores` (`id_catalogo`, `id_proveedor`, `id_producto`, `created_at`) VALUES
+(4, 3, 24, '2026-06-11 22:44:12'),
+(5, 3, 23, '2026-06-11 23:05:26'),
+(6, 4, 24, '2026-06-12 18:01:09'),
+(7, 3, 22, '2026-06-13 21:29:37'),
+(8, 5, 21, '2026-06-13 21:38:17'),
+(9, 4, 25, '2026-06-13 23:01:45'),
+(11, 4, 26, '2026-06-13 23:03:23'),
+(12, 6, 27, '2026-06-14 19:10:07'),
+(13, 4, 27, '2026-06-14 19:18:23'),
+(14, 3, 28, '2026-06-14 19:48:45'),
+(15, 6, 29, '2026-06-18 18:20:46');
+
 -- --------------------------------------------------------
 
 --
@@ -50,17 +88,22 @@ CREATE TABLE `categorias` (
   `descripcion` text DEFAULT NULL,
   `estado` int(11) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `unidad_medida` varchar(10) NOT NULL DEFAULT 'UND',
+  `requiere_capacidad` tinyint(1) NOT NULL DEFAULT 0,
+  `etiqueta_capacidad` varchar(50) DEFAULT NULL,
+  `maneja_envase` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `categorias`
 --
 
-INSERT INTO `categorias` (`id_categoria`, `nombre`, `descripcion`, `estado`, `created_at`, `updated_at`) VALUES
-(1, 'Gas Doméstico', 'balones de gas GLP para uso doméstico en hogares, cocinas y pequeños negocios.', 1, '2026-05-15 06:25:19', '2026-05-21 13:31:30'),
-(2, 'Accesorios', 'productos complementarios para la instalación y seguridad del sistema de gas, como reguladores, mangueras y abrazaderas.', 1, '2026-05-15 06:26:14', '2026-06-07 13:17:13'),
-(3, 'Bidones de Agua', 'bidones de agua para consumo doméstico y comercial, en diferentes capacidades y presentaciones', 1, '2026-05-15 09:23:07', '2026-05-21 13:18:30');
+INSERT INTO `categorias` (`id_categoria`, `nombre`, `descripcion`, `estado`, `created_at`, `updated_at`, `unidad_medida`, `requiere_capacidad`, `etiqueta_capacidad`, `maneja_envase`) VALUES
+(1, 'Gas Doméstico', 'balones de gas GLP para uso doméstico en hogares, cocinas y pequeños negocios.', 1, '2026-05-15 06:25:19', '2026-06-18 18:06:03', 'KG', 1, 'Capacidad (kg)', 1),
+(2, 'Accesorios(Por Unidad)', 'productos complementarios para la instalación y seguridad del sistema de gas, como reguladores, mangueras y abrazaderas.', 1, '2026-05-15 06:26:14', '2026-06-10 18:32:30', 'UND', 0, NULL, 0),
+(3, 'Bidones de Agua', 'bidones de agua para consumo doméstico y comercial, en diferentes capacidades y presentaciones', 1, '2026-05-15 09:23:07', '2026-06-10 17:27:17', 'L', 1, 'Contenido (Litros)', 1),
+(4, 'Accesorios(Por Metros)', '', 1, '2026-06-10 18:32:54', '2026-06-10 18:32:54', 'M', 1, 'Longitud (Metros)', 0);
 
 -- --------------------------------------------------------
 
@@ -72,9 +115,9 @@ CREATE TABLE `clientes` (
   `id_cliente` bigint(20) NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `dni` varchar(8) DEFAULT NULL,
-  `direccion` varchar(255) NULL,
+  `direccion` varchar(255) DEFAULT NULL,
   `referencia` varchar(150) DEFAULT NULL,
-  `telefono` varchar(255) NULL,
+  `telefono` varchar(9) DEFAULT NULL,
   `correo` varchar(255) DEFAULT NULL,
   `estado` int(11) NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -86,7 +129,11 @@ CREATE TABLE `clientes` (
 --
 
 INSERT INTO `clientes` (`id_cliente`, `nombre`, `dni`, `direccion`, `referencia`, `telefono`, `correo`, `estado`, `created_at`, `updated_at`) VALUES
-(1, 'Esnaydeher', '73838677', 'ADSASD', 'ASDASDA', '963335241', NULL, 1, '2026-06-05 18:47:07', '2026-06-05 18:47:07');
+(1, 'Esnaydeher', '73838677', 'ADSASD', 'ASDASDA', '963335241', NULL, 1, '2026-06-05 18:47:07', '2026-06-05 18:47:07'),
+(3, 'juanito', NULL, '', 'gextt', '', NULL, 1, '2026-06-09 06:07:57', '2026-06-09 06:07:57'),
+(4, 'juanito2', NULL, '', NULL, '', NULL, 1, '2026-06-09 06:08:43', '2026-06-09 06:08:43'),
+(6, 'juano', NULL, '', NULL, '', NULL, 1, '2026-06-09 08:52:04', '2026-06-09 08:52:04'),
+(7, 'pedro', NULL, 'intruccion 174', NULL, '938545399', NULL, 1, '2026-06-09 09:17:17', '2026-06-09 09:17:17');
 
 -- --------------------------------------------------------
 
@@ -122,7 +169,33 @@ INSERT INTO `compras` (`id_compra`, `id_proveedor`, `id_usuario`, `fecha_compra`
 (12, 4, 8, '2026-06-07 23:19:00', 'NC001-0014', 100.00, '2026-06-07 23:20:18', '2026-06-07 23:21:11', 2),
 (13, 4, 8, '2026-06-07 23:32:00', 'NC001-0015', 100.00, '2026-06-07 23:32:19', '2026-06-07 23:33:28', 2),
 (14, 4, 8, '2026-06-07 23:32:00', 'NC001-0016', 50.00, '2026-06-07 23:33:00', '2026-06-07 23:33:00', 1),
-(15, 3, 8, '2026-06-08 14:13:00', 'NC001-0017', 400.00, '2026-06-08 14:13:20', '2026-06-08 14:13:20', 1);
+(15, 3, 8, '2026-06-08 14:13:00', 'NC001-0017', 400.00, '2026-06-08 14:13:20', '2026-06-08 14:13:20', 1),
+(16, 3, 8, '2026-06-09 09:12:00', 'NC001-0018', 400.00, '2026-06-09 09:13:13', '2026-06-09 09:13:13', 1),
+(17, 3, 8, '2026-06-12 17:59:00', 'NC001-0019', 200.00, '2026-06-12 18:00:12', '2026-06-12 18:00:12', 1),
+(18, 4, 8, '2026-06-12 18:02:00', 'NC001-0020', 500.00, '2026-06-12 18:02:42', '2026-06-12 18:02:42', 1),
+(19, 3, 8, '2026-06-12 19:39:00', 'NC001-0021', 840.00, '2026-06-12 19:39:54', '2026-06-12 19:39:54', 1),
+(20, 4, 8, '2026-06-12 19:45:00', 'NC001-0022', 150.00, '2026-06-12 19:45:28', '2026-06-12 19:45:28', 1),
+(21, 3, 8, '2026-06-12 20:02:00', 'NC001-0023', 700.00, '2026-06-12 20:02:35', '2026-06-12 20:02:35', 1),
+(22, 4, 8, '2026-06-12 20:19:00', 'NC001-0024', 40.00, '2026-06-12 20:19:37', '2026-06-12 20:19:37', 1),
+(23, 3, 8, '2026-06-12 20:36:00', 'NC001-0025', 50.00, '2026-06-12 20:36:43', '2026-06-12 20:36:43', 1),
+(24, 3, 8, '2026-06-13 21:25:00', 'NC001-0026', 10.00, '2026-06-13 21:26:17', '2026-06-13 21:26:17', 1),
+(25, 3, 8, '2026-06-13 21:26:00', 'NC001-0027', 20.00, '2026-06-13 21:27:15', '2026-06-13 21:27:15', 1),
+(26, 3, 8, '2026-06-13 21:29:00', 'NC001-0028', 50.00, '2026-06-13 21:30:08', '2026-06-13 21:30:08', 1),
+(27, 3, 8, '2026-06-13 21:32:00', 'NC001-0029', 450.00, '2026-06-13 21:33:21', '2026-06-13 21:33:21', 1),
+(28, 3, 8, '2026-06-13 21:56:00', 'NC001-0030', 500.00, '2026-06-13 21:57:07', '2026-06-13 21:57:23', 2),
+(29, 3, 8, '2026-06-13 22:07:00', 'NC001-0031', 330.00, '2026-06-13 22:08:02', '2026-06-13 22:08:25', 2),
+(30, 4, 8, '2026-06-13 23:14:00', 'NC001-0032', 1000.00, '2026-06-13 23:15:07', '2026-06-13 23:40:43', 2),
+(31, 4, 8, '2026-06-13 23:15:00', 'NC001-0033', 1000.00, '2026-06-13 23:15:45', '2026-06-13 23:29:25', 2),
+(32, 4, 8, '2026-06-13 23:29:00', 'NC001-0034', 200.00, '2026-06-13 23:29:58', '2026-06-13 23:30:10', 2),
+(33, 4, 8, '2026-06-13 23:39:00', 'NC001-0035', 3000.00, '2026-06-13 23:39:54', '2026-06-13 23:39:54', 1),
+(34, 6, 8, '2026-06-14 19:10:00', 'NC001-0036', 400.00, '2026-06-14 19:10:54', '2026-06-14 19:10:54', 1),
+(35, 4, 8, '2026-06-14 19:21:00', 'NC001-0037', 300.00, '2026-06-14 19:21:43', '2026-06-14 19:21:43', 1),
+(36, 4, 8, '2026-06-14 19:25:00', 'NC001-0038', 1000.00, '2026-06-14 19:26:54', '2026-06-14 19:39:29', 2),
+(37, 3, 8, '2026-06-14 20:03:00', 'NC001-0039', 50.00, '2026-06-14 20:07:53', '2026-06-14 20:07:53', 1),
+(38, 3, 8, '2026-06-14 20:09:00', 'NC001-0040', 100.00, '2026-06-14 20:09:13', '2026-06-14 20:09:13', 1),
+(39, 4, 8, '2026-06-18 00:11:00', 'NC001-0041', 240.00, '2026-06-18 00:11:37', '2026-06-18 00:11:37', 1),
+(40, 3, 8, '2026-06-18 16:36:00', 'NC001-0042', 100.00, '2026-06-18 16:37:13', '2026-06-18 16:37:13', 1),
+(41, 6, 8, '2026-06-18 18:20:00', 'NC001-0043', 110.00, '2026-06-18 18:21:14', '2026-06-18 18:21:14', 1);
 
 -- --------------------------------------------------------
 
@@ -161,8 +234,8 @@ CREATE TABLE `correlativos` (
 --
 
 INSERT INTO `correlativos` (`id_correlativo`, `numero_actual`, `serie`, `tipo`) VALUES
-(1, 1, 'NV001', 'VENTA_NOTA'),
-(2, 17, 'NC001', 'COMPRA_NOTA');
+(1, 5, 'NV001', 'VENTA_NOTA'),
+(2, 43, 'NC001', 'COMPRA_NOTA');
 
 -- --------------------------------------------------------
 
@@ -191,7 +264,27 @@ INSERT INTO `detalle_compra` (`id_detalle_compra`, `id_compra`, `id_producto`, `
 (10, 10, 16, 2, 45.00),
 (11, 11, 17, 100, 0.90),
 (14, 14, 18, 50, 1.00),
-(15, 15, 19, 10, 40.00);
+(15, 15, 19, 10, 40.00),
+(16, 16, 21, 101, 3.96),
+(17, 17, 24, 10, 20.00),
+(18, 18, 24, 20, 25.00),
+(19, 19, 24, 30, 28.00),
+(20, 20, 24, 5, 30.00),
+(21, 21, 24, 20, 35.00),
+(22, 22, 24, 1, 40.00),
+(23, 23, 24, 1, 50.00),
+(24, 24, 24, 1, 10.00),
+(25, 25, 24, 1, 20.00),
+(26, 26, 22, 1, 50.00),
+(27, 27, 22, 9, 50.00),
+(33, 33, 25, 10, 300.00),
+(34, 34, 27, 10, 40.00),
+(35, 35, 27, 15, 20.00),
+(37, 37, 28, 60, 0.83),
+(38, 38, 28, 120, 0.83),
+(39, 39, 26, 100, 2.40),
+(40, 40, 28, 60, 1.67),
+(41, 41, 29, 2, 55.00);
 
 -- --------------------------------------------------------
 
@@ -212,7 +305,11 @@ CREATE TABLE `detalle_pedido` (
 --
 
 INSERT INTO `detalle_pedido` (`id_detalle`, `cantidad`, `precio_unitario`, `id_pedido`, `id_producto`) VALUES
-(1, 2, 45.00, 1, 3);
+(4, 2, 45.00, 1, 3),
+(7, 1, 3.00, 3, 18),
+(8, 1, 3.00, 4, 18),
+(12, 1, 2.90, 6, 17),
+(16, 1, 45.00, 7, 3);
 
 -- --------------------------------------------------------
 
@@ -239,8 +336,10 @@ CREATE TABLE `empleados` (
 INSERT INTO `empleados` (`id_empleado`, `dni`, `nombre`, `telefono`, `sueldo_base`, `descuentos`, `estado`, `created_at`, `updated_at`) VALUES
 (2, '70135060', 'YOVANA MAMANI FAIJO', '965456456', 150.00, 0.00, 1, '2026-06-06 19:33:26', '2026-06-06 19:47:05'),
 (3, '73838677', 'ROY AGAPITO VEGAS', '963332114', 122.00, 0.00, 1, '2026-06-06 19:41:08', '2026-06-06 19:57:58'),
-(4, '76195535', 'ALEX AGAPITO VEGAS', '963332166', 250.00, 0.00, 1, '2026-06-06 20:28:56', '2026-06-06 20:28:56'),
-(5, '71513386', 'KEMJI ENEQUE APAZA', '969696969', 6000.00, 0.00, 1, '2026-06-06 23:56:18', '2026-06-06 23:56:18');
+(4, '76195535', 'ALEX AGAPITO VEGAS', '963332166', 250.00, 0.00, 0, '2026-06-06 20:28:56', '2026-06-09 05:03:15'),
+(5, '71513386', 'KEMJI ENEQUE APAZA', '969696969', 6000.00, 0.00, 1, '2026-06-06 23:56:18', '2026-06-06 23:56:18'),
+(6, '75142854', 'ABEL ORDOÑEZ ZAPATA', '938545399', 1200.00, 0.00, 1, '2026-06-09 08:48:29', '2026-06-09 08:48:29'),
+(7, '75926849', 'LEIDY BRUNO CHAVEZ', '954826175', 1000.00, 0.00, 1, '2026-06-09 09:09:50', '2026-06-09 09:09:50');
 
 -- --------------------------------------------------------
 
@@ -269,6 +368,52 @@ CREATE TABLE `inventario` (
   `stock_vacios` int(11) NOT NULL DEFAULT 0,
   `id_producto` bigint(20) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `inventario_lotes`
+--
+
+CREATE TABLE `inventario_lotes` (
+  `id_lote` bigint(20) NOT NULL,
+  `id_producto` bigint(20) NOT NULL,
+  `id_proveedor` bigint(20) NOT NULL,
+  `cantidad_inicial` decimal(10,2) NOT NULL,
+  `cantidad_actual` decimal(10,2) NOT NULL,
+  `precio_compra` decimal(10,2) NOT NULL,
+  `precio_venta` decimal(10,2) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `id_compra` bigint(20) DEFAULT NULL,
+  `metros_por_rollo` decimal(10,2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `inventario_lotes`
+--
+
+INSERT INTO `inventario_lotes` (`id_lote`, `id_producto`, `id_proveedor`, `cantidad_inicial`, `cantidad_actual`, `precio_compra`, `precio_venta`, `created_at`, `updated_at`, `id_compra`, `metros_por_rollo`) VALUES
+(1, 24, 3, 10.00, 10.00, 20.00, 30.00, '2026-06-12 18:00:12', '2026-06-12 18:00:12', NULL, NULL),
+(2, 24, 4, 20.00, 20.00, 25.00, 30.00, '2026-06-12 18:02:42', '2026-06-12 18:04:57', NULL, NULL),
+(3, 24, 3, 30.00, 30.00, 28.00, 28.00, '2026-06-12 19:39:54', '2026-06-12 19:39:54', NULL, NULL),
+(4, 24, 4, 5.00, 5.00, 30.00, 30.00, '2026-06-12 19:45:28', '2026-06-12 19:45:28', NULL, NULL),
+(5, 24, 3, 20.00, 20.00, 35.00, 40.00, '2026-06-12 20:02:35', '2026-06-12 20:02:35', NULL, NULL),
+(6, 24, 4, 1.00, 1.00, 40.00, 40.00, '2026-06-12 20:19:37', '2026-06-12 20:19:37', NULL, NULL),
+(7, 24, 3, 1.00, 1.00, 50.00, 50.00, '2026-06-12 20:36:43', '2026-06-12 20:36:43', NULL, NULL),
+(8, 24, 3, 1.00, 1.00, 10.00, 20.00, '2026-06-13 21:26:17', '2026-06-13 21:26:17', NULL, NULL),
+(9, 24, 3, 1.00, 1.00, 20.00, 25.00, '2026-06-13 21:27:15', '2026-06-13 21:27:15', NULL, NULL),
+(10, 22, 3, 1.00, 1.00, 50.00, 70.00, '2026-06-13 21:30:08', '2026-06-13 21:30:08', NULL, NULL),
+(11, 22, 3, 9.00, 9.00, 50.00, 70.00, '2026-06-13 21:33:21', '2026-06-13 21:33:21', NULL, NULL),
+(12, 23, 3, 10.00, 0.00, 50.00, 80.00, '2026-06-13 21:57:07', '2026-06-13 21:57:23', 28, NULL),
+(17, 25, 4, 10.00, 0.00, 300.00, 320.00, '2026-06-13 23:39:54', '2026-06-14 18:58:39', 33, NULL),
+(18, 27, 6, 10.00, 10.00, 40.00, 48.00, '2026-06-14 19:10:54', '2026-06-14 20:13:54', 34, NULL),
+(19, 27, 4, 15.00, 15.00, 20.00, 25.00, '2026-06-14 19:21:43', '2026-06-14 19:38:47', 35, NULL),
+(21, 28, 3, 60.00, 0.00, 0.83, 4.00, '2026-06-14 20:07:53', '2026-06-17 21:50:55', 37, NULL),
+(22, 28, 3, 120.00, 61.00, 0.83, 2.83, '2026-06-14 20:09:13', '2026-06-18 16:19:45', 38, NULL),
+(23, 26, 4, 100.00, 45.00, 2.40, 5.40, '2026-06-18 00:11:37', '2026-06-18 00:31:12', 39, 50.00),
+(24, 28, 3, 60.00, 60.00, 1.67, 3.67, '2026-06-18 16:37:13', '2026-06-18 16:37:13', 40, 60.00),
+(25, 29, 6, 2.00, 2.00, 55.00, 60.00, '2026-06-18 18:21:14', '2026-06-18 18:21:14', 41, NULL);
 
 -- --------------------------------------------------------
 
@@ -370,7 +515,7 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL),
 (12, 'Empleados', 'fas fa-user-tie', 'empleados', 1, NULL),
 (13, 'Clientes', 'fas fa-user-friends', 'clientes', 1, NULL),
-(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacionMotos', 1, NULL);
+(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacion_motos', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -392,15 +537,21 @@ CREATE TABLE `pedidos` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `id_cliente` bigint(20) NOT NULL,
   `id_empleado` bigint(20) DEFAULT NULL,
-  `id_usuario` bigint(20) NOT NULL
+  `id_usuario` bigint(20) NOT NULL,
+  `num_operacion` varchar(50) DEFAULT NULL,
+  `id_metodo` bigint(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `pedidos`
 --
 
-INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`) VALUES
-(1, 'NV001-0001', '2026-06-05 23:47:07', 'PENDIENTE', 'PENDIENTE', NULL, '2026-06-05 18:47:07.000000', 90.00, '', 90.00, '2026-06-05 23:47:07', 1, NULL, 2);
+INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`, `num_operacion`, `id_metodo`) VALUES
+(1, 'NV001-0001', '2026-06-05 23:47:07', 'PAGADO', 'PENDIENTE', '2026-06-09 05:24:39.000000', '2026-06-09 05:24:58.000000', 90.00, '', 90.00, '2026-06-09 10:24:58', 1, 5, 2, NULL, 1),
+(3, 'NV001-0002', '2026-06-09 11:07:57', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:14.000000', 3.00, '', 3.00, '2026-06-09 11:08:14', 3, 5, 8, NULL, 1),
+(4, 'NV001-0003', '2026-06-09 11:08:43', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:43.000000', 3.00, '', 3.00, '2026-06-09 11:08:43', 4, 5, 8, NULL, 1),
+(6, 'NV001-0004', '2026-06-09 13:52:04', 'PAGADO', 'ENTREGADO', '2026-06-09 08:57:42.000000', '2026-06-09 08:57:42.000000', 2.90, '', 2.90, '2026-06-09 13:57:42', 6, 6, 9, NULL, 1),
+(7, 'NV001-0005', '2026-06-09 14:17:17', 'PAGADO', 'ENTREGADO', '2026-06-09 09:21:21.000000', '2026-06-09 09:21:21.000000', 45.00, '', 45.00, '2026-06-09 14:21:21', 7, 6, 9, NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -421,7 +572,11 @@ CREATE TABLE `pedido_pagos` (
 --
 
 INSERT INTO `pedido_pagos` (`id_pago`, `id_pedido`, `id_metodo`, `monto`, `num_operacion`) VALUES
-(1, 1, 1, 90.00, NULL);
+(4, 1, 1, 90.00, NULL),
+(7, 3, 1, 3.00, NULL),
+(8, 4, 1, 3.00, NULL),
+(12, 6, 1, 2.90, NULL),
+(17, 7, 1, 45.00, NULL);
 
 -- --------------------------------------------------------
 
@@ -465,7 +620,7 @@ CREATE TABLE `perfil_opcion` (
 INSERT INTO `perfil_opcion` (`id_perfil`, `id_opcion`) VALUES
 (2, 4),
 (2, 10),
-(4, 4);
+(4, 10);
 
 -- --------------------------------------------------------
 
@@ -498,23 +653,33 @@ CREATE TABLE `productos` (
 --
 
 INSERT INTO `productos` (`id_producto`, `id_categoria`, `nombre`, `capacidad`, `unidad_medida`, `descripcion`, `precio_compra`, `precio_venta`, `stock_llenos`, `stock_vacios`, `stock_minimo`, `requiere_envase`, `url_imagen`, `estado`, `created_at`, `updated_at`, `ganancia_producto`) VALUES
-(3, 1, 'Balón de Gas 10Kg', 10.00, 'KG', '', 35.00, 45.00, 141.00, 0, 10.00, b'1', '', 1, '2026-05-22 00:50:49', '2026-06-07 21:29:27', 0.00),
-(4, 2, 'valvula', NULL, 'NO APLICA', '', 35.00, 45.00, 30.00, 10, 10.00, b'0', '', 1, '2026-05-22 00:50:53', '2026-06-07 16:45:15', 0.00),
-(5, 3, 'Agua 20L', 20.00, 'L', '', 8.00, 10.00, 50.00, 0, 10.00, b'1', '', 1, '2026-05-23 00:01:49', '2026-06-07 16:44:38', 0.00),
-(6, 1, 'Balón ', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 1, '2026-06-07 17:25:40', '2026-06-07 17:25:40', 0.00),
-(7, 1, 'Balón ', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 1, '2026-06-07 17:25:40', '2026-06-07 17:25:40', 0.00),
-(8, 3, 'agua', 20.00, 'L', '', 0.00, 0.00, 0.00, 0, 10.00, b'1', NULL, 1, '2026-06-07 17:26:37', '2026-06-07 17:26:37', 20.00),
-(9, 2, 'Manguera', 50.00, 'M', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 1, '2026-06-07 18:42:08', '2026-06-07 18:42:08', 10.00),
-(10, 2, 'Manguerra', 50.00, 'M', '', 0.00, 0.00, 0.00, 0, 20.00, b'0', NULL, 1, '2026-06-07 19:08:42', '2026-06-07 19:08:42', 0.00),
+(3, 1, 'Balón de Gas 10Kg', 10.00, 'KG', '', 35.00, 45.00, 140.00, 0, 10.00, b'1', '', 2, '2026-05-22 00:50:49', '2026-06-13 23:19:11', 0.00),
+(4, 2, 'valvula', NULL, 'NO APLICA', '', 35.00, 45.00, 30.00, 10, 10.00, b'0', '', 2, '2026-05-22 00:50:53', '2026-06-13 23:19:08', 0.00),
+(5, 3, 'Agua 20L', 20.00, 'L', '', 8.00, 10.00, 50.00, 0, 10.00, b'1', '', 2, '2026-05-23 00:01:49', '2026-06-13 23:19:05', 0.00),
+(6, 1, 'Balón ', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 2, '2026-06-07 17:25:40', '2026-06-09 06:10:24', 0.00),
+(7, 1, 'Balón ', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 2, '2026-06-07 17:25:40', '2026-06-09 06:10:21', 0.00),
+(8, 3, 'agua', 20.00, 'L', '', 0.00, 0.00, 0.00, 0, 10.00, b'1', NULL, 2, '2026-06-07 17:26:37', '2026-06-09 06:10:25', 20.00),
+(9, 2, 'Manguera', 50.00, 'M', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 2, '2026-06-07 18:42:08', '2026-06-09 06:10:27', 10.00),
+(10, 2, 'Manguerra', 50.00, 'M', '', 0.00, 0.00, 0.00, 0, 20.00, b'0', NULL, 2, '2026-06-07 19:08:42', '2026-06-09 06:10:18', 0.00),
 (11, 2, 'valculaa', NULL, 'NO_APLICA', '', 0.00, 0.00, 0.00, 0, 5.00, b'0', NULL, 2, '2026-06-07 19:22:10', '2026-06-07 19:34:58', 5.00),
-(12, 2, 'valualar', NULL, 'NO APLICA', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 1, '2026-06-07 19:35:15', '2026-06-07 19:35:15', 5.00),
-(13, 2, 'mageee', 60.00, 'M', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 1, '2026-06-07 19:37:14', '2026-06-07 19:37:14', 10.00),
-(14, 2, 'mnnnn', 75.00, 'M', 'hihji', 0.00, 0.00, 1.00, 0, 25.00, b'0', NULL, 1, '2026-06-07 20:13:21', '2026-06-07 21:42:58', 2.00),
-(15, 1, 'gaspremiun', 10.00, 'KG', '', 80.00, 85.00, 25.00, 0, 10.00, b'1', NULL, 1, '2026-06-07 22:19:48', '2026-06-07 22:22:20', 5.00),
-(16, 2, 'MANGUERA', 50.00, 'M', '', 45.00, 47.00, 2.00, 0, 15.00, b'0', NULL, 1, '2026-06-07 22:25:29', '2026-06-07 22:26:22', 2.00),
-(17, 2, 'MANGUERAPRE', 50.00, 'M', '', 0.90, 2.90, 100.00, 0, 15.00, b'0', NULL, 1, '2026-06-07 23:02:22', '2026-06-07 23:03:29', 2.00),
-(18, 2, 'MANUERAAPREMIUN', 50.00, 'M', '', 1.00, 3.00, 50.00, 0, 15.00, b'0', NULL, 1, '2026-06-07 23:19:46', '2026-06-07 23:33:28', 2.00),
-(19, 1, 'gspre', 10.00, 'KG', '', 40.00, 50.00, 10.00, 0, 10.00, b'1', NULL, 1, '2026-06-08 14:11:25', '2026-06-08 14:14:30', 10.00);
+(12, 2, 'valualar', NULL, 'NO APLICA', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 2, '2026-06-07 19:35:15', '2026-06-09 06:10:16', 5.00),
+(13, 2, 'mageee', 60.00, 'M', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 2, '2026-06-07 19:37:14', '2026-06-09 06:10:30', 10.00),
+(14, 2, 'mnnnn', 75.00, 'M', 'hihji', 0.00, 0.00, 1.00, 0, 25.00, b'0', NULL, 2, '2026-06-07 20:13:21', '2026-06-09 06:10:32', 2.00),
+(15, 1, 'gaspremiun', 20.00, 'KG', '', 80.00, 85.00, 25.00, 0, 10.00, b'1', NULL, 2, '2026-06-07 22:19:48', '2026-06-13 23:19:03', 5.00),
+(16, 2, 'MANGUERA', 50.00, 'M', '', 45.00, 47.00, 2.00, 0, 15.00, b'0', NULL, 2, '2026-06-07 22:25:29', '2026-06-09 06:10:48', 2.00),
+(17, 2, 'MANGUERA PREMIUN', 50.00, 'M', '', 0.90, 2.90, 99.00, 0, 15.00, b'0', NULL, 2, '2026-06-07 23:02:22', '2026-06-13 23:19:02', 2.00),
+(18, 2, 'MANUERAAPREMIUN', 50.00, 'M', '', 1.00, 3.00, 48.00, 0, 15.00, b'0', NULL, 2, '2026-06-07 23:19:46', '2026-06-09 06:11:11', 2.00),
+(19, 1, 'gspre', 10.00, 'KG', '', 40.00, 50.00, 10.00, 0, 10.00, b'1', NULL, 2, '2026-06-08 14:11:25', '2026-06-09 06:11:14', 10.00),
+(20, 1, 'Balón de Gas ', 5.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 2, '2026-06-09 07:10:25', '2026-06-09 07:10:28', 0.01),
+(21, 2, 'Balón de Gas 10', 500.00, 'M', '', 3.96, 5.36, 101.00, 0, 0.00, b'0', NULL, 2, '2026-06-09 07:18:08', '2026-06-13 23:19:00', 1.40),
+(22, 1, 'BAONGAS', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'1', NULL, 2, '2026-06-10 19:24:19', '2026-06-13 23:18:57', 20.00),
+(23, 1, 'GASS', 10.00, 'KG', '', 0.00, 0.00, 0.00, 0, 0.00, b'0', NULL, 2, '2026-06-10 20:23:43', '2026-06-13 23:18:55', 30.00),
+(24, 3, 'AGUAAASS', 20.00, 'L', '', 50.00, 55.00, 87.00, 0, 20.00, b'1', NULL, 2, '2026-06-10 20:24:44', '2026-06-13 23:18:52', 5.00),
+(25, 2, 'VALL', NULL, 'UND', 'FINAL', 0.00, 0.00, 5.00, 0, 10.00, b'0', NULL, 1, '2026-06-13 22:53:26', '2026-06-14 18:58:45', 4.00),
+(26, 4, 'MANGUERA2005', 50.00, 'M', '', 0.00, 0.00, 0.00, 0, 20.00, b'0', NULL, 1, '2026-06-13 23:02:46', '2026-06-15 12:34:23', 3.00),
+(27, 3, 'aguav2', 20.00, 'L', '', 0.00, 0.00, 0.00, 0, 10.00, b'1', NULL, 1, '2026-06-14 19:07:59', '2026-06-14 19:34:52', 5.00),
+(28, 4, 'MAGUERA', 60.00, 'M', '', 0.00, 0.00, 0.00, 0, 10.00, b'0', NULL, 1, '2026-06-14 19:48:01', '2026-06-14 19:49:49', 2.00),
+(29, 3, 'AGUAPREMIUNV2', 30.00, 'L', '', 0.00, 0.00, 0.00, 0, 10.00, b'1', NULL, 1, '2026-06-18 18:20:32', '2026-06-18 18:20:32', 5.00);
 
 -- --------------------------------------------------------
 
@@ -541,7 +706,8 @@ CREATE TABLE `proveedores` (
 INSERT INTO `proveedores` (`id_proveedor`, `ruc`, `nombre`, `telefono`, `correo`, `estado`, `created_at`, `updated_at`, `id_rubro`) VALUES
 (3, '12345678901', 'Sipan Gas', '963852750', 'correo34@gmail.com', 1, '2026-05-21 23:46:26', '2026-05-22 00:45:04', 2),
 (4, '12345678955', 'guillermo', '963852754', '', 1, '2026-05-22 00:23:15', '2026-05-22 00:53:13', 3),
-(5, '11002011540', 'vitagas', '951159753', 'vitagas@gmail.com', 1, '2026-05-23 22:34:11', '2026-05-23 22:34:16', 2);
+(5, '11002011540', 'vitagas', '951159753', 'vitagas@gmail.com', 1, '2026-05-23 22:34:11', '2026-05-23 22:34:16', 2),
+(6, '15159696455', 'AGUACIX', '969645266', '', 1, '2026-06-14 19:09:55', '2026-06-14 19:09:55', 3);
 
 -- --------------------------------------------------------
 
@@ -589,12 +755,14 @@ CREATE TABLE `usuarios` (
 
 INSERT INTO `usuarios` (`id_usuario`, `id_perfil`, `username`, `correo`, `password`, `fecha_creacion`, `estado`, `id_empleado`) VALUES
 (1, 1, 'yogacix5', 'abelordonezzapata@gmail.com', 'admin123', '2026-05-12 13:08:53', 2, NULL),
-(2, 1, 'admin_zair', 'zair9@gmail.com', '$2a$10$VIUBS8.d7GhLbO3GKmGRLO.okTqHNYKp4F0pec2GCaE6u2PD85qju', '2026-05-15 05:45:50', 1, NULL),
-(4, 4, 'motorizado_abel', 'abelordonez@gmail.com', '$2a$10$qepz3mo6j0A.Y3TNT44zYO.J7A5ncAOczVD7NxbwO98M99G.tDAS2', '2026-05-15 09:05:31', 1, NULL),
+(2, 1, 'admin_zair', 'zair9@gmail.com', '$2a$10$VIUBS8.d7GhLbO3GKmGRLO.okTqHNYKp4F0pec2GCaE6u2PD85qju', '2026-05-15 05:45:50', 2, NULL),
+(4, 4, 'motorizado_abel', 'abelordonez@gmail.com', '$2a$10$qepz3mo6j0A.Y3TNT44zYO.J7A5ncAOczVD7NxbwO98M99G.tDAS2', '2026-05-15 09:05:31', 2, NULL),
 (5, 1, 'admin_roy', 'roy1@gmail.com', '$2a$10$BSd3X.R8bcClmFDB/e8JIOwVE7sesuJJsk1W4IkQ8yQu39NXJRDNq', '2026-06-06 20:14:48', 1, 3),
 (6, 2, 'admin_yovana', 'anonimo1324@ejemplo.com', '$2a$10$LHYMpZtkudvEWJBOg1fYzOzgnUn08rIE3rXORlckY5yukYb.zfgTu', '2026-06-06 20:27:54', 1, 2),
 (7, 2, 'admin_alex', 'anonimo13232324@ejemplo.com', '$2a$10$nJoaLFXMvUkoNkR6Wc5CmOqEXeX2PclRkATw.mWODnk9VeGt//owW', '2026-06-06 20:29:27', 1, 4),
-(8, 1, 'admin_zairK', 'zairmasnaa@gmail.com', '$2a$10$/28V8yxSKALNWVacmGwHCOzJj9M0bLl5V2JBaHJbPQo4iWUXtmASu', '2026-06-07 00:00:05', 1, 5);
+(8, 1, 'admin_zairK', 'zairmasnaa@gmail.com', '$2a$10$/28V8yxSKALNWVacmGwHCOzJj9M0bLl5V2JBaHJbPQo4iWUXtmASu', '2026-06-07 00:00:05', 1, 5),
+(9, 4, 'repartidor_abel', 'pedro@gmail.com', '$2a$10$MqM9bR6b4S2PW4PcuuJvzeSca0qucPRcElT7ZOMcead1DQwd.NOra', '2026-06-09 08:50:11', 1, 6),
+(10, 4, 'motorizado_12', 'correo@gmail.com', '$2a$10$OeTkon5eLl4C2gCEZNwBU.j/t0gjFqV5cNPZCKGG.JDiNYOqYxqVa', '2026-06-09 09:10:25', 1, 7);
 
 --
 -- Índices para tablas volcadas
@@ -607,6 +775,14 @@ ALTER TABLE `asignacion_motos`
   ADD PRIMARY KEY (`id_asignacion`),
   ADD KEY `fk_asignacion_moto` (`id_moto`),
   ADD KEY `fk_asignacion_empleado` (`id_empleado`);
+
+--
+-- Indices de la tabla `catalogo_proveedores`
+--
+ALTER TABLE `catalogo_proveedores`
+  ADD PRIMARY KEY (`id_catalogo`),
+  ADD UNIQUE KEY `uk_catalogo_proveedores` (`id_proveedor`,`id_producto`),
+  ADD KEY `fk_cat_prov_maestro_producto` (`id_producto`);
 
 --
 -- Indices de la tabla `categorias`
@@ -685,6 +861,15 @@ ALTER TABLE `inventario`
   ADD KEY `id_producto_idx` (`id_producto`);
 
 --
+-- Indices de la tabla `inventario_lotes`
+--
+ALTER TABLE `inventario_lotes`
+  ADD PRIMARY KEY (`id_lote`),
+  ADD KEY `fk_lotes_maestro_producto` (`id_producto`),
+  ADD KEY `fk_lotes_maestro_proveedor` (`id_proveedor`),
+  ADD KEY `FK90jstbuyftp0mdyv1yxwaaxmf` (`id_compra`);
+
+--
 -- Indices de la tabla `metas_venta`
 --
 ALTER TABLE `metas_venta`
@@ -720,7 +905,8 @@ ALTER TABLE `pedidos`
   ADD UNIQUE KEY `UKopykg0avndf87lga45wx7l02v` (`codigo`),
   ADD KEY `FKdnomiluem4t3x66t6b9aher47` (`id_cliente`),
   ADD KEY `FKltrtqgh9kyqgjst49dj88e4ra` (`id_empleado`),
-  ADD KEY `FK4a0lfwlpmytywxpwjfa1a3ar2` (`id_usuario`);
+  ADD KEY `FK4a0lfwlpmytywxpwjfa1a3ar2` (`id_usuario`),
+  ADD KEY `FKkak0y959yhogp8xvwashvv14t` (`id_metodo`);
 
 --
 -- Indices de la tabla `pedido_pagos`
@@ -782,25 +968,31 @@ ALTER TABLE `usuarios`
 -- AUTO_INCREMENT de la tabla `asignacion_motos`
 --
 ALTER TABLE `asignacion_motos`
-  MODIFY `id_asignacion` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_asignacion` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT de la tabla `catalogo_proveedores`
+--
+ALTER TABLE `catalogo_proveedores`
+  MODIFY `id_catalogo` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `categorias`
 --
 ALTER TABLE `categorias`
-  MODIFY `id_categoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_categoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `clientes`
 --
 ALTER TABLE `clientes`
-  MODIFY `id_cliente` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_cliente` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `compras`
 --
 ALTER TABLE `compras`
-  MODIFY `id_compra` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id_compra` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT de la tabla `control_envase`
@@ -818,19 +1010,19 @@ ALTER TABLE `correlativos`
 -- AUTO_INCREMENT de la tabla `detalle_compra`
 --
 ALTER TABLE `detalle_compra`
-  MODIFY `id_detalle_compra` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id_detalle_compra` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_pedido`
 --
 ALTER TABLE `detalle_pedido`
-  MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `empleados`
 --
 ALTER TABLE `empleados`
-  MODIFY `id_empleado` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id_empleado` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `historial_stock`
@@ -843,6 +1035,12 @@ ALTER TABLE `historial_stock`
 --
 ALTER TABLE `inventario`
   MODIFY `id_inventario` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `inventario_lotes`
+--
+ALTER TABLE `inventario_lotes`
+  MODIFY `id_lote` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT de la tabla `motos`
@@ -860,13 +1058,13 @@ ALTER TABLE `opciones`
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id_pedido` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_pedido` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `pedido_pagos`
 --
 ALTER TABLE `pedido_pagos`
-  MODIFY `id_pago` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_pago` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT de la tabla `perfiles`
@@ -878,13 +1076,13 @@ ALTER TABLE `perfiles`
 -- AUTO_INCREMENT de la tabla `productos`
 --
 ALTER TABLE `productos`
-  MODIFY `id_producto` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id_producto` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT de la tabla `proveedores`
 --
 ALTER TABLE `proveedores`
-  MODIFY `id_proveedor` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id_proveedor` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `rubros`
@@ -896,7 +1094,7 @@ ALTER TABLE `rubros`
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id_usuario` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id_usuario` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- Restricciones para tablas volcadas
@@ -908,6 +1106,13 @@ ALTER TABLE `usuarios`
 ALTER TABLE `asignacion_motos`
   ADD CONSTRAINT `FK9l0tjcbajvd7wcrape4b3rrvm` FOREIGN KEY (`id_moto`) REFERENCES `motos` (`id_moto`),
   ADD CONSTRAINT `FKnlympgjovss2eqcjih4yv0gsm` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`);
+
+--
+-- Filtros para la tabla `catalogo_proveedores`
+--
+ALTER TABLE `catalogo_proveedores`
+  ADD CONSTRAINT `fk_cat_prov_maestro_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_cat_prov_maestro_proveedor` FOREIGN KEY (`id_proveedor`) REFERENCES `proveedores` (`id_proveedor`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `compras`
@@ -952,6 +1157,14 @@ ALTER TABLE `inventario`
   ADD CONSTRAINT `fk_inventario_productos` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
+-- Filtros para la tabla `inventario_lotes`
+--
+ALTER TABLE `inventario_lotes`
+  ADD CONSTRAINT `FK90jstbuyftp0mdyv1yxwaaxmf` FOREIGN KEY (`id_compra`) REFERENCES `compras` (`id_compra`),
+  ADD CONSTRAINT `fk_lotes_maestro_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_lotes_maestro_proveedor` FOREIGN KEY (`id_proveedor`) REFERENCES `proveedores` (`id_proveedor`) ON DELETE CASCADE;
+
+--
 -- Filtros para la tabla `metas_venta`
 --
 ALTER TABLE `metas_venta`
@@ -969,6 +1182,7 @@ ALTER TABLE `opciones`
 ALTER TABLE `pedidos`
   ADD CONSTRAINT `FK4a0lfwlpmytywxpwjfa1a3ar2` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`),
   ADD CONSTRAINT `FKdnomiluem4t3x66t6b9aher47` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`),
+  ADD CONSTRAINT `FKkak0y959yhogp8xvwashvv14t` FOREIGN KEY (`id_metodo`) REFERENCES `metodo_pago` (`id_metodo`),
   ADD CONSTRAINT `FKltrtqgh9kyqgjst49dj88e4ra` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`);
 
 --
