@@ -73,8 +73,6 @@ public class CompraServiceImplement implements CompraService {
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            // 🛢️ LÓGICA DE NEGOCIO: Guardar solo el detalle de compra en la factura.
-            // Toda la cantidad y precios se registran ahora en la tabla de lotes.
             BigDecimal cantidadComprada = BigDecimal.valueOf(item.cantidad());
 
             DetalleCompra detalle = new DetalleCompra();

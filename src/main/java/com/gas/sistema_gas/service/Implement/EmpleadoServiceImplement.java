@@ -108,7 +108,7 @@ public class EmpleadoServiceImplement implements EmpleadoService {
                         HttpStatus.NOT_FOUND,
                         "Empleado no encontrado"));
 
-        emp.setEstado(0);
+        emp.setEstado(2);
         empleadoRepository.save(emp);
     }
 

@@ -43,11 +43,7 @@ public class CategoriaServiceImplement implements CategoriaService {
 
         Categoria categoria = categoriaMapper.toEntity(createDto);
 
-        // =====================================================================
-        // PROCESAMIENTO AUTOMÁTICO DE BANDERAS LÓGICAS (NUEVO)
-        // =====================================================================
         configurarBanderasPorTipoUnidad(categoria, createDto.tipoUnidad());
-        // =====================================================================
 
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
@@ -70,11 +66,7 @@ public class CategoriaServiceImplement implements CategoriaService {
         categoria.setNombre(updateDto.nombre());
         categoria.setDescripcion(updateDto.descripcion());
 
-        // =====================================================================
-        // RECALCULAR BANDERAS POR SI EL USUARIO CAMBIÓ LA FORMA DE VENTA (NUEVO)
-        // =====================================================================
         configurarBanderasPorTipoUnidad(categoria, updateDto.tipoUnidad());
-        // =====================================================================
 
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
