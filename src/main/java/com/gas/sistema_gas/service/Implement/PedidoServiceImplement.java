@@ -119,6 +119,18 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
         }
 
+        // Lógica de fecha límite de pago para créditos
+        if (createDto.fechaLimitePago() != null) {
+            LocalDateTime baseline = pedido.getFechaSolicitud() != null ? pedido.getFechaSolicitud() : LocalDateTime.now();
+            LocalDateTime maxLimit = baseline.plusDays(2).withHour(23).withMinute(59).withSecond(59);
+            if (createDto.fechaLimitePago().isAfter(maxLimit)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha límite de pago no puede superar los 2 días de plazo.");
+            }
+            pedido.setFechaLimitePago(createDto.fechaLimitePago());
+        } else {
+            pedido.setFechaLimitePago(null);
+        }
+
         // 1. Validar Relaciones
         Cliente cliente;
         if (createDto.idCliente() != null) {
@@ -282,18 +294,34 @@ public class PedidoServiceImplement implements PedidoService {
                 totalPagos = totalPagos.add(pagoDto.monto());
             }
 
-            if (totalPagos.compareTo(montoAcumulado) != 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "El total de los pagos debe ser igual al monto total de la venta");
+            if (pedidoGuardado.getFechaLimitePago() == null) {
+                if (totalPagos.compareTo(montoAcumulado) != 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El total de los pagos debe ser igual al monto total de la venta");
+                }
+            } else {
+                if (totalPagos.compareTo(montoAcumulado) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El total de los pagos no puede superar el monto total de la venta");
+                }
             }
 
             PedidoDTO.PagoCreate pagoPrincipal = pagosDto.get(0);
             MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
             pedidoGuardado.setMetodoPago(metodoPagoPrincipal);
             pedidoGuardado.setNumOperacion(pagoPrincipal.numOperacion());
-            pedidoGuardado.setEstadoPago("PAGADO");
+
+            if (totalPagos.compareTo(montoAcumulado) == 0) {
+                pedidoGuardado.setEstadoPago("PAGADO");
+            } else {
+                pedidoGuardado.setEstadoPago("CREDITO");
+            }
         } else {
-            pedidoGuardado.setEstadoPago("PENDIENTE");
+            if (pedidoGuardado.getFechaLimitePago() != null) {
+                pedidoGuardado.setEstadoPago("CREDITO");
+            } else {
+                pedidoGuardado.setEstadoPago("PENDIENTE");
+            }
         }
 
         return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
@@ -397,6 +425,7 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.getObservaciones(),
             pedido.getEstadoPedido(),
             pedido.getTipoVenta(),
+            pedido.getFechaLimitePago(),
             detallesDto,
             pagosDto
         );

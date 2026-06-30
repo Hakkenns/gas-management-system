@@ -541,19 +541,20 @@ CREATE TABLE `pedidos` (
   `id_usuario` bigint(20) NOT NULL,
   `num_operacion` varchar(50) DEFAULT NULL,
   `id_metodo` bigint(20) DEFAULT NULL,
-  `tipo_venta` varchar(20) NOT NULL DEFAULT 'DOMICILIO'
+  `tipo_venta` varchar(20) NOT NULL DEFAULT 'DOMICILIO',
+  `fecha_limite_pago` datetime(6) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `pedidos`
 --
 
-INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`, `num_operacion`, `id_metodo`, `tipo_venta`) VALUES
-(1, 'NV001-0001', '2026-06-05 23:47:07', 'PAGADO', 'PENDIENTE', '2026-06-09 05:24:39.000000', '2026-06-09 05:24:58.000000', 90.00, '', 90.00, '2026-06-09 10:24:58', 1, 5, 2, NULL, 1, 'DOMICILIO'),
-(3, 'NV001-0002', '2026-06-09 11:07:57', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:14.000000', 3.00, '', 3.00, '2026-06-09 11:08:14', 3, 5, 8, NULL, 1, 'DOMICILIO'),
-(4, 'NV001-0003', '2026-06-09 11:08:43', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:43.000000', 3.00, '', 3.00, '2026-06-09 11:08:43', 4, 5, 8, NULL, 1, 'DOMICILIO'),
-(6, 'NV001-0004', '2026-06-09 13:52:04', 'PAGADO', 'ENTREGADO', '2026-06-09 08:57:42.000000', '2026-06-09 08:57:42.000000', 2.90, '', 2.90, '2026-06-09 13:57:42', 6, 6, 9, NULL, 1, 'DOMICILIO'),
-(7, 'NV001-0005', '2026-06-09 14:17:17', 'PAGADO', 'ENTREGADO', '2026-06-09 09:21:21.000000', '2026-06-09 09:21:21.000000', 45.00, '', 45.00, '2026-06-09 14:21:21', 7, 6, 9, NULL, 1, 'DOMICILIO');
+INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`, `num_operacion`, `id_metodo`, `tipo_venta`, `fecha_limite_pago`) VALUES
+(1, 'NV001-0001', '2026-06-05 23:47:07', 'PAGADO', 'PENDIENTE', '2026-06-09 05:24:39.000000', '2026-06-09 05:24:58.000000', 90.00, '', 90.00, '2026-06-09 10:24:58', 1, 5, 2, NULL, 1, 'DOMICILIO', NULL),
+(3, 'NV001-0002', '2026-06-09 11:07:57', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:14.000000', 3.00, '', 3.00, '2026-06-09 11:08:14', 3, 5, 8, NULL, 1, 'DOMICILIO', NULL),
+(4, 'NV001-0003', '2026-06-09 11:08:43', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:43.000000', 3.00, '', 3.00, '2026-06-09 11:08:43', 4, 5, 8, NULL, 1, 'DOMICILIO', NULL),
+(6, 'NV001-0004', '2026-06-09 13:52:04', 'PAGADO', 'ENTREGADO', '2026-06-09 08:57:42.000000', '2026-06-09 08:57:42.000000', 2.90, '', 2.90, '2026-06-09 13:57:42', 6, 6, 9, NULL, 1, 'DOMICILIO', NULL),
+(7, 'NV001-0005', '2026-06-09 14:17:17', 'PAGADO', 'ENTREGADO', '2026-06-09 09:21:21.000000', '2026-06-09 09:21:21.000000', 45.00, '', 45.00, '2026-06-09 14:21:21', 7, 6, 9, NULL, 1, 'DOMICILIO', NULL);
 
 -- --------------------------------------------------------
 

@@ -54,6 +54,38 @@ $(function() {
         $('#txt-total-general').text(formatMoney(total));
     }
 
+    function configurarLimitesFechaCredito() {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const maxDate = new Date(today);
+        maxDate.setDate(today.getDate() + 2);
+
+        const formatDate = (d) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        $('#input-fecha-limite').attr('min', formatDate(today));
+        $('#input-fecha-limite').attr('max', formatDate(maxDate));
+        $('#input-fecha-limite').val(formatDate(tomorrow));
+    }
+
+    $(document).on('change', '#select-condicion-pago', function() {
+        const condicion = $(this).val();
+        if (condicion === 'CREDITO') {
+            $('#group-fecha-limite').show();
+            configurarLimitesFechaCredito();
+            $('#select-metodo').prop('required', false);
+        } else {
+            $('#group-fecha-limite').hide();
+            $('#input-fecha-limite').val('');
+            $('#select-metodo').prop('required', true);
+        }
+    });
+
     function limpiarClienteSeleccionado() {
         $('#input-id-cliente').val('');
         $('#input-nombre-cliente').val('');
@@ -132,6 +164,9 @@ $(function() {
         $('#input-id-pedido').val('');
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
+        $('#select-condicion-pago').val('CONTADO');
+        $('#group-fecha-limite').hide();
+        $('#input-fecha-limite').val('');
         actualizarCamposMetodoPago();
         $('.modal-title').text('Registrar nueva venta local');
 
@@ -175,6 +210,17 @@ $(function() {
                 $('#input-nombre-cliente').val(data.nombreCliente);
                 $('#input-telefono-cliente').val(data.telefonoCliente);
                 $('#input-observaciones').val(data.observaciones || '');
+
+                if (data.fechaLimitePago) {
+                    $('#select-condicion-pago').val('CREDITO');
+                    $('#group-fecha-limite').show();
+                    configurarLimitesFechaCredito();
+                    $('#input-fecha-limite').val(data.fechaLimitePago.split('T')[0]);
+                } else {
+                    $('#select-condicion-pago').val('CONTADO');
+                    $('#group-fecha-limite').hide();
+                    $('#input-fecha-limite').val('');
+                }
 
                 $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente').prop('readonly', false);
                 $('#btn-buscar-cliente').show();
@@ -430,6 +476,34 @@ $(function() {
             }
         }
 
+        const totalGeneral = parseMoney($('#txt-total-general').text());
+        const totalPagado = pagosVenta.reduce((sum, p) => sum + parseMoney(p.monto), 0);
+        const condicion = $('#select-condicion-pago').val();
+
+        if (condicion === 'CONTADO') {
+            // Si el usuario no agregó pagos a la tabla pero seleccionó método + monto directo en inputs
+            if (pagosVenta.length === 0 && $('#select-metodo').val()) {
+                const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
+                if (Math.abs(montoInput - totalGeneral) > 0.01) {
+                    alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+                    return;
+                }
+            } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
+                alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
+                return;
+            }
+        } else {
+            // A CRÉDITO
+            if (totalPagado > totalGeneral) {
+                alert('El total pagado no puede ser mayor al total general de la venta a crédito.');
+                return;
+            }
+            if (!$('#input-fecha-limite').val()) {
+                alert('Debe especificar una fecha límite de pago para ventas a crédito.');
+                return;
+            }
+        }
+
         const payload = {
             idPedido: parseInt($('#input-id-pedido').val(), 10) || null,
             idCliente: clientId,
@@ -443,6 +517,7 @@ $(function() {
             numOperacion: numOperacion,
             estadoPedido: 'ENTREGADO',
             tipoVenta: 'LOCAL',
+            fechaLimitePago: condicion === 'CREDITO' ? $('#input-fecha-limite').val() + 'T23:59:59' : null,
             pagos: pagosVenta.map(pago => ({
                 idMetodoPago: pago.idMetodoPago,
                 monto: pago.monto,
