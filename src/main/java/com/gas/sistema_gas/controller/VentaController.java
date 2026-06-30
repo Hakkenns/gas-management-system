@@ -75,6 +75,9 @@ public class VentaController {
     @Autowired
     private AsignacionMotoRepository asignacionMotoRepository;
 
+    @Autowired
+    private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
+
     @GetMapping
     public String ventas() {
         return "redirect:/ventas/local";
@@ -187,6 +190,7 @@ public class VentaController {
     @GetMapping("/detalle/{id}")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> detalleVenta(@PathVariable Long id) {
+        List<com.gas.sistema_gas.Model.ControlEnvase> prestamos = controlEnvaseRepository.findByPedido_Id(id);
         List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(id);
         List<Map<String, Object>> detalleItems = detalles.stream().map(det -> {
             Map<String, Object> item = new HashMap<>();
@@ -194,6 +198,13 @@ public class VentaController {
             item.put("cantidad", det.getCantidad());
             item.put("precioUnitario", det.getPrecioUnitario());
             item.put("subtotal", det.getPrecioUnitario().multiply(java.math.BigDecimal.valueOf(det.getCantidad())));
+            
+            Integer cantPrestada = prestamos.stream()
+                .filter(p -> p.getProducto().getId().equals(det.getProducto().getId()))
+                .map(com.gas.sistema_gas.Model.ControlEnvase::getCantidadPrestada)
+                .findFirst()
+                .orElse(0);
+            item.put("cantidadPrestada", cantPrestada);
             return item;
         }).toList();
 

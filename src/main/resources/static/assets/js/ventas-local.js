@@ -139,6 +139,7 @@ $(function() {
                     <td>${item.nombreProducto}</td>
                     <td>${item.cantidad}</td>
                     <td>S/ ${formatMoney(item.precioUnitario)}</td>
+                    <td>${item.cantidadPrestada || 0}</td>
                     <td>S/ ${formatMoney(subtotal)}</td>
                     <td class="text-center col-quitar-producto">
                         <button type="button" class="btn btn-danger btn-sm btn-remover-item" data-index="${index}">
@@ -167,6 +168,7 @@ $(function() {
         $('#select-condicion-pago').val('CONTADO');
         $('#group-fecha-limite').hide();
         $('#input-fecha-limite').val('');
+        $('#input-cantidad-prestada').val('0');
         actualizarCamposMetodoPago();
         $('.modal-title').text('Registrar nueva venta local');
 
@@ -231,7 +233,8 @@ $(function() {
                         idProducto: detalle.idProducto,
                         nombreProducto: detalle.nombreProducto,
                         cantidad: detalle.cantidad,
-                        precioUnitario: detalle.precioUnitario
+                        precioUnitario: detalle.precioUnitario,
+                        cantidadPrestada: detalle.cantidadPrestada || 0
                     });
                 });
 
@@ -412,21 +415,37 @@ $(function() {
         const nombreProducto = $('#input-producto-nombre').val();
         const cantidad = parseInt($('#select-cantidad').val(), 10);
         const precio = parseMoney($('#select-precio').val());
+        const cantidadPrestada = parseInt($('#input-cantidad-prestada').val(), 10) || 0;
 
         if (!idProducto || cantidad < 1 || precio <= 0) {
             alert('Seleccione un producto y complete cantidad/precio.');
             return;
         }
 
+        if (cantidadPrestada < 0) {
+            alert('La cantidad de envases prestados no puede ser negativa.');
+            return;
+        }
+
+        if (cantidadPrestada > cantidad) {
+            alert('La cantidad de envases prestados no puede ser mayor a la cantidad comprada.');
+            return;
+        }
+
         const existente = detallesVenta.find(item => item.idProducto === idProducto);
         if (existente) {
             existente.cantidad += cantidad;
+            existente.cantidadPrestada += cantidadPrestada;
+            if (existente.cantidadPrestada > existente.cantidad) {
+                existente.cantidadPrestada = existente.cantidad;
+            }
         } else {
             detallesVenta.push({
                 idProducto,
                 nombreProducto,
                 cantidad,
-                precioUnitario: precio
+                precioUnitario: precio,
+                cantidadPrestada
             });
         }
 
@@ -434,6 +453,7 @@ $(function() {
         $('#input-producto-nombre').val('');
         $('#select-cantidad').val('1');
         $('#select-precio').val('');
+        $('#input-cantidad-prestada').val('0');
         renderizarFilas();
     });
 
@@ -527,7 +547,8 @@ $(function() {
             detalles: detallesVenta.map(item => ({
                 idProducto: parseInt(item.idProducto, 10),
                 cantidad: item.cantidad,
-                precioUnitario: item.precioUnitario
+                precioUnitario: item.precioUnitario,
+                cantidadPrestada: item.cantidadPrestada || 0
             }))
         };
 
@@ -579,7 +600,8 @@ $(function() {
                 detalles.forEach(det => {
                     const subtotal = parseMoney(det.subtotal || (det.precioUnitario * det.cantidad));
                     const tr = $('<tr>');
-                    tr.append(`<td>${det.producto || ''}</td>`);
+                    const loanNote = det.cantidadPrestada > 0 ? ` <small class="text-info font-weight-bold">(${det.cantidadPrestada} prestado/s)</small>` : '';
+                    tr.append(`<td>${det.producto || ''}${loanNote}</td>`);
                     tr.append(`<td class="text-center">${det.cantidad || 0}</td>`);
                     tr.append(`<td class="text-right">S/ ${formatMoney(det.precioUnitario)}</td>`);
                     tr.append(`<td class="text-right">S/ ${formatMoney(subtotal)}</td>`);

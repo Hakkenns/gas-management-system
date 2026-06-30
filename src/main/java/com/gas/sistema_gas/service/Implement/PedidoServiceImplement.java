@@ -61,6 +61,8 @@ public class PedidoServiceImplement implements PedidoService {
     private MetodoPagoRepository metodoPagoRepository;
     @Autowired
     private CorrelativoService correlativoService;
+    @Autowired
+    private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
 
     @Override
     @Transactional
@@ -108,9 +110,10 @@ public class PedidoServiceImplement implements PedidoService {
                 productoRepository.save(producto);
             }
 
-            // Eliminar detalles y pagos anteriores
+            // Eliminar detalles, pagos y control de envases anteriores
             detalleRepository.deleteAll(detallesAnteriores);
             pedidoPagoRepository.deleteAll(pedidoPagoRepository.findByPedido_Id(pedido.getId()));
+            controlEnvaseRepository.deleteByPedido_Id(pedido.getId());
 
         } else {
             // Lógica de Creación
@@ -243,6 +246,21 @@ public class PedidoServiceImplement implements PedidoService {
             montoAcumulado = montoAcumulado.add(importeLinea);
 
             detalleRepository.save(detalle);
+
+            // Registrar préstamo de envases si corresponde
+            if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
+                if (item.cantidadPrestada() > item.cantidad()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
+                }
+                com.gas.sistema_gas.Model.ControlEnvase prestamo = new com.gas.sistema_gas.Model.ControlEnvase();
+                prestamo.setPedido(pedidoGuardado);
+                prestamo.setProducto(producto);
+                prestamo.setCliente(pedidoGuardado.getCliente());
+                prestamo.setCantidadPrestada(item.cantidadPrestada());
+                prestamo.setEstado("PRESTADO");
+                controlEnvaseRepository.save(prestamo);
+            }
         }
 
         pedidoGuardado.setSubtotal(montoAcumulado);
@@ -393,15 +411,22 @@ public class PedidoServiceImplement implements PedidoService {
 
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(id);
         List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(id);
+        List<com.gas.sistema_gas.Model.ControlEnvase> prestamos = controlEnvaseRepository.findByPedido_Id(id);
 
-        List<PedidoDTO.DetalleResponse> detallesDto = detalles.stream().map(det ->
-            new PedidoDTO.DetalleResponse(
+        List<PedidoDTO.DetalleResponse> detallesDto = detalles.stream().map(det -> {
+            Integer cantPrestada = prestamos.stream()
+                .filter(p -> p.getProducto().getId().equals(det.getProducto().getId()))
+                .map(com.gas.sistema_gas.Model.ControlEnvase::getCantidadPrestada)
+                .findFirst()
+                .orElse(0);
+            return new PedidoDTO.DetalleResponse(
                 det.getProducto().getId(),
                 det.getProducto().getNombre(),
                 det.getCantidad(),
-                det.getPrecioUnitario()
-            )
-        ).collect(Collectors.toList());
+                det.getPrecioUnitario(),
+                cantPrestada
+            );
+        }).collect(Collectors.toList());
 
         List<PedidoDTO.PagoResponse> pagosDto = pagos.stream().map(pago ->
             new PedidoDTO.PagoResponse(

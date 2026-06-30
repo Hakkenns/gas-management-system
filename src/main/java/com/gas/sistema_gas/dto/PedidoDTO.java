@@ -38,7 +38,8 @@ public class PedidoDTO {
     public record DetalleCreate(
         Long idProducto,
         Integer cantidad,
-        BigDecimal precioUnitario
+        BigDecimal precioUnitario,
+        Integer cantidadPrestada
     ){}
 
     public record PagoCreate(
@@ -92,7 +93,8 @@ public class PedidoDTO {
         Long idProducto,
         String nombreProducto,
         Integer cantidad,
-        BigDecimal precioUnitario
+        BigDecimal precioUnitario,
+        Integer cantidadPrestada
     ){}
 
     public record PagoResponse(
