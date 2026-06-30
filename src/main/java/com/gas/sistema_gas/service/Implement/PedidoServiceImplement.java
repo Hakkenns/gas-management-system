@@ -63,6 +63,10 @@ public class PedidoServiceImplement implements PedidoService {
     private CorrelativoService correlativoService;
     @Autowired
     private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
+    @Autowired
+    private com.gas.sistema_gas.Repository.InventarioLoteRepository inventarioLoteRepository;
+    @Autowired
+    private com.gas.sistema_gas.service.InventarioLoteService inventarioLoteService;
 
     @Override
     @Transactional
@@ -106,7 +110,21 @@ public class PedidoServiceImplement implements PedidoService {
             for (DetallePedido detalle : detallesAnteriores) {
                 Producto producto = detalle.getProducto();
                 BigDecimal cantidadDevolver = BigDecimal.valueOf(detalle.getCantidad());
-                producto.setStockLlenos(producto.getStockLlenos().add(cantidadDevolver));
+                
+                // Devolver stock al último lote de este producto
+                List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
+                if (!lotes.isEmpty()) {
+                    com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
+                    ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadDevolver));
+                    inventarioLoteRepository.save(ultimoLote);
+                }
+
+                // Sincronizar el campo estático stock_llenos
+                BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                        .stream()
+                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                producto.setStockLlenos(stockDisponible);
                 productoRepository.save(producto);
             }
 
@@ -228,12 +246,23 @@ public class PedidoServiceImplement implements PedidoService {
 
             BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
             
-            if (producto.getStockLlenos().compareTo(cantidadSolicitada) < 0) {
+            // Calcular el stock real en caliente desde los lotes
+            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Stock insuficiente para " + producto.getNombre());
             }
 
-            producto.setStockLlenos(producto.getStockLlenos().subtract(cantidadSolicitada));
+            // Descontar por PEPS en los lotes
+            inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
+
+            // Mantener sincronizado el campo estático stock_llenos de la tabla productos
+            BigDecimal nuevoStockProducto = stockDisponible.subtract(cantidadSolicitada);
+            producto.setStockLlenos(nuevoStockProducto);
             productoRepository.save(producto);
 
             DetallePedido detalle = new DetallePedido();
@@ -382,11 +411,22 @@ public class PedidoServiceImplement implements PedidoService {
 
         for (DetallePedido detalle : detalles) {
             Producto producto = detalle.getProducto();
-            
-            // 📈 SUMA DE STOCK: Convertimos la cantidad del detalle a BigDecimal y usamos .add()
             BigDecimal cantidadADevolver = BigDecimal.valueOf(detalle.getCantidad());
-            producto.setStockLlenos(producto.getStockLlenos().add(cantidadADevolver));
             
+            // Devolver stock al último lote de este producto
+            List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
+            if (!lotes.isEmpty()) {
+                com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
+                ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadADevolver));
+                inventarioLoteRepository.save(ultimoLote);
+            }
+
+            // Sincronizar el campo estático stock_llenos
+            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            producto.setStockLlenos(stockDisponible);
             productoRepository.save(producto);
         }
 
