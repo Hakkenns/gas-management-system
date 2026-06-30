@@ -515,8 +515,7 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL),
 (12, 'Empleados', 'fas fa-user-tie', 'empleados', 1, NULL),
 (13, 'Clientes', 'fas fa-user-friends', 'clientes', 1, NULL),
-(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacion_motos', 1, NULL),
-(15, 'Ventas Domicilio', 'fas fa-truck', 'ventas/domicilio', 1, NULL);
+(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacion_motos', 1, NULL);
 
 -- --------------------------------------------------------
 
