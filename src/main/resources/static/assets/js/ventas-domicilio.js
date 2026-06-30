@@ -136,15 +136,27 @@ $(function() {
 
     function renderizarFilas() {
         const isMotorizado = $('#session-perfil-id').val() == '4';
+        const estadoPedido = $('#select-estado-pedido').val();
+        // Es editable si el pedido es nuevo o está PENDIENTE
+        const isPedidoEditable = !$('#input-id-pedido').val() || estadoPedido === 'PENDIENTE';
+
         const tbody = $('#tabla-filas-venta').empty();
         detallesVenta.forEach((item, index) => {
             const subtotal = item.cantidad * item.precioUnitario;
+            
+            // Si es editable, mostramos un input numérico. Si no, texto estático
+            const inputPrestados = isPedidoEditable 
+                ? `<input type="number" class="form-control form-control-sm input-cantidad-prestada-fila" 
+                          min="0" max="${item.cantidad}" value="${item.cantidadPrestada || 0}" 
+                          style="width: 80px;" data-index="${index}">`
+                : `<span>${item.cantidadPrestada || 0}</span>`;
+
             const tr = $(
                 `<tr>
                     <td>${item.nombreProducto}</td>
                     <td>${item.cantidad}</td>
                     <td>S/ ${formatMoney(item.precioUnitario)}</td>
-                    <td>${item.cantidadPrestada || 0}</td>
+                    <td>${inputPrestados}</td>
                     <td>S/ ${formatMoney(subtotal)}</td>
                     <td class="text-center col-quitar-producto" ${isMotorizado ? 'style="display:none;"' : ''}>
                         <button type="button" class="btn btn-danger btn-sm btn-remover-item" data-index="${index}">
@@ -491,6 +503,25 @@ $(function() {
         renderizarFilas();
     });
 
+    $(document).on('change', '.input-cantidad-prestada-fila', function() {
+        const index = $(this).data('index');
+        const val = parseInt($(this).val(), 10) || 0;
+        const item = detallesVenta[index];
+        if (item) {
+            if (val < 0) {
+                alert('La cantidad de envases prestados no puede ser negativa.');
+                $(this).val(0);
+                item.cantidadPrestada = 0;
+            } else if (val > item.cantidad) {
+                alert('La cantidad de envases prestados no puede ser mayor a la cantidad comprada.');
+                $(this).val(item.cantidad);
+                item.cantidadPrestada = item.cantidad;
+            } else {
+                item.cantidadPrestada = val;
+            }
+        }
+    });
+
     $(document).on('click', '.btn-remover-pago', function() {
         const index = $(this).data('index');
         pagosVenta.splice(index, 1);
@@ -534,16 +565,22 @@ $(function() {
         const condicion = $('#select-condicion-pago').val();
 
         if (condicion === 'CONTADO') {
-            // Si el usuario no agregó pagos a la tabla pero seleccionó método + monto directo en inputs
-            if (pagosVenta.length === 0 && $('#select-metodo').val()) {
-                const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
-                if (Math.abs(montoInput - totalGeneral) > 0.01) {
-                    alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+            const estadoPedido = $('#select-estado-pedido').val();
+            // Para ventas a domicilio al contado, si el estado es PENDIENTE y no se registran pagos ni método, permitimos guardar vacío (lo cobrará el motorizado)
+            if (estadoPedido === 'PENDIENTE' && pagosVenta.length === 0 && !$('#select-metodo').val()) {
+                // Permitido sin pagos
+            } else {
+                // Si el usuario no agregó pagos a la tabla pero seleccionó método + monto directo en inputs
+                if (pagosVenta.length === 0 && $('#select-metodo').val()) {
+                    const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
+                    if (Math.abs(montoInput - totalGeneral) > 0.01) {
+                        alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+                        return;
+                    }
+                } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
+                    alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
                     return;
                 }
-            } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
-                alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
-                return;
             }
         } else {
             // A CRÉDITO

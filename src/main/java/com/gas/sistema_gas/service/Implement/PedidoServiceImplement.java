@@ -342,9 +342,14 @@ public class PedidoServiceImplement implements PedidoService {
             }
 
             if (pedidoGuardado.getFechaLimitePago() == null) {
-                if (totalPagos.compareTo(montoAcumulado) != 0) {
+                boolean esPendienteDomicilio = "DOMICILIO".equalsIgnoreCase(pedidoGuardado.getTipoVenta()) 
+                        && "PENDIENTE".equalsIgnoreCase(pedidoGuardado.getEstadoPedido());
+                
+                if (esPendienteDomicilio && totalPagos.compareTo(BigDecimal.ZERO) == 0) {
+                    // Permitido: no hay pagos registrados aún porque se cobrará al entregar
+                } else if (totalPagos.compareTo(montoAcumulado) != 0) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "El total de los pagos debe ser igual al monto total de la venta");
+                            "El total de los pagos debe ser igual al monto total de la venta al contado.");
                 }
             } else {
                 if (totalPagos.compareTo(montoAcumulado) > 0) {
