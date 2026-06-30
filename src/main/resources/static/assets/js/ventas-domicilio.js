@@ -139,12 +139,13 @@ $(function() {
         $('#txt-total-general').text('0.00');
         $('#txt-total-pagado').text('0.00');
 
-        $('#input-id-pedido').val(''); // Limpiar ID de pedido para asegurar que es una creación
+        $('#input-id-pedido').val('');
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
         $('#select-motorizado').val('');
         actualizarCamposMetodoPago();
         $('#select-estado-pedido').val('PENDIENTE');
+        $('.modal-title').text('Registrar nueva venta a domicilio');
 
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
             .then(r => r.json())
@@ -173,17 +174,14 @@ $(function() {
                 return response.json();
             })
             .then(data => {
-                // Resetear el formulario y los arrays
                 $('#form-venta')[0].reset();
                 detallesVenta = [];
                 pagosVenta = [];
 
-                // Llenar datos del pedido
                 $('#input-id-pedido').val(data.idPedido);
                 $('#input-codigo').val(data.codigo);
-                $('.modal-title').text('Editar Venta: ' + data.codigo);
+                $('.modal-title').text('Editar Venta Domicilio: ' + data.codigo);
 
-                // Llenar datos del cliente
                 $('#input-id-cliente').val(data.idCliente);
                 $('#input-dni-cliente').val(data.dniCliente);
                 $('#input-nombre-cliente').val(data.nombreCliente);
@@ -191,12 +189,10 @@ $(function() {
                 $('#input-direccion-cliente').val(data.direccionCliente);
                 $('#input-referencia-cliente').val(data.referenciaCliente);
 
-                // Llenar datos de la venta
                 $('#select-motorizado').val(data.idEmpleado || '');
                 $('#input-observaciones').val(data.observaciones || '');
                 $('#select-estado-pedido').val(data.estadoPedido || 'PENDIENTE');
 
-                // Bloquear UI si es Motorizado
                 const perfilId = $('#session-perfil-id').val();
                 if (perfilId == '4') {
                     $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
@@ -212,7 +208,6 @@ $(function() {
                     $('#card-agregar-productos').show();
                 }
 
-                // Llenar detalles de productos
                 data.detalles.forEach(detalle => {
                     detallesVenta.push({
                         idProducto: detalle.idProducto,
@@ -222,7 +217,6 @@ $(function() {
                     });
                 });
 
-                // Llenar pagos
                 data.pagos.forEach(pago => {
                     pagosVenta.push({
                         idMetodoPago: pago.idMetodoPago,
@@ -258,14 +252,10 @@ $(function() {
         }
     });
 
-    // Nota: el select de productos fue reemplazado por un input + hidden id.
-
-    // Abrir modal de búsqueda de productos
     $('#btn-buscar-producto').on('click', function() {
         $('#input-buscar-nombre').val('');
         $('#tabla-busqueda-productos tbody tr').show();
 
-        // Si el select de categorías está vacío (solo opción por defecto), poblarlo desde las filas
         const selectCat = $('#select-buscar-categoria');
         if (selectCat.length && selectCat.find('option').length <= 1) {
             const seen = {};
@@ -281,12 +271,10 @@ $(function() {
             });
         }
 
-        // Reset category filter
         if (selectCat.length) selectCat.val('');
         $('#modal-buscar-producto').modal('show');
     });
 
-    // Soporte rápido: presionar Enter en el input de producto abre el modal y filtra
     $('#input-producto-nombre').on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
@@ -305,10 +293,10 @@ $(function() {
         $('#tabla-busqueda-productos tbody tr').each(function() {
             const row = $(this);
             const nombreRow = (row.find('td').first().text() || '').toLowerCase();
-                const categoriaRow = row.data('categoria') != null ? String(row.data('categoria')) : '';
+            const categoriaRow = row.data('categoria') != null ? String(row.data('categoria')) : '';
 
-                const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
-                const matchCategoria = !categoria || categoria === '' || String(categoriaRow) === String(categoria);
+            const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
+            const matchCategoria = !categoria || categoria === '' || String(categoriaRow) === String(categoria);
 
             if (matchNombre && matchCategoria) {
                 row.show();
@@ -329,21 +317,16 @@ $(function() {
         }
     });
 
-    // Seleccionar producto desde la tabla de búsqueda
     $(document).on('click', '.btn-seleccionar-producto', function() {
         const row = $(this).closest('tr');
         const id = row.data('id');
         const precio = row.data('precio');
         const nombreData = row.data('nombre');
-        const categoriaData = row.data('categoria');
-        const capacidadData = row.data('capacidad');
-        const unidadData = row.data('unidad');
+        const categoria = row.data('categoria');
+        const capacidad = row.data('capacidad');
+        const unidad = row.data('unidad');
 
-        // Fallback a atributos si jQuery.data no encuentra valores
         const nombre = (nombreData !== undefined && nombreData !== null) ? String(nombreData).trim() : row.attr('data-nombre') || row.find('td').first().text().trim();
-        const categoria = (categoriaData !== undefined && categoriaData !== null) ? categoriaData : row.attr('data-categoria');
-        const capacidad = (capacidadData !== undefined && capacidadData !== null) ? capacidadData : row.attr('data-capacidad');
-        const unidad = (unidadData !== undefined && unidadData !== null) ? unidadData : row.attr('data-unidad');
 
         function unidadLabel(u) {
             if (!u) return '';
@@ -362,41 +345,11 @@ $(function() {
                 displayName = `${nombre} - ${capVal}${labelUnidad ? ' ' + labelUnidad : ''}`;
             }
 
-            // Guardar datos ocultos para la conversión
-            try { $('#select-producto').val(id); } catch (err) {}
-            try { $('#input-producto-nombre').val(displayName); } catch (err) {}
-            try { $('#select-precio').val(formatMoney(precio)); } catch (err) {}
-            try { $('#select-unidad').val(unidad); } catch (err) {}
-            try { $('#select-capacidad').val(capVal); } catch (err) {}
-            try { $('#select-categoria').val(categoria); } catch (err) {}  // Agregar categoría
+            $('#select-producto').val(id);
+            $('#input-producto-nombre').val(displayName);
+            $('#select-precio').val(formatMoney(precio));
 
-            // Ajustar paso y mínimo del precio en el modal de compras
-            try {
-                const precioInput = $('#select-precio');
-                precioInput.attr('step', '0.10');
-                let minPrecio = 0.10;
-                if (categoria === '1' || categoria === 1) minPrecio = 50;
-                if (categoria === '2' || categoria === 2) minPrecio = 200;
-                if (categoria === '3' || categoria === 3) minPrecio = 8;
-                precioInput.attr('min', minPrecio.toFixed(2));
-            } catch (err) {}
-
-            // Mostrar/ocultar campos según el tipo de unidad
-            if (unidad === 'M' && capVal !== '') {
-                $('#contenedor-metros-rollo').show();
-                $('#select-metros-rollo').val(capVal);
-                $('#label-cantidad').text('¿Cuántos Rollos?');
-                $('#label-precio').text('Precio por Rollo');
-            } else {
-                $('#contenedor-metros-rollo').hide();
-                $('#label-cantidad').text('Cantidad');
-                $('#label-precio').text('Precio Costo');
-            }
-
-            // Reset cantidad, pero mantener el precio cargado para que pueda modificarse
             $('#select-cantidad').val(1);
-            $('#select-cantidad').attr('step', '1');
-
             $('#modal-buscar-producto').modal('hide');
         }
     });
@@ -412,11 +365,11 @@ $(function() {
         let numOperacion = $('#input-num-operacion').val().trim() || null;
 
         if (!metodoId) {
-            alert('Seleccione un método de pago para agregar el pago.');
+            alert('Seleccione un método de pago.');
             return;
         }
         if (monto <= 0) {
-            alert('Ingrese un monto de pago válido mayor a cero.');
+            alert('Ingrese un monto de pago válido.');
             return;
         }
         if ((metodoNombre.toLowerCase() === 'yape' || metodoNombre.toLowerCase() === 'plin') && !numOperacion) {
@@ -443,7 +396,7 @@ $(function() {
         const precio = parseMoney($('#select-precio').val());
 
         if (!idProducto || cantidad < 1 || precio <= 0) {
-            alert('Seleccione un producto y complete cantidad/precio válidos.');
+            alert('Seleccione un producto y complete cantidad/precio.');
             return;
         }
 
@@ -459,7 +412,6 @@ $(function() {
             });
         }
 
-        // Limpiar selección de producto (hidden id + nombre visible)
         $('#select-producto').val('');
         $('#input-producto-nombre').val('');
         $('#select-cantidad').val('1');
@@ -483,20 +435,21 @@ $(function() {
         e.preventDefault();
 
         if (detallesVenta.length === 0) {
-            alert('Debe agregar al menos un producto a la venta.');
+            alert('Debe agregar al menos un producto.');
             return;
         }
 
         const clientId = parseInt($('#input-id-cliente').val(), 10) || null;
         const dniCliente = $('#input-dni-cliente').val().trim() || null;
         const nombreCliente = $('#input-nombre-cliente').val().trim();
-        const direccionCliente = $('#input-direccion-cliente').val().trim() || null;
-        const telefonoCliente = $('#input-telefono-cliente').val().trim() || null;
-        const referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
-        const idMotorizado = parseInt($('#select-motorizado').val(), 10) || null;
+        const direccionCliente = $('#input-direccion-cliente').val().trim();
 
         if (!nombreCliente) {
             alert('Debe completar el nombre del cliente.');
+            return;
+        }
+        if (!direccionCliente) {
+            alert('Debe completar la dirección de envío para pedidos a domicilio.');
             return;
         }
 
@@ -516,12 +469,13 @@ $(function() {
             dniCliente: dniCliente,
             nombreCliente: nombreCliente,
             direccionCliente: direccionCliente,
-            telefonoCliente: telefonoCliente,
-            referenciaCliente: referenciaCliente,
-            idEmpleado: idMotorizado,
+            telefonoCliente: $('#input-telefono-cliente').val().trim() || null,
+            referenciaCliente: $('#input-referencia-cliente').val().trim() || null,
+            idEmpleado: parseInt($('#select-motorizado').val(), 10) || null,
             idMetodoPago: parseInt($('#select-metodo').val(), 10) || null,
             numOperacion: numOperacion,
             estadoPedido: $('#select-estado-pedido').val(),
+            tipoVenta: 'DOMICILIO',
             pagos: pagosVenta.map(pago => ({
                 idMetodoPago: pago.idMetodoPago,
                 monto: pago.monto,
@@ -566,10 +520,7 @@ $(function() {
 
     $(document).on('click', '.btn-ver-detalle-venta', function() {
         const ventaId = $(this).data('id');
-        if (!ventaId) {
-            alert('ID de venta inválido');
-            return;
-        }
+        if (!ventaId) return;
 
         $('#detalle-venta-body').empty();
         $('#detalle-venta-sin-items').hide();
@@ -577,7 +528,7 @@ $(function() {
         $.getJSON(`/ventas/detalle/${ventaId}`)
             .done(function(data) {
                 const detalles = Array.isArray(data) ? data : data.detalles || [];
-                if (!Array.isArray(detalles) || detalles.length === 0) {
+                if (detalles.length === 0) {
                     $('#detalle-venta-sin-items').show();
                     $('#modal-detalle-venta').modal('show');
                     return;
@@ -603,7 +554,7 @@ $(function() {
                 $('#modal-detalle-venta').modal('show');
             })
             .fail(function() {
-                alert('No se pudo cargar el detalle de la venta. Intenta de nuevo.');
+                alert('No se pudo cargar el detalle.');
             });
     });
 });

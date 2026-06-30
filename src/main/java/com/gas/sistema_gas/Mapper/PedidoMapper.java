@@ -45,6 +45,7 @@ public interface PedidoMapper {
     @Mapping(target = "subtotal", ignore = true)
     @Mapping(target = "montoTotal", ignore = true)
     @Mapping(target = "observaciones", source = "observaciones")
+    @Mapping(target = "tipoVenta", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     void updateEntityFromDto(PedidoDTO.Update updateDto, @org.mapstruct.MappingTarget Pedido pedido);

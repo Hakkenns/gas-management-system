@@ -72,6 +72,14 @@ public class PedidoServiceImplement implements PedidoService {
 
     @Override
     @Transactional
+    public List<PedidoDTO.SimpleResponse> listByTipoVenta(String tipoVenta) {
+        return pedidoRepository.findByTipoVenta(tipoVenta).stream()
+                .map(pedidoMapper::toSimpleResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
     public long countSalesToday() {
         LocalDateTime inicio = LocalDateTime.now().toLocalDate().atStartOfDay();
         LocalDateTime fin = inicio.plusDays(1).minusNanos(1);
@@ -108,6 +116,7 @@ public class PedidoServiceImplement implements PedidoService {
             // Lógica de Creación
             pedido = pedidoMapper.toEntity(createDto);
             pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
+            pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
         }
 
         // 1. Validar Relaciones
@@ -162,19 +171,29 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
         pedido.setFechaSolicitud(LocalDateTime.now());
-        pedido.setEstadoPedido("PENDIENTE");
+
+        // Lógica de estados según tipo de venta
+        if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+            pedido.setEstadoPedido("ENTREGADO");
+            if (pedido.getFechaEntrega() == null) {
+                pedido.setFechaEntrega(LocalDateTime.now());
+            }
+        } else {
+            pedido.setEstadoPedido("PENDIENTE");
+            if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
+                pedido.setEstadoPedido(createDto.estadoPedido());
+                if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
+                    pedido.setFechaEntrega(LocalDateTime.now());
+                }
+            }
+        }
+
         pedido.setEstadoPago("PENDIENTE");
         // Inicializar valores monetarios para evitar errores de validación en el primer save
         pedido.setSubtotal(BigDecimal.ZERO);
         pedido.setMontoTotal(BigDecimal.ZERO);
         // Actualizar campos desde el DTO
         pedido.setObservaciones(createDto.observaciones());
-        if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
-            pedido.setEstadoPedido(createDto.estadoPedido());
-            if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
-                pedido.setFechaEntrega(LocalDateTime.now());
-            }
-        }
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
@@ -377,6 +396,7 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
             pedido.getObservaciones(),
             pedido.getEstadoPedido(),
+            pedido.getTipoVenta(),
             detallesDto,
             pagosDto
         );

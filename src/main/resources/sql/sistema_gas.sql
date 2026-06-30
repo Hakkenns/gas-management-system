@@ -511,11 +511,12 @@ INSERT INTO `opciones` (`id_opciones`, `nombre`, `icono`, `ruta`, `estado`, `id_
 (7, 'Tipos de productos', 'fas fa-box', 'categorias', 1, 4),
 (8, 'Rubros', 'fas fa-tags', 'rubros', 1, 4),
 (9, 'Compras', 'fas fa-shopping-cart', 'compras', 1, NULL),
-(10, 'Ventas', 'fas fa-cash-register', 'ventas', 1, NULL),
+(10, 'Ventas Local', 'fas fa-cash-register', 'ventas/local', 1, NULL),
 (11, 'Motos', 'fas fa-motorcycle', 'motos', 1, NULL),
 (12, 'Empleados', 'fas fa-user-tie', 'empleados', 1, NULL),
 (13, 'Clientes', 'fas fa-user-friends', 'clientes', 1, NULL),
-(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacion_motos', 1, NULL);
+(14, 'Asignación Motos', 'fas fa-clipboard-check', 'asignacion_motos', 1, NULL),
+(15, 'Ventas Domicilio', 'fas fa-truck', 'ventas/domicilio', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -539,19 +540,20 @@ CREATE TABLE `pedidos` (
   `id_empleado` bigint(20) DEFAULT NULL,
   `id_usuario` bigint(20) NOT NULL,
   `num_operacion` varchar(50) DEFAULT NULL,
-  `id_metodo` bigint(20) DEFAULT NULL
+  `id_metodo` bigint(20) DEFAULT NULL,
+  `tipo_venta` varchar(20) NOT NULL DEFAULT 'DOMICILIO'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `pedidos`
 --
 
-INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`, `num_operacion`, `id_metodo`) VALUES
-(1, 'NV001-0001', '2026-06-05 23:47:07', 'PAGADO', 'PENDIENTE', '2026-06-09 05:24:39.000000', '2026-06-09 05:24:58.000000', 90.00, '', 90.00, '2026-06-09 10:24:58', 1, 5, 2, NULL, 1),
-(3, 'NV001-0002', '2026-06-09 11:07:57', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:14.000000', 3.00, '', 3.00, '2026-06-09 11:08:14', 3, 5, 8, NULL, 1),
-(4, 'NV001-0003', '2026-06-09 11:08:43', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:43.000000', 3.00, '', 3.00, '2026-06-09 11:08:43', 4, 5, 8, NULL, 1),
-(6, 'NV001-0004', '2026-06-09 13:52:04', 'PAGADO', 'ENTREGADO', '2026-06-09 08:57:42.000000', '2026-06-09 08:57:42.000000', 2.90, '', 2.90, '2026-06-09 13:57:42', 6, 6, 9, NULL, 1),
-(7, 'NV001-0005', '2026-06-09 14:17:17', 'PAGADO', 'ENTREGADO', '2026-06-09 09:21:21.000000', '2026-06-09 09:21:21.000000', 45.00, '', 45.00, '2026-06-09 14:21:21', 7, 6, 9, NULL, 1);
+INSERT INTO `pedidos` (`id_pedido`, `codigo`, `created_at`, `estado_pago`, `estado_pedido`, `fecha_entrega`, `fecha_solicitud`, `monto_total`, `observaciones`, `subtotal`, `updated_at`, `id_cliente`, `id_empleado`, `id_usuario`, `num_operacion`, `id_metodo`, `tipo_venta`) VALUES
+(1, 'NV001-0001', '2026-06-05 23:47:07', 'PAGADO', 'PENDIENTE', '2026-06-09 05:24:39.000000', '2026-06-09 05:24:58.000000', 90.00, '', 90.00, '2026-06-09 10:24:58', 1, 5, 2, NULL, 1, 'DOMICILIO'),
+(3, 'NV001-0002', '2026-06-09 11:07:57', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:14.000000', 3.00, '', 3.00, '2026-06-09 11:08:14', 3, 5, 8, NULL, 1, 'DOMICILIO'),
+(4, 'NV001-0003', '2026-06-09 11:08:43', 'PAGADO', 'PENDIENTE', NULL, '2026-06-09 06:08:43.000000', 3.00, '', 3.00, '2026-06-09 11:08:43', 4, 5, 8, NULL, 1, 'DOMICILIO'),
+(6, 'NV001-0004', '2026-06-09 13:52:04', 'PAGADO', 'ENTREGADO', '2026-06-09 08:57:42.000000', '2026-06-09 08:57:42.000000', 2.90, '', 2.90, '2026-06-09 13:57:42', 6, 6, 9, NULL, 1, 'DOMICILIO'),
+(7, 'NV001-0005', '2026-06-09 14:17:17', 'PAGADO', 'ENTREGADO', '2026-06-09 09:21:21.000000', '2026-06-09 09:21:21.000000', 45.00, '', 45.00, '2026-06-09 14:21:21', 7, 6, 9, NULL, 1, 'DOMICILIO');
 
 -- --------------------------------------------------------
 

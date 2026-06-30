@@ -76,11 +76,31 @@ public class VentaController {
     private AsignacionMotoRepository asignacionMotoRepository;
 
     @GetMapping
-    public String ventas(Model model, HttpSession session) {
+    public String ventas() {
+        return "redirect:/ventas/local";
+    }
+
+    @GetMapping("/local")
+    public String ventasLocal(Model model, HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+
+        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listByTipoVenta("LOCAL");
+
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
+        model.addAttribute("ventas", ventasList);
+        model.addAttribute("productos", productoService.listAll());
+        model.addAttribute("categorias", categoriaService.listAll());
+        model.addAttribute("metodosPago", metodoPagoService.listActive());
+        model.addAttribute("contenido", "views/ventas_local");
+        return "components/layout";
+    }
+
+    @GetMapping("/domicilio")
+    public String ventasDomicilio(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         Long usuarioId = (Long) session.getAttribute("usuarioId");
 
-        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listAll();
+        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listByTipoVenta("DOMICILIO");
         
         // Si es motorizado (perfil 4), solo ve las ventas que tiene asignadas
         if (perfilId != null && perfilId == 4L && usuarioId != null) {
@@ -108,7 +128,7 @@ public class VentaController {
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("motorizados", motorizadosActivos);
-        model.addAttribute("contenido", "views/ventas");
+        model.addAttribute("contenido", "views/ventas_domicilio");
         return "components/layout";
     }
 
