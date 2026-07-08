@@ -21,14 +21,22 @@ import jakarta.transaction.Transactional;
 @Service
 public class CompraServiceImplement implements CompraService {
 
-    @Autowired private CompraRepository compraRepository;
-    @Autowired private DetalleCompraRepository detalleCompraRepository;
-    @Autowired private ProductoRepository productoRepository;
-    @Autowired private ProveedorRepository proveedorRepository;
-    @Autowired private UsuarioRepository usuarioRepository;
-    @Autowired private CompraMapper compraMapper;
-    @Autowired private CorrelativoService correlativoService;
-    @Autowired private InventarioLoteService inventarioLoteService;
+    @Autowired
+    private CompraRepository compraRepository;
+    @Autowired
+    private DetalleCompraRepository detalleCompraRepository;
+    @Autowired
+    private ProductoRepository productoRepository;
+    @Autowired
+    private ProveedorRepository proveedorRepository;
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+    @Autowired
+    private CompraMapper compraMapper;
+    @Autowired
+    private CorrelativoService correlativoService;
+    @Autowired
+    private InventarioLoteService inventarioLoteService;
 
     @Override
     @Transactional
@@ -68,13 +76,11 @@ public class CompraServiceImplement implements CompraService {
 
         Compra compraGuardada = compraRepository.save(compra);
 
-                // Procesar la lista de productos agregados
+        // Procesar la lista de productos agregados
         for (CompraDTO.DetalleItem item : dto.detalles()) {
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            // 🛢️ LÓGICA DE NEGOCIO: Guardar solo el detalle de compra en la factura.
-            // Toda la cantidad y precios se registran ahora en la tabla de lotes.
             BigDecimal cantidadComprada = BigDecimal.valueOf(item.cantidad());
 
             DetalleCompra detalle = new DetalleCompra();
@@ -84,8 +90,10 @@ public class CompraServiceImplement implements CompraService {
             detalle.setPrecioCostoUnitario(item.precioCostoUnitario());
             detalleCompraRepository.save(detalle);
 
-            // Registrar el lote vinculado a este proveedor/producto en el inventario de lotes
-            BigDecimal gananciaBase = producto.getGananciaProducto() != null ? producto.getGananciaProducto() : BigDecimal.ZERO;
+            // Registrar el lote vinculado a este proveedor/producto en el inventario de
+            // lotes
+            BigDecimal gananciaBase = producto.getGananciaProducto() != null ? producto.getGananciaProducto()
+                    : BigDecimal.ZERO;
             BigDecimal metrosPorRollo = null;
             if ("M".equals(producto.getUnidadMedida())) {
                 metrosPorRollo = producto.getCapacidad();
@@ -101,11 +109,9 @@ public class CompraServiceImplement implements CompraService {
                     item.precioCostoUnitario(),
                     item.precioCostoUnitario().add(gananciaBase),
                     metrosPorRollo,
-                    compraGuardada.getId()
-            );
+                    compraGuardada.getId());
             inventarioLoteService.registrarLote(loteDto);
         }
-
 
         return compraMapper.toSimpleResponse(compraGuardada);
     }
@@ -119,18 +125,14 @@ public class CompraServiceImplement implements CompraService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La compra ya está anulada");
         }
 
-        // Obtener todos los detalles de esta compra
         List<DetalleCompra> detalles = detalleCompraRepository.findByCompraId(idCompra);
 
-        // En el nuevo modelo por lotes, los campos estáticos del producto no se deben modificar
-        // al anular una compra. Debemos buscar los lotes nacidos de esta factura y anular su stock.
         inventarioLoteService.anularLotesCompra(idCompra);
 
         for (DetalleCompra detalle : detalles) {
             detalleCompraRepository.delete(detalle);
         }
 
-        // Marcar la compra como anulada
         compra.setSituacion(2);
         Compra compraActualizada = compraRepository.save(compra);
         return compraMapper.toSimpleResponse(compraActualizada);
@@ -138,6 +140,6 @@ public class CompraServiceImplement implements CompraService {
 
     @Override
     public List<DetalleCompra> listDetallesByCompraId(Long idCompra) {
-        return detalleCompraRepository.findByCompraId(idCompra);//aqui tbm me sale error en .findByCompraId
+        return detalleCompraRepository.findByCompraId(idCompra);
     }
 }

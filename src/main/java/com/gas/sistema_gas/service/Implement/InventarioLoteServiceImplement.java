@@ -68,7 +68,7 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
         InventarioLote lote = inventarioLoteRepository.findById(idLote)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El lote de inventario no existe"));
 
-        // 🌟 REGLA DE NEGOCIO: Actualizamos el precio de venta en caliente por la competencia
+        //REGLA DE NEGOCIO: Actualizamos el precio de venta en caliente por la competencia
         lote.setPrecioVenta(updateDto.precioVenta());
         
         // Al guardarlo, MariaDB actualizará automáticamente el campo 'updated_at' por el trigger del SQL
@@ -86,11 +86,15 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Desconta el stock de los lotes disponibles según el método PEPS (Primero en Entrar, Primero en Salir)
+     * @param idProducto El ID del producto del que se desea descontar stock
+     * @param cantidadAVender La cantidad a vender
+     */
     @Override
     @Transactional
     public void descontarStockPorPEPS(Long idProducto, BigDecimal cantidadAVender) {
-        // 🧠 ALGORITMO MATEMÁTICO PEPS (Primero en Entrar, Primero en Salir)
-        // 1. Buscamos los lotes que tienen stock vivo ordenados del más antiguo al más nuevo
+        
         List<InventarioLote> lotesDisponibles = inventarioLoteRepository.findLotesDisponiblesPEPS(idProducto);
 
         BigDecimal cantidadRestante = cantidadAVender;
