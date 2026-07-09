@@ -63,18 +63,22 @@ public class Pedido {
     // Relaciones seguras con Lazy Fetch
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_cliente", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Cliente cliente;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_usuario", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Usuario usuario;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_empleado") 
+    @JoinColumn(name = "id_empleado")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Empleado empleado;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_metodo")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private MetodoPago metodoPago;
 
     @Column(name = "tipo_venta", nullable = false, length = 20)

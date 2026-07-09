@@ -23,10 +23,12 @@ public class AsignacionMoto {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_moto", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Moto moto;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_empleado", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Empleado empleado;
 
     @Column(name = "fecha_asignacion", nullable = false)

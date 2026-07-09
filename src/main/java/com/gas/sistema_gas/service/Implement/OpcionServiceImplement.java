@@ -32,12 +32,29 @@ public class OpcionServiceImplement implements OpcionService {
         return repository.findByPadreIsNullAndEstado(1).stream()
                 .map(opcion -> {
                     // Filtramos sus hijos para que solo viajen los que están activos
+                    List<Opcion> hijosFiltrados = null;
                     if (opcion.getHijos() != null) {
-                        opcion.setHijos(opcion.getHijos().stream()
+                        hijosFiltrados = opcion.getHijos().stream()
                                 .filter(h -> h.getEstado() == 1)
-                                .collect(Collectors.toList()));
+                                .collect(Collectors.toList());
                     }
-                    return opcionMapper.toSimpleResponse(opcion);
+                    
+                    // Crear DTO con hijos mapeados recursivamente
+                    OpcionDTO.SimpleResponse dto = opcionMapper.toSimpleResponse(opcion);
+                    if (hijosFiltrados != null && !hijosFiltrados.isEmpty()) {
+                        List<OpcionDTO.SimpleResponse> hijosDto = hijosFiltrados.stream()
+                            .map(h -> opcionMapper.toSimpleResponse(h))
+                            .collect(Collectors.toList());
+                        // Usar reflexión para establecer los hijos en el DTO record
+                        try {
+                            java.lang.reflect.Field hijosField = dto.getClass().getDeclaredField("hijos");
+                            hijosField.setAccessible(true);
+                            hijosField.set(dto, hijosDto);
+                        } catch (Exception e) {
+                            // Si falla, devolver el DTO sin hijos
+                        }
+                    }
+                    return dto;
                 })
                 .collect(Collectors.toList());
     }
@@ -55,18 +72,40 @@ public class OpcionServiceImplement implements OpcionService {
         // Para otros perfiles: traemos raíces activas y filtramos hijos asignados a su perfil
         return repository.findByPadreIsNullAndEstado(1).stream()
             .map(opcion -> {
+                // Filtrar hijos activos y con permiso del perfil
+                List<Opcion> hijosFiltrados = null;
                 if (opcion.getHijos() != null) {
-                    opcion.setHijos(opcion.getHijos().stream()
+                    hijosFiltrados = opcion.getHijos().stream()
                         .filter(h -> h.getEstado() == 1)
                         .filter(h -> h.getPerfiles() != null && h.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId)))
-                        .collect(Collectors.toList()));
+                        .collect(Collectors.toList());
                 }
-                return opcion;
+                
+                // Crear DTO con hijos mapeados recursivamente
+                OpcionDTO.SimpleResponse dto = opcionMapper.toSimpleResponse(opcion);
+                if (hijosFiltrados != null && !hijosFiltrados.isEmpty()) {
+                    List<OpcionDTO.SimpleResponse> hijosDto = hijosFiltrados.stream()
+                        .map(h -> opcionMapper.toSimpleResponse(h))
+                        .collect(Collectors.toList());
+                    // Usar reflexión para establecer los hijos en el DTO record
+                    try {
+                        java.lang.reflect.Field hijosField = dto.getClass().getDeclaredField("hijos");
+                        hijosField.setAccessible(true);
+                        hijosField.set(dto, hijosDto);
+                    } catch (Exception e) {
+                        // Si falla, devolver el DTO sin hijos
+                    }
+                }
+                return dto;
             })
             // El menú padre se muestra si él mismo tiene permiso OR si le quedó algún hijo con permiso
-            .filter(o -> (o.getPerfiles() != null && o.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId))) 
-                      || (o.getHijos() != null && !o.getHijos().isEmpty()))
-            .map(opcionMapper::toSimpleResponse)
+            .filter(dto -> {
+                // Verificar si la opción padre tiene permiso
+                boolean padreTienePermiso = repository.findById(dto.id())
+                    .map(o -> o.getPerfiles() != null && o.getPerfiles().stream().anyMatch(p -> p.getId().equals(perfilId)))
+                    .orElse(false);
+                return padreTienePermiso || (dto.hijos() != null && !dto.hijos().isEmpty());
+            })
             .collect(Collectors.toList());
     }
 

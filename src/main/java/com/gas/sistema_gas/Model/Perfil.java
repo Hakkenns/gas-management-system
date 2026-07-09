@@ -51,5 +51,6 @@ public class Perfil {
         joinColumns = @JoinColumn(name = "id_perfil"), 
         inverseJoinColumns = @JoinColumn(name = "id_opcion")
     )
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<Opcion> opciones;
 }

@@ -31,6 +31,7 @@ import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.Repository.AsignacionMotoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.dto.EmpleadoDTO;
 import com.gas.sistema_gas.service.ClienteService;
 import com.gas.sistema_gas.service.EmpleadoService;
 import com.gas.sistema_gas.service.MetodoPagoService;
@@ -116,10 +117,11 @@ public class VentaController {
         }
 
         // Obtener solo los motorizados que tienen una moto activa asignada en este momento
-        List<Empleado> motorizadosActivos = asignacionMotoRepository.findAllByOrderByCreatedAtDesc().stream()
+        List<EmpleadoDTO.SimpleResponse> motorizadosActivos = asignacionMotoRepository.findAllByOrderByCreatedAtDesc().stream()
                 .filter(a -> a.getEstado() == AsignacionMoto.EstadoAsignacion.ACTIVA)
                 .map(AsignacionMoto::getEmpleado)
                 .distinct()
+                .map(e -> new EmpleadoDTO.SimpleResponse(e.getId(), e.getNombre(), e.getDni(), e.getTelefono(), e.getSueldoBase(), e.getEstado()))
                 .collect(Collectors.toList());
 
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));

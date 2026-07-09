@@ -38,11 +38,13 @@ public class DetallePedido {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido", nullable = false)
     @NotNull(message = "El pedido es obligatorio")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Pedido pedido;
 
     // Relación ManyToOne con Producto
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_producto", nullable = false)
     @NotNull(message = "El producto es obligatorio")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Producto producto;
 }
