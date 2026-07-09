@@ -22,6 +22,12 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     // Listar pedidos de un cliente específico
     List<Pedido> findByClienteId(Long idCliente);
 
+    // Listar pedidos por tipo de venta
+    List<Pedido> findByTipoVenta(String tipoVenta);
+
+    // Listar pedidos por tipo de venta y empleado (motorizado)
+    List<Pedido> findByTipoVentaAndEmpleadoId(String tipoVenta, Long idEmpleado);
+
     // Reporte de ventas entre fechas (Muy útil para el cierre de caja)
     @Query("SELECT p FROM Pedido p WHERE p.fechaSolicitud BETWEEN :inicio AND :fin")
     List<Pedido> findPedidosByRangoFechas(@Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);

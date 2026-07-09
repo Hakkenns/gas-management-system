@@ -75,23 +75,43 @@ public class VentaController {
     @Autowired
     private AsignacionMotoRepository asignacionMotoRepository;
 
+    @Autowired
+    private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
+
     @GetMapping
-    public String ventas(Model model, HttpSession session) {
+    public String ventas() {
+        return "redirect:/ventas/local";
+    }
+
+    @GetMapping("/local")
+    public String ventasLocal(Model model, HttpSession session) {
+        populateVentasModel(model, session, "local");
+        return "components/layout";
+    }
+
+    @GetMapping("/domicilio")
+    public String ventasDomicilio(Model model, HttpSession session) {
+        populateVentasModel(model, session, "domicilio");
+        return "components/layout";
+    }
+
+    private void populateVentasModel(Model model, HttpSession session, String activeTab) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         Long usuarioId = (Long) session.getAttribute("usuarioId");
 
-        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listAll();
-        
+        List<PedidoDTO.SimpleResponse> ventasLocalList = pedidoService.listByTipoVenta("LOCAL");
+        List<PedidoDTO.SimpleResponse> ventasDomicilioList = pedidoService.listByTipoVenta("DOMICILIO");
+
         // Si es motorizado (perfil 4), solo ve las ventas que tiene asignadas
         if (perfilId != null && perfilId == 4L && usuarioId != null) {
             Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
             if (usuario != null && usuario.getEmpleado() != null) {
                 String nombreMoto = usuario.getEmpleado().getNombre();
-                ventasList = ventasList.stream()
+                ventasDomicilioList = ventasDomicilioList.stream()
                         .filter(v -> nombreMoto.equals(v.nombreEmpleado()))
                         .collect(Collectors.toList());
             } else {
-                ventasList = List.of(); // Si el motorizado no tiene empleado asociado
+                ventasDomicilioList = List.of();
             }
         }
 
@@ -103,13 +123,14 @@ public class VentaController {
                 .collect(Collectors.toList());
 
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("ventas", ventasList);
+        model.addAttribute("ventasLocal", ventasLocalList);
+        model.addAttribute("ventasDomicilio", ventasDomicilioList);
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("motorizados", motorizadosActivos);
+        model.addAttribute("activeTab", activeTab);
         model.addAttribute("contenido", "views/ventas");
-        return "components/layout";
     }
 
     @PostMapping
@@ -167,6 +188,7 @@ public class VentaController {
     @GetMapping("/detalle/{id}")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> detalleVenta(@PathVariable Long id) {
+        List<com.gas.sistema_gas.Model.ControlEnvase> prestamos = controlEnvaseRepository.findByPedido_Id(id);
         List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(id);
         List<Map<String, Object>> detalleItems = detalles.stream().map(det -> {
             Map<String, Object> item = new HashMap<>();
@@ -174,6 +196,13 @@ public class VentaController {
             item.put("cantidad", det.getCantidad());
             item.put("precioUnitario", det.getPrecioUnitario());
             item.put("subtotal", det.getPrecioUnitario().multiply(java.math.BigDecimal.valueOf(det.getCantidad())));
+            
+            Integer cantPrestada = prestamos.stream()
+                .filter(p -> p.getProducto().getId().equals(det.getProducto().getId()))
+                .map(com.gas.sistema_gas.Model.ControlEnvase::getCantidadPrestada)
+                .findFirst()
+                .orElse(0);
+            item.put("cantidadPrestada", cantPrestada);
             return item;
         }).toList();
 

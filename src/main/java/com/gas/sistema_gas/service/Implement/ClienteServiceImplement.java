@@ -99,7 +99,7 @@ public class ClienteServiceImplement implements ClienteService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El cliente no existe"));
 
         // Eliminación lógica
-        cliente.setEstado(0);
+        cliente.setEstado(2);
         clienteRepository.save(cliente);
     }
 

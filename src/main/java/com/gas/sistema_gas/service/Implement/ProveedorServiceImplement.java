@@ -3,6 +3,7 @@ package com.gas.sistema_gas.service.Implement;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.gas.sistema_gas.Repository.RubroRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,9 @@ public class ProveedorServiceImplement implements ProveedorService {
     private ProveedorRepository proveedorRepository;
     @Autowired
     private  ProveedorMapper proveedorMapper;
-    
+    @Autowired
+    private RubroRepository rubroRepository;
+
     @Override
     @Transactional
     public List<ProveedorDTO.SimpleResponse> listAll() {
@@ -43,9 +46,6 @@ public class ProveedorServiceImplement implements ProveedorService {
         Proveedor proveedor = proveedorMapper.toEntity(dto);
         return proveedorMapper.toSimpleResponse(proveedorRepository.save(proveedor));
     }
-
-    @Autowired
-    private com.gas.sistema_gas.Repository.RubroRepository rubroRepository; // 👈 Asegúrate de tener inyectado el repositorio de rubros aquí arriba
 
     @Override
     @Transactional

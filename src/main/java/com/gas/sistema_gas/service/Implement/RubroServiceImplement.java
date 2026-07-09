@@ -63,7 +63,7 @@ public class RubroServiceImplement implements RubroService {
         Rubro rubro = repository.findById(id)
             .orElseThrow(() -> new RuntimeException("Rubro no encontrado con el ID: " + id));
     
-        rubro.setEstado(2); // 🟢 Cambiamos el estado a 0 (Inactivo)
+        rubro.setEstado(2);
         repository.save(rubro); // Lo guardamos actualizado
     }
 

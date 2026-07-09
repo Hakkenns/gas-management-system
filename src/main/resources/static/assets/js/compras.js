@@ -437,6 +437,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectCategoria) {
         selectCategoria.addEventListener('change', filtrarProductosModal);
     }
+
+    // Abrir modal de búsqueda de productos
+    const btnBuscarProducto = document.getElementById('btn-buscar-producto');
+    if (btnBuscarProducto) {
+        btnBuscarProducto.addEventListener('click', () => {
+            if (window.jQuery) {
+                window.jQuery('#modal-buscar-producto').modal('show');
+            }
+        });
+    }
+
+    const inputProductoNombre = document.getElementById('input-producto-nombre');
+    if (inputProductoNombre) {
+        inputProductoNombre.addEventListener('click', () => {
+            if (window.jQuery) {
+                window.jQuery('#modal-buscar-producto').modal('show');
+            }
+        });
+    }
 });
 
 function initTablaCompras() {

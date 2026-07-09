@@ -61,11 +61,25 @@ public class PedidoServiceImplement implements PedidoService {
     private MetodoPagoRepository metodoPagoRepository;
     @Autowired
     private CorrelativoService correlativoService;
+    @Autowired
+    private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
+    @Autowired
+    private com.gas.sistema_gas.Repository.InventarioLoteRepository inventarioLoteRepository;
+    @Autowired
+    private com.gas.sistema_gas.service.InventarioLoteService inventarioLoteService;
 
     @Override
     @Transactional
     public List<PedidoDTO.SimpleResponse> listAll() {
         return pedidoRepository.findAll().stream()
+                .map(pedidoMapper::toSimpleResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public List<PedidoDTO.SimpleResponse> listByTipoVenta(String tipoVenta) {
+        return pedidoRepository.findByTipoVenta(tipoVenta).stream()
                 .map(pedidoMapper::toSimpleResponse)
                 .collect(Collectors.toList());
     }
@@ -96,18 +110,46 @@ public class PedidoServiceImplement implements PedidoService {
             for (DetallePedido detalle : detallesAnteriores) {
                 Producto producto = detalle.getProducto();
                 BigDecimal cantidadDevolver = BigDecimal.valueOf(detalle.getCantidad());
-                producto.setStockLlenos(producto.getStockLlenos().add(cantidadDevolver));
+                
+                // Devolver stock al último lote de este producto
+                List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
+                if (!lotes.isEmpty()) {
+                    com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
+                    ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadDevolver));
+                    inventarioLoteRepository.save(ultimoLote);
+                }
+
+                // Sincronizar el campo estático stock_llenos
+                BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                        .stream()
+                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                producto.setStockLlenos(stockDisponible);
                 productoRepository.save(producto);
             }
 
-            // Eliminar detalles y pagos anteriores
+            // Eliminar detalles, pagos y control de envases anteriores
             detalleRepository.deleteAll(detallesAnteriores);
             pedidoPagoRepository.deleteAll(pedidoPagoRepository.findByPedido_Id(pedido.getId()));
+            controlEnvaseRepository.deleteByPedido_Id(pedido.getId());
 
         } else {
             // Lógica de Creación
             pedido = pedidoMapper.toEntity(createDto);
             pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
+            pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
+        }
+
+        // Lógica de fecha límite de pago para créditos
+        if (createDto.fechaLimitePago() != null) {
+            LocalDateTime baseline = pedido.getFechaSolicitud() != null ? pedido.getFechaSolicitud() : LocalDateTime.now();
+            LocalDateTime maxLimit = baseline.plusDays(2).withHour(23).withMinute(59).withSecond(59);
+            if (createDto.fechaLimitePago().isAfter(maxLimit)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha límite de pago no puede superar los 2 días de plazo.");
+            }
+            pedido.setFechaLimitePago(createDto.fechaLimitePago());
+        } else {
+            pedido.setFechaLimitePago(null);
         }
 
         // 1. Validar Relaciones
@@ -162,19 +204,29 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
         pedido.setFechaSolicitud(LocalDateTime.now());
-        pedido.setEstadoPedido("PENDIENTE");
+
+        // Lógica de estados según tipo de venta
+        if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+            pedido.setEstadoPedido("ENTREGADO");
+            if (pedido.getFechaEntrega() == null) {
+                pedido.setFechaEntrega(LocalDateTime.now());
+            }
+        } else {
+            pedido.setEstadoPedido("PENDIENTE");
+            if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
+                pedido.setEstadoPedido(createDto.estadoPedido());
+                if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
+                    pedido.setFechaEntrega(LocalDateTime.now());
+                }
+            }
+        }
+
         pedido.setEstadoPago("PENDIENTE");
         // Inicializar valores monetarios para evitar errores de validación en el primer save
         pedido.setSubtotal(BigDecimal.ZERO);
         pedido.setMontoTotal(BigDecimal.ZERO);
         // Actualizar campos desde el DTO
         pedido.setObservaciones(createDto.observaciones());
-        if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
-            pedido.setEstadoPedido(createDto.estadoPedido());
-            if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
-                pedido.setFechaEntrega(LocalDateTime.now());
-            }
-        }
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
@@ -194,12 +246,23 @@ public class PedidoServiceImplement implements PedidoService {
 
             BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
             
-            if (producto.getStockLlenos().compareTo(cantidadSolicitada) < 0) {
+            // Calcular el stock real en caliente desde los lotes
+            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Stock insuficiente para " + producto.getNombre());
             }
 
-            producto.setStockLlenos(producto.getStockLlenos().subtract(cantidadSolicitada));
+            // Descontar por PEPS en los lotes
+            inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
+
+            // Mantener sincronizado el campo estático stock_llenos de la tabla productos
+            BigDecimal nuevoStockProducto = stockDisponible.subtract(cantidadSolicitada);
+            producto.setStockLlenos(nuevoStockProducto);
             productoRepository.save(producto);
 
             DetallePedido detalle = new DetallePedido();
@@ -212,6 +275,21 @@ public class PedidoServiceImplement implements PedidoService {
             montoAcumulado = montoAcumulado.add(importeLinea);
 
             detalleRepository.save(detalle);
+
+            // Registrar préstamo de envases si corresponde
+            if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
+                if (item.cantidadPrestada() > item.cantidad()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
+                }
+                com.gas.sistema_gas.Model.ControlEnvase prestamo = new com.gas.sistema_gas.Model.ControlEnvase();
+                prestamo.setPedido(pedidoGuardado);
+                prestamo.setProducto(producto);
+                prestamo.setCliente(pedidoGuardado.getCliente());
+                prestamo.setCantidadPrestada(item.cantidadPrestada());
+                prestamo.setEstado("PRESTADO");
+                controlEnvaseRepository.save(prestamo);
+            }
         }
 
         pedidoGuardado.setSubtotal(montoAcumulado);
@@ -263,18 +341,39 @@ public class PedidoServiceImplement implements PedidoService {
                 totalPagos = totalPagos.add(pagoDto.monto());
             }
 
-            if (totalPagos.compareTo(montoAcumulado) != 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "El total de los pagos debe ser igual al monto total de la venta");
+            if (pedidoGuardado.getFechaLimitePago() == null) {
+                boolean esPendienteDomicilio = "DOMICILIO".equalsIgnoreCase(pedidoGuardado.getTipoVenta()) 
+                        && "PENDIENTE".equalsIgnoreCase(pedidoGuardado.getEstadoPedido());
+                
+                if (esPendienteDomicilio && totalPagos.compareTo(BigDecimal.ZERO) == 0) {
+                    // Permitido: no hay pagos registrados aún porque se cobrará al entregar
+                } else if (totalPagos.compareTo(montoAcumulado) != 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El total de los pagos debe ser igual al monto total de la venta al contado.");
+                }
+            } else {
+                if (totalPagos.compareTo(montoAcumulado) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El total de los pagos no puede superar el monto total de la venta");
+                }
             }
 
             PedidoDTO.PagoCreate pagoPrincipal = pagosDto.get(0);
             MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
             pedidoGuardado.setMetodoPago(metodoPagoPrincipal);
             pedidoGuardado.setNumOperacion(pagoPrincipal.numOperacion());
-            pedidoGuardado.setEstadoPago("PAGADO");
+
+            if (totalPagos.compareTo(montoAcumulado) == 0) {
+                pedidoGuardado.setEstadoPago("PAGADO");
+            } else {
+                pedidoGuardado.setEstadoPago("CREDITO");
+            }
         } else {
-            pedidoGuardado.setEstadoPago("PENDIENTE");
+            if (pedidoGuardado.getFechaLimitePago() != null) {
+                pedidoGuardado.setEstadoPago("CREDITO");
+            } else {
+                pedidoGuardado.setEstadoPago("PENDIENTE");
+            }
         }
 
         return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
@@ -317,11 +416,22 @@ public class PedidoServiceImplement implements PedidoService {
 
         for (DetallePedido detalle : detalles) {
             Producto producto = detalle.getProducto();
-            
-            // 📈 SUMA DE STOCK: Convertimos la cantidad del detalle a BigDecimal y usamos .add()
             BigDecimal cantidadADevolver = BigDecimal.valueOf(detalle.getCantidad());
-            producto.setStockLlenos(producto.getStockLlenos().add(cantidadADevolver));
             
+            // Devolver stock al último lote de este producto
+            List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
+            if (!lotes.isEmpty()) {
+                com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
+                ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadADevolver));
+                inventarioLoteRepository.save(ultimoLote);
+            }
+
+            // Sincronizar el campo estático stock_llenos
+            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            producto.setStockLlenos(stockDisponible);
             productoRepository.save(producto);
         }
 
@@ -346,15 +456,22 @@ public class PedidoServiceImplement implements PedidoService {
 
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(id);
         List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(id);
+        List<com.gas.sistema_gas.Model.ControlEnvase> prestamos = controlEnvaseRepository.findByPedido_Id(id);
 
-        List<PedidoDTO.DetalleResponse> detallesDto = detalles.stream().map(det ->
-            new PedidoDTO.DetalleResponse(
+        List<PedidoDTO.DetalleResponse> detallesDto = detalles.stream().map(det -> {
+            Integer cantPrestada = prestamos.stream()
+                .filter(p -> p.getProducto().getId().equals(det.getProducto().getId()))
+                .map(com.gas.sistema_gas.Model.ControlEnvase::getCantidadPrestada)
+                .findFirst()
+                .orElse(0);
+            return new PedidoDTO.DetalleResponse(
                 det.getProducto().getId(),
                 det.getProducto().getNombre(),
                 det.getCantidad(),
-                det.getPrecioUnitario()
-            )
-        ).collect(Collectors.toList());
+                det.getPrecioUnitario(),
+                cantPrestada
+            );
+        }).collect(Collectors.toList());
 
         List<PedidoDTO.PagoResponse> pagosDto = pagos.stream().map(pago ->
             new PedidoDTO.PagoResponse(
@@ -377,6 +494,8 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
             pedido.getObservaciones(),
             pedido.getEstadoPedido(),
+            pedido.getTipoVenta(),
+            pedido.getFechaLimitePago(),
             detallesDto,
             pagosDto
         );

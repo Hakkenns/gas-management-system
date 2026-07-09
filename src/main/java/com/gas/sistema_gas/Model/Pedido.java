@@ -77,6 +77,12 @@ public class Pedido {
     @JoinColumn(name = "id_metodo")
     private MetodoPago metodoPago;
 
+    @Column(name = "tipo_venta", nullable = false, length = 20)
+    private String tipoVenta = "DOMICILIO"; // LOCAL o DOMICILIO
+
+    @Column(name = "fecha_limite_pago")
+    private LocalDateTime fechaLimitePago;
+
     // 3. Auditoría automatizada de verdad (Compatibilidad total con la base de datos)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false, 
             columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")

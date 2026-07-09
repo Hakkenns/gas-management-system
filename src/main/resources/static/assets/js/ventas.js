@@ -1,694 +1,715 @@
-// assets/js/ventas.js
-// Maneja ventas, crédito, gestión de cuotas y pagos
+console.log("ventas.js cargado correctamente en el cliente");
 
 $(function() {
-    // Estado
-    let detalle = [];
-    let cuotasCalculadas = [];
-    let creditoConfigured = false;
-    let currentGestionVentaId = null;
+    let detallesVenta = [];
+    let pagosVenta = [];
 
-    // Helpers
-    function parseNumber(v) {
-        const n = Number(String(v).replace(/[^\d.-]+/g, '').replace(',', '.'));
-        return isNaN(n) ? 0 : n;
+    function parseMoney(value) {
+        const number = Number(String(value).replace(/[^0-9.-]+/g, '').replace(',', '.'));
+        return isNaN(number) ? 0 : number;
     }
 
-    function formatoMoneda(n) {
-        return parseNumber(n).toFixed(2);
+    function formatMoney(value) {
+        return parseMoney(value).toFixed(2);
     }
 
-    function actualizarTotales() {
-        const total = detalle.reduce((s, d) => s + parseNumber(d.subtotal), 0);
-        $('#venta-total').text(formatoMoneda(total));
-    }
-
-    function sanitizeDetalle() {
-        return detalle.map(d => ({
-            id_producto: d.id_producto,
-            cantidad: parseInt(d.cantidad || 0, 10),
-            precio_unitario: parseFloat(parseNumber(d.precio_unitario)),
-            descuento: parseFloat(parseNumber(d.descuento || 0)),
-            subtotal: parseFloat(parseNumber(d.subtotal || 0))
-        }));
-    }
-
-    function renderTablaProductos() {
-        const $tbody = $('#tabla-productos tbody').empty();
-        if (detalle.length === 0) {
-            $tbody.append('<tr><td colspan="8" class="text-center">Sin productos</td></tr>');
+    // Toggle fields based on sale type (Local / Domicilio)
+    function actualizarCamposPorTipoVenta() {
+        const tipo = $('#select-tipo-venta').val();
+        if (tipo === 'LOCAL') {
+            $('.group-campos-domicilio').hide();
+            $('#input-direccion-cliente').val('');
+            $('#input-referencia-cliente').val('');
+            $('#select-motorizado').val('');
+            
+            // Forzar y ocultar select-estado-pedido a ENTREGADO
+            $('#select-estado-pedido').val('ENTREGADO');
+            $('#group-estado-pedido-parent').hide();
         } else {
-            detalle.forEach((d, idx) => {
-                const $tr = $('<tr>');
-                $tr.append(`<td>${d.id_producto}</td>`);
-                $tr.append(`<td>${d.nombre}</td>`);
-                $tr.append(`<td class="text-center">${d.stock}</td>`);
-                $tr.append(`<td class="text-center"><input type="number" min="1" max="${d.stock}" value="${d.cantidad}" class="form-control input-cant" data-idx="${idx}"></td>`);
-                $tr.append(`<td class="text-right">S/ ${formatoMoneda(d.precio_unitario)}</td>`);
-                $tr.append(`<td class="text-right">S/ ${formatoMoneda(d.descuento || 0)}</td>`);
-                $tr.append(`<td class="text-right">S/ <span class="subtotal" data-idx="${idx}">${formatoMoneda(d.subtotal)}</span></td>`);
-                $tr.append(`<td class="text-center"><button class="btn btn-danger btn-sm btn-eliminar" data-idx="${idx}"><i class="fas fa-trash"></i></button></td>`);
-                $tbody.append($tr);
-            });
+            $('.group-campos-domicilio').show();
+            $('#group-estado-pedido-parent').show();
+            // Si el estado del pedido es ENTREGADO y es una nueva venta a domicilio, por defecto poner PENDIENTE
+            if (!$('#input-id-pedido').val() && $('#select-estado-pedido').val() === 'ENTREGADO') {
+                $('#select-estado-pedido').val('PENDIENTE');
+            }
         }
-        actualizarTotales();
     }
 
-    // =========================
-    // LÓGICA DE CRÉDITO
-    // =========================
+    $('#select-tipo-venta').on('change', function() {
+        actualizarCamposPorTipoVenta();
+    });
 
-    function configurarEventoCambioFormaPago() {
-        $(document).off('change', '#venta-forma-pago').on('change', '#venta-forma-pago', function() {
-            const formaPago = $(this).val();
-            if (formaPago === 'Credito') {
-                $('#btn-abrir-credito').show();
-                creditoConfigured = false;
-                $('#div-resumen-credito').hide();
+    function renderizarPagos() {
+        const tbody = $('#tabla-pagos-venta').empty();
+        if (pagosVenta.length === 0) {
+            tbody.append('<tr><td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td></tr>');
+            actualizarTotalPagos();
+            return;
+        }
+
+        pagosVenta.forEach((pago, index) => {
+            const tr = $(
+                `<tr>
+                    <td>${pago.metodoNombre}</td>
+                    <td>S/ ${formatMoney(pago.monto)}</td>
+                    <td>${pago.numOperacion || ''}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm btn-remover-pago" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`
+            );
+            tbody.append(tr);
+        });
+        actualizarTotalPagos();
+    }
+
+    function actualizarTotalPagos() {
+        // No hay campo de texto acumulativo de pagos, pero si existiera, se actualizaría aquí.
+    }
+
+    function actualizarCamposMetodoPago() {
+        const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
+        const esDigital = metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin';
+
+        if (esDigital) {
+            $('#row-num-operacion').show();
+            $('#input-num-operacion').prop('required', true);
+        } else {
+            $('#row-num-operacion').hide();
+            $('#input-num-operacion').prop('required', false).val('');
+        }
+    }
+
+    $('#select-metodo').on('change', function() {
+        actualizarCamposMetodoPago();
+    });
+
+    function actualizarTotal() {
+        const subtotal = detallesVenta.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
+        $('#txt-subtotal').text(formatMoney(subtotal));
+        $('#txt-total-general').text(formatMoney(subtotal));
+    }
+
+    function configurarLimitesFechaCredito() {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const maxDate = new Date(today);
+        maxDate.setDate(today.getDate() + 2);
+
+        const formatDate = (d) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        $('#input-fecha-limite').attr('min', formatDate(today));
+        $('#input-fecha-limite').attr('max', formatDate(maxDate));
+        $('#input-fecha-limite').val(formatDate(tomorrow));
+    }
+
+    $(document).on('change', '#select-condicion-pago', function() {
+        const condicion = $(this).val();
+        if (condicion === 'CREDITO') {
+            $('#group-fecha-limite').show();
+            configurarLimitesFechaCredito();
+            $('#select-metodo').prop('required', false);
+        } else {
+            $('#group-fecha-limite').hide();
+            $('#input-fecha-limite').val('');
+            $('#select-metodo').prop('required', true);
+        }
+    });
+
+    function limpiarClienteSeleccionado() {
+        $('#input-id-cliente').val('');
+        $('#input-nombre-cliente').val('');
+        $('#input-telefono-cliente').val('');
+        $('#input-direccion-cliente').val('');
+        $('#input-referencia-cliente').val('');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
+        $('#cliente-feedback').text('Ingrese el DNI y busque el cliente, o complete los datos manualmente.');
+    }
+
+    function mostrarCliente(cliente) {
+        $('#input-id-cliente').val(cliente.id);
+        $('#input-nombre-cliente').val(cliente.nombre);
+        $('#input-telefono-cliente').val(cliente.telefono);
+        $('#input-direccion-cliente').val(cliente.direccion || '');
+        $('#input-referencia-cliente').val(cliente.referencia || '');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
+        $('#cliente-feedback').text('Cliente encontrado. Si desea usar datos distintos, borre el DNI o comience nuevamente.');
+    }
+
+    function buscarClientePorDni(dni) {
+        if (!dni) {
+            limpiarClienteSeleccionado();
+            $('#cliente-feedback').text('DNI opcional, complete los datos del cliente manualmente.');
+            return;
+        }
+        if (!/^[0-9]{8}$/.test(dni)) {
+            limpiarClienteSeleccionado();
+            $('#input-dni-cliente').val(dni);
+            $('#cliente-feedback').text('Ingrese un DNI válido de 8 dígitos.');
+            return;
+        }
+
+        fetch(`/ventas/cliente?dni=${dni}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Cliente no encontrado');
+                }
+                return response.json();
+            })
+            .then(cliente => mostrarCliente(cliente))
+            .catch(() => {
+                limpiarClienteSeleccionado();
+                $('#input-dni-cliente').val(dni);
+                $('#cliente-feedback').text('No se encontró un cliente con ese DNI. Complete los datos y la venta creará un nuevo cliente.');
+            });
+    }
+
+    function renderizarFilas() {
+        const isMotorizado = $('#session-perfil-id').val() == '4';
+        const estadoPedido = $('#select-estado-pedido').val();
+        const isPedidoEditable = !$('#input-id-pedido').val() || estadoPedido === 'PENDIENTE';
+
+        const tbody = $('#tabla-filas-venta').empty();
+        detallesVenta.forEach((item, index) => {
+            const subtotal = item.cantidad * item.precioUnitario;
+            
+            const inputPrestados = isPedidoEditable 
+                ? `<input type="number" class="form-control form-control-sm input-cantidad-prestada-fila" 
+                          min="0" max="${item.cantidad}" value="${item.cantidadPrestada || 0}" 
+                          style="width: 80px;" data-index="${index}">`
+                : `<span>${item.cantidadPrestada || 0}</span>`;
+
+            const tr = $(
+                `<tr>
+                    <td>${item.nombreProducto}</td>
+                    <td>${item.cantidad}</td>
+                    <td>S/ ${formatMoney(item.precioUnitario)}</td>
+                    <td>${inputPrestados}</td>
+                    <td>S/ ${formatMoney(subtotal)}</td>
+                    <td class="text-center col-quitar-producto" ${isMotorizado ? 'style="display:none;"' : ''}>
+                        <button type="button" class="btn btn-danger btn-sm btn-remover-item" data-index="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`
+            );
+            tbody.append(tr);
+        });
+        actualizarTotal();
+
+        if (isMotorizado) {
+            $('th.col-quitar-producto').hide();
+        } else {
+            $('th.col-quitar-producto').show();
+        }
+    }
+
+    // Modal triggers for creating new sale (Local or Domicilio)
+    $(document).on('click', '.btn-crear-venta', function() {
+        const tipoDefault = $(this).data('tipo'); // LOCAL or DOMICILIO
+        
+        detallesVenta = [];
+        pagosVenta = [];
+        
+        try {
+            if ($('#form-venta')[0]) {
+                $('#form-venta')[0].reset();
+            }
+        } catch(e) {
+            console.error("Error al reiniciar el formulario:", e);
+        }
+        
+        $('#tabla-filas-venta').empty();
+        $('#tabla-pagos-venta').html('<tr><td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td></tr>');
+        $('#txt-total-general').text('0.00');
+        $('#txt-subtotal').text('0.00');
+
+        $('#input-id-pedido').val('');
+        limpiarClienteSeleccionado();
+        $('#input-dni-cliente').val('');
+        $('#select-motorizado').val('');
+        $('#select-condicion-pago').val('CONTADO');
+        $('#group-fecha-limite').hide();
+        $('#input-fecha-limite').val('');
+        $('#input-cantidad-prestada').val('0');
+        
+        // Configurar y bloquear el tipo de venta
+        $('#select-tipo-venta').val(tipoDefault).prop('disabled', true);
+        actualizarCamposPorTipoVenta();
+        actualizarCamposMetodoPago();
+
+        const titulo = tipoDefault === 'LOCAL' ? 'Registrar nueva venta local' : 'Registrar nueva venta a domicilio';
+        $('#modal-title-venta').text(titulo);
+
+        // Mostrar el modal INMEDIATAMENTE
+        $('#modal-venta').modal('show');
+        $('#input-codigo').val('Cargando...');
+
+        fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
+            .then(r => {
+                if (!r.ok) throw new Error("Error HTTP " + r.status);
+                return r.json();
+            })
+            .then(data => {
+                if (data && data.codigo) {
+                    $('#input-codigo').val(data.codigo);
+                } else {
+                    $('#input-codigo').val('NV001-0000');
+                }
+            })
+            .catch(err => {
+                console.warn("Fallo al obtener correlativo, usando por defecto:", err);
+                $('#input-codigo').val('NV001-0000');
+            });
+    });
+
+    $(document).on('click', '.btn-editar-venta', function() {
+        const ventaId = $(this).data('id');
+        if (!ventaId) return;
+
+        fetch(`/ventas/editar/${ventaId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('No se pudo cargar los datos de la venta para editar.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                $('#form-venta')[0].reset();
+                detallesVenta = [];
+                pagosVenta = [];
+
+                $('#input-id-pedido').val(data.idPedido);
+                $('#input-codigo').val(data.codigo);
+                
+                const tipoStr = data.tipoVenta || 'LOCAL';
+                $('#select-tipo-venta').val(tipoStr).prop('disabled', true);
+                
+                const titulo = tipoStr === 'LOCAL' ? 'Editar Venta Local: ' : 'Editar Venta Domicilio: ';
+                $('#modal-title-venta').text(titulo + data.codigo);
+
+                $('#input-id-cliente').val(data.idCliente);
+                $('#input-dni-cliente').val(data.dniCliente);
+                $('#input-nombre-cliente').val(data.nombreCliente);
+                $('#input-telefono-cliente').val(data.telefonoCliente);
+                
+                actualizarCamposPorTipoVenta();
+                
+                if (tipoStr === 'DOMICILIO') {
+                    $('#input-direccion-cliente').val(data.direccionCliente || '');
+                    $('#input-referencia-cliente').val(data.referenciaCliente || '');
+                    $('#select-motorizado').val(data.idEmpleado || '');
+                    $('#select-estado-pedido').val(data.estadoPedido || 'PENDIENTE');
+                }
+
+                if (data.fechaLimitePago) {
+                    $('#select-condicion-pago').val('CREDITO');
+                    $('#group-fecha-limite').show();
+                    configurarLimitesFechaCredito();
+                    $('#input-fecha-limite').val(data.fechaLimitePago.split('T')[0]);
+                } else {
+                    $('#select-condicion-pago').val('CONTADO');
+                    $('#group-fecha-limite').hide();
+                    $('#input-fecha-limite').val('');
+                }
+
+                $('#input-observaciones').val(data.observaciones || '');
+
+                const perfilId = $('#session-perfil-id').val();
+                if (perfilId == '4') {
+                    // Bloqueo para motorizados
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
+                    $('#btn-buscar-cliente').hide();
+                    $('#select-motorizado').prop('disabled', true);
+                    $('#input-observaciones').prop('readonly', true);
+                    $('#card-agregar-productos').hide();
+                } else {
+                    // Operador normal
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
+                    $('#btn-buscar-cliente').show();
+                    $('#select-motorizado').prop('disabled', false);
+                    $('#input-observaciones').prop('readonly', false);
+                    $('#card-agregar-productos').show();
+                }
+
+                data.detalles.forEach(detalle => {
+                    detallesVenta.push({
+                        idProducto: detalle.idProducto,
+                        nombreProducto: detalle.nombreProducto,
+                        cantidad: detalle.cantidad,
+                        precioUnitario: detalle.precioUnitario,
+                        cantidadPrestada: detalle.cantidadPrestada || 0
+                    });
+                });
+
+                data.pagos.forEach(pago => {
+                    pagosVenta.push({
+                        idMetodoPago: pago.idMetodoPago,
+                        metodoNombre: pago.metodoNombre,
+                        monto: pago.monto,
+                        numOperacion: pago.numOperacion
+                    });
+                });
+
+                renderizarFilas();
+                renderizarPagos();
+                actualizarCamposMetodoPago();
+                $('#modal-venta').modal('show');
+            })
+            .catch(error => {
+                alert(error.message);
+            });
+    });
+
+    $('#btn-buscar-cliente').on('click', function() {
+        buscarClientePorDni($('#input-dni-cliente').val().trim());
+    });
+
+    $('#input-dni-cliente').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            buscarClientePorDni($(this).val().trim());
+        }
+    });
+
+    $('#input-dni-cliente').on('input', function() {
+        if ($(this).val().trim() === '') {
+            limpiarClienteSeleccionado();
+        }
+    });
+
+    $('#btn-buscar-producto').on('click', function() {
+        $('#buscar-producto-filtro').val('');
+        $('#tabla-busqueda-productos tbody tr').show();
+        $('#select-buscar-categoria').val('');
+        $('#modal-buscar-producto').modal('show');
+    });
+
+    $('#buscar-producto-filtro').on('input', filtrarProductosModal);
+    $('#select-buscar-categoria').on('change', filtrarProductosModal);
+
+    function filtrarProductosModal() {
+        const text = $('#buscar-producto-filtro').val().toLowerCase().trim();
+        const cat = $('#select-buscar-categoria').val();
+
+        $('#tabla-busqueda-productos tbody tr').each(function() {
+            const row = $(this);
+            const name = row.find('td').eq(0).text().toLowerCase();
+            const rowCat = String(row.data('categoria') || '');
+
+            const matchText = name.indexOf(text) > -1;
+            const matchCat = !cat || rowCat === cat;
+
+            if (matchText && matchCat) {
+                row.show();
             } else {
-                $('#btn-abrir-credito').hide();
-                $('#div-resumen-credito').hide();
-                creditoConfigured = false;
-                cuotasCalculadas = [];
-                $('#tabla-cuotas-credito tbody').empty();
+                row.hide();
             }
         });
     }
 
-    $('#btn-abrir-credito').on('click', function() {
-        const total = parseNumber($('#venta-total').text());
-        if (total <= 0) {
-            alert('Agrega productos antes de configurar el crédito');
-            return;
-        }
-        $('#credito-deuda-total').text(formatoMoneda(total));
-        $('#modal-credito').modal('show');
+    $(document).on('click', '.btn-seleccionar-producto', function() {
+        const row = $(this).closest('tr');
+        const id = row.data('id');
+        const nombre = row.data('nombre');
+        const precio = row.data('precio');
+
+        $('#select-producto').val(id);
+        $('#input-producto-nombre').val(nombre);
+        $('#select-precio').val(precio);
+        $('#select-cantidad').val(1);
+        $('#input-cantidad-prestada').val(0);
+
+        $('#modal-buscar-producto').modal('hide');
     });
 
-    function actualizarDeudaCredito() {
-        const total = parseNumber($('#venta-total').text());
-        const pagoInicial = parseNumber($('#credito-pago-inicial').val() || 0);
-        const deuda = Math.max(0, total - pagoInicial);
-        $('#credito-deuda-total').text(formatoMoneda(deuda));
-        calcularCuotasCredito();
-    }
+    $('#btn-agregar-pago').on('click', function() {
+        const metodoId = $('#select-metodo').val();
+        const metodoNombre = $('#select-metodo option:selected').text().trim();
+        const monto = parseMoney($('#input-monto-pago').val());
+        let numOperacion = $('#input-num-operacion').val().trim() || null;
 
-    $(document).off('change', '#credito-pago-inicial').on('change', '#credito-pago-inicial', function() {
-        actualizarDeudaCredito();
-    });
-
-    function calcularCuotasCredito() {
-        const numCuotas = parseInt($('#credito-num-cuotas').val() || 0, 10);
-        const intervalo = $('#credito-intervalo').val();
-        const pagoInicial = parseNumber($('#credito-pago-inicial').val() || 0);
-        const totalVenta = parseNumber($('#venta-total').text() || 0);
-
-        if (numCuotas <= 0 || !intervalo || totalVenta <= 0) {
-            $('#div-tabla-cuotas-credito').hide();
-            cuotasCalculadas = [];
+        if (!metodoId) {
+            alert('Seleccione un método de pago.');
+            return;
+        }
+        if (monto <= 0) {
+            alert('Ingrese un monto de pago mayor a cero.');
+            return;
+        }
+        if ((metodoNombre.toLowerCase() === 'yape' || metodoNombre.toLowerCase() === 'plin') && !numOperacion) {
+            alert('El número de operación es obligatorio para Yape y Plin.');
             return;
         }
 
-        if (pagoInicial > totalVenta) {
-            alert('El pago inicial no puede ser mayor al total');
-            $('#credito-pago-inicial').val('0.00');
-            actualizarDeudaCredito();
-            return;
-        }
-
-        const deuda = Math.max(0, totalVenta - pagoInicial);
-        let montoPorCuota = parseFloat((deuda / numCuotas).toFixed(2));
-
-        cuotasCalculadas = [];
-        const diasIntervalo = {
-            'QUINCENAL': 15,
-            'MENSUAL': 30,
-            'BIMESTRAL': 60,
-            'TRIMESTRAL': 90
-        }[intervalo] || 30;
-
-        const hoy = new Date();
-        for (let i = 1; i <= numCuotas; i++) {
-            const fecha = new Date(hoy);
-            fecha.setDate(fecha.getDate() + (diasIntervalo * i));
-            cuotasCalculadas.push({
-                numero: i,
-                monto: montoPorCuota,
-                fecha: fecha.toISOString().split('T')[0],
-                intervalo: intervalo
-            });
-        }
-
-        // Ajuste por redondeo en la última cuota
-        const suma = cuotasCalculadas.reduce((s, c) => s + parseNumber(c.monto), 0);
-        const diff = parseFloat((deuda - suma).toFixed(2));
-        if (Math.abs(diff) >= 0.01 && cuotasCalculadas.length > 0) {
-            cuotasCalculadas[cuotasCalculadas.length - 1].monto = parseFloat((cuotasCalculadas[cuotasCalculadas.length - 1].monto + diff).toFixed(2));
-        }
-
-        renderTablaCuotasCredito();
-        $('#div-tabla-cuotas-credito').show();
-    }
-
-    function renderTablaCuotasCredito() {
-        const $tbody = $('#tabla-cuotas-credito tbody').empty();
-        if (cuotasCalculadas.length === 0) {
-            $tbody.append('<tr><td colspan="3" class="text-center">Sin cuotas</td></tr>');
-            return;
-        }
-        cuotasCalculadas.forEach(c => {
-            const $tr = $('<tr>');
-            $tr.append(`<td class="text-center"><strong>${c.numero}</strong></td>`);
-            $tr.append(`<td class="text-center"><strong>S/ ${formatoMoneda(c.monto)}</strong></td>`);
-            $tr.append(`<td class="text-center">${c.fecha}</td>`);
-            $tbody.append($tr);
+        pagosVenta.push({
+            idMetodoPago: parseInt(metodoId, 10),
+            metodoNombre: metodoNombre,
+            monto: monto,
+            numOperacion: numOperacion
         });
-    }
 
-    $(document).off('change', '#credito-num-cuotas').on('change', '#credito-num-cuotas', function() {
-        calcularCuotasCredito();
+        $('#select-metodo').val('');
+        $('#input-monto-pago').val('');
+        $('#input-num-operacion').val('');
+        actualizarCamposMetodoPago();
+        renderizarPagos();
     });
 
-    $(document).off('change', '#credito-intervalo').on('change', '#credito-intervalo', function() {
-        calcularCuotasCredito();
+    $(document).on('click', '.btn-remover-pago', function() {
+        const index = $(this).data('index');
+        pagosVenta.splice(index, 1);
+        renderizarPagos();
     });
 
-    $('#btn-guardar-credito').on('click', function() {
-        const numCuotas = parseInt($('#credito-num-cuotas').val() || 0, 10);
-        const intervalo = $('#credito-intervalo').val();
+    $('#btn-agregar-detalle').on('click', function() {
+        const idProducto = $('#select-producto').val();
+        const nombreProducto = $('#input-producto-nombre').val();
+        const cantidad = parseInt($('#select-cantidad').val(), 10) || 0;
+        const precio = parseMoney($('#select-precio').val());
+        const cantidadPrestada = parseInt($('#input-cantidad-prestada').val(), 10) || 0;
 
-        if (numCuotas <= 0 || !intervalo) {
-            alert('Debes seleccionar N° de cuotas e intervalo de pago');
+        if (!idProducto || cantidad < 1 || precio <= 0) {
+            alert('Seleccione un producto y complete cantidad/precio válidos.');
             return;
         }
 
-        if (cuotasCalculadas.length === 0) {
-            alert('Las cuotas no se calcularon. Intenta de nuevo.' );
+        if (cantidadPrestada > cantidad) {
+            alert('La cantidad de envases prestados no puede ser mayor a la cantidad comprada.');
             return;
         }
 
-        const pagoInicial = parseNumber($('#credito-pago-inicial').val() || 0);
-        const deuda = parseNumber($('#credito-deuda-total').text() || 0);
-
-        $('#resumen-pago-inicial').text(formatoMoneda(pagoInicial));
-        $('#resumen-num-cuotas').text(numCuotas);
-        $('#resumen-intervalo').text(intervalo);
-        $('#resumen-deuda').text(formatoMoneda(deuda));
-        $('#div-resumen-credito').show();
-
-        // Guardar el pago_inicial en un atributo de datos
-        $('body').attr('data-pago-inicial', pagoInicial);
-
-        creditoConfigured = true;
-    });
-
-    $('#modal-credito').on('show.bs.modal', function() {
-        const total = parseNumber($('#venta-total').text() || 0);
-        $('#credito-deuda-total').text(formatoMoneda(total));
-    });
-
-    // =========================
-    // CARGA Y BÚSQUEDAS
-    // =========================
-
-    function cargarCategorias() {
-        $.getJSON('views/Ventas.php?action=obtener_categorias')
-            .done(function(resp) {
-                const $select = $('#filtro-categoria').empty().append('<option value="">-- Todas las categorías --</option>');
-                if (resp && resp.data && Array.isArray(resp.data)) {
-                    resp.data.forEach(cat => {
-                        $select.append(`<option value="${cat.id}">${cat.nombre}</option>`);
-                    });
-                }
-            })
-            .fail(function() {
-                console.error('Error cargando categorías');
-            });
-    }
-
-    function cargarProductosModal(id_categoria = null) {
-        const $tbody = $('#tabla-buscar-productos tbody').empty();
-        let url = 'views/Ventas.php?action=obtener_productos';
-        if (id_categoria && id_categoria > 0) url += '&categoria=' + encodeURIComponent(id_categoria);
-
-        $.getJSON(url)
-            .done(function(resp) {
-                const data = resp.data || [];
-                if (!data.length) {
-                    $tbody.append('<tr><td colspan="5" class="text-center">No hay productos disponibles</td></tr>');
-                    return;
-                }
-                data.forEach(p => {
-                    const precio = parseNumber(p.precio_venta || p.precio || 0).toFixed(2);
-                    const $tr = $('<tr>');
-                    $tr.append(`<td>${p.id}</td>`);
-                    $tr.append(`<td>${p.nombre || p.descripcion || ''}</td>`);
-                    $tr.append(`<td class="text-center">${p.stock || 0}</td>`);
-                    $tr.append(`<td class="text-right">S/ ${precio}</td>`);
-                    $tr.append(`<td class="text-center"><button class="btn btn-primary btn-sm btn-add-prod" data-id="${p.id}" data-nombre="${p.nombre || p.descripcion || ''}" data-stock="${p.stock || 0}" data-precio="${precio}"><i class="fas fa-plus"></i></button></td>`);
-                    $tbody.append($tr);
-                });
-            })
-            .fail(function(xhr, status, error) {
-                console.error('Error cargando productos:', error);
-                $tbody.append('<tr><td colspan="5" class="text-danger text-center">Error cargando productos</td></tr>');
-            });
-    }
-
-    $('#btn-productos').on('click', function() {
-        $('#filtro-categoria').empty().append('<option value="">-- Todas las categorías --</option>');
-        cargarCategorias();
-        cargarProductosModal();
-        $('#modal-productos').modal('show');
-    });
-
-    $(document).on('change', '#filtro-categoria', function() {
-        const id_categoria = $(this).val();
-        cargarProductosModal(id_categoria || null);
-    });
-
-    $(document).on('keyup', '#buscarProductoVenta', function() {
-        const termino = $(this).val().toLowerCase();
-        $('#tabla-buscar-productos tbody tr').each(function() {
-            const nombre = $(this).find('td:eq(1)').text().toLowerCase();
-            $(this).toggle(nombre.indexOf(termino) !== -1);
-        });
-    });
-
-    // =========================
-    // DETALLE DE PRODUCTOS
-    // =========================
-
-    $(document).on('click', '.btn-add-prod', function() {
-        const $b = $(this);
-        const p = {
-            id_producto: $b.data('id'),
-            nombre: $b.data('nombre'),
-            stock: parseInt($b.data('stock') || 0, 10),
-            cantidad: 1,
-            precio_unitario: parseFloat(parseNumber($b.data('precio') || 0)),
-            descuento: 0,
-            subtotal: parseFloat(parseNumber($b.data('precio') || 0))
-        };
-        const idx = detalle.findIndex(x => x.id_producto == p.id_producto);
-        if (idx >= 0) {
-            const nuevo = Math.min(detalle[idx].cantidad + 1, p.stock);
-            detalle[idx].cantidad = nuevo;
-            detalle[idx].subtotal = parseFloat((nuevo * detalle[idx].precio_unitario - (detalle[idx].descuento || 0)).toFixed(2));
+        const existente = detallesVenta.find(item => item.idProducto === idProducto);
+        if (existente) {
+            existente.cantidad += cantidad;
+            existente.cantidadPrestada = (existente.cantidadPrestada || 0) + cantidadPrestada;
+            if (existente.cantidadPrestada > existente.cantidad) {
+                existente.cantidadPrestada = existente.cantidad;
+            }
         } else {
-            detalle.push(p);
-        }
-        renderTablaProductos();
-    });
-
-    $(document).on('change', '.input-cant', function() {
-        const idx = $(this).data('idx');
-        let val = parseInt($(this).val() || 1, 10);
-        if (isNaN(val) || val < 1) val = 1;
-        const max = parseInt($(this).attr('max') || 999999, 10);
-        if (val > max) val = max;
-        $(this).val(val);
-        if (detalle[idx]) {
-            detalle[idx].cantidad = val;
-            detalle[idx].subtotal = parseFloat((detalle[idx].cantidad * detalle[idx].precio_unitario - (detalle[idx].descuento || 0)).toFixed(2));
-            $(`.subtotal[data-idx="${idx}"]`).text(formatoMoneda(detalle[idx].subtotal));
-            actualizarTotales();
-        }
-    });
-
-    $(document).on('click', '.btn-eliminar', function() {
-        const idx = $(this).data('idx');
-        detalle.splice(idx, 1);
-        renderTablaProductos();
-    });
-
-    // =========================
-    // CLIENTE / DNI
-    // =========================
-
-    $('#btn-buscar-dni').on('click', function() {
-        const doc = $('#venta-dni').val().trim();
-        $('#venta-nombre').val('');
-        $('#venta-correo').val('');
-        $('#venta-id-cliente').val('');
-
-        if (!doc || !/^\d+$/.test(doc)) {
-            alert('Ingrese sólo números (DNI 8 / RUC 11)');
-            return;
-        }
-
-        $.getJSON('views/Ventas.php?action=buscarClienteBD&documento=' + encodeURIComponent(doc))
-            .done(function(resp) {
-                if (!resp) return alert('Respuesta inválida');
-                if (resp.success && resp.data) {
-                    $('#venta-id-cliente').val(resp.data.id || '');
-                    $('#venta-nombre').val(resp.data.nombre || '');
-                    $('#venta-correo').val(resp.data.correo || '');
-                } else if (resp.found_in === 'API' && resp.data) {
-                    $('#venta-nombre').val(resp.data.nombre || '');
-                    $('#venta-correo').val('');
-                } else {
-                    alert(resp.message || 'Cliente no encontrado');
-                    $('#venta-correo').val('');
-                }
-            })
-            .fail(function() {
-                alert('Error conectando al servidor para buscar cliente');
+            detallesVenta.push({
+                idProducto,
+                nombreProducto,
+                cantidad,
+                precioUnitario: precio,
+                cantidadPrestada
             });
+        }
+
+        $('#select-producto').val('');
+        $('#input-producto-nombre').val('');
+        $('#select-cantidad').val('1');
+        $('#select-precio').val('');
+        $('#input-cantidad-prestada').val('0');
+        renderizarFilas();
     });
 
-    $('#btn-sin-cliente').on('click', function() {
-        $('#venta-dni').val('');
-        $('#venta-id-cliente').val('');
-        $('#venta-nombre').val('CLIENTE FINAL');
-        $('#venta-correo').val('');
+    $(document).on('click', '.btn-remover-item', function() {
+        const index = $(this).data('index');
+        detallesVenta.splice(index, 1);
+        renderizarFilas();
     });
 
-    // =========================
-    // CORRELATIVO
-    // =========================
-
-    $('#venta-comprobante').on('change', function() {
-        const tipo = $(this).val();
-        if (!tipo) return;
-        $.getJSON('views/Ventas.php?action=correlativo&tipo=' + encodeURIComponent(tipo))
-            .done(function(resp) {
-                if (resp && resp.success) {
-                    $('#venta-nro-doc').val(resp.n_venta);
-                } else {
-                    alert('Error obteniendo correlativo');
-                }
-            })
-            .fail(function() {
-                alert('Error al solicitar correlativo');
-            });
+    $(document).on('change', '.input-cantidad-prestada-fila', function() {
+        const index = $(this).data('index');
+        const val = parseInt($(this).val(), 10) || 0;
+        const item = detallesVenta[index];
+        if (item) {
+            if (val < 0) {
+                alert('La cantidad de envases prestados no puede ser negativa.');
+                $(this).val(0);
+                item.cantidadPrestada = 0;
+            } else if (val > item.cantidad) {
+                alert('La cantidad de envases prestados no puede ser mayor a la cantidad comprada.');
+                $(this).val(item.cantidad);
+                item.cantidadPrestada = item.cantidad;
+            } else {
+                item.cantidadPrestada = val;
+            }
+        }
     });
 
-    // =========================
-    // GUARDAR VENTA
-    // =========================
+    // Form submit validation & AJAX request
+    $('#form-venta').on('submit', function(e) {
+        e.preventDefault();
 
-    $('#btn-guardar-venta').on('click', function() {
-        if (detalle.length === 0) {
-            alert('Agrega al menos un producto');
+        if (detallesVenta.length === 0) {
+            alert('Debe agregar al menos un producto a la venta.');
             return;
         }
 
-        const tipo_comprobante = $('#venta-comprobante').val();
-        if (!tipo_comprobante) {
-            alert('Selecciona comprobante');
+        const tipoVenta = $('#select-tipo-venta').val();
+        const clientId = parseInt($('#input-id-cliente').val(), 10) || null;
+        const dniCliente = $('#input-dni-cliente').val().trim() || null;
+        const nombreCliente = $('#input-nombre-cliente').val().trim();
+        const telefonoCliente = $('#input-telefono-cliente').val().trim() || null;
+
+        if (!nombreCliente) {
+            alert('Debe completar el nombre del cliente.');
             return;
         }
 
-        const formaPagoVenta = $('#venta-forma-pago').val() || 'Contado';
-        if (formaPagoVenta === 'Credito') {
-            if (!creditoConfigured || cuotasCalculadas.length === 0) {
-                alert('Para crédito: Debes configurar el crédito correctamente');
+        let direccionCliente = null;
+        let referenciaCliente = null;
+        let idMotorizado = null;
+
+        if (tipoVenta === 'DOMICILIO') {
+            direccionCliente = $('#input-direccion-cliente').val().trim() || null;
+            idMotorizado = parseInt($('#select-motorizado').val(), 10) || null;
+            referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
+            if (!direccionCliente) {
+                alert('Debe completar la dirección de envío para ventas a domicilio.');
                 return;
             }
         }
 
-        // Construir valores numéricos seguros
-        const total = parseNumber($('#venta-total').text() || 0);
-        const pagoInicial = formaPagoVenta === 'Credito' ? parseFloat($('body').attr('data-pago-inicial') || $('#credito-pago-inicial').val() || 0) : 0;
-        const deuda = Math.max(0, total - pagoInicial);
+        const totalGeneral = parseMoney($('#txt-total-general').text());
+        const totalPagado = pagosVenta.reduce((sum, p) => sum + parseMoney(p.monto), 0);
+        const condicion = $('#select-condicion-pago').val();
 
-        // Prepara payload
+        // VALIDACIÓN DE CONDICIÓN DE PAGO
+        if (condicion === 'CONTADO') {
+            const estadoPedido = $('#select-estado-pedido').val();
+            // Para ventas a domicilio al contado en estado PENDIENTE, permitimos guardar sin pagos asociados.
+            // Para otros casos (Ventas Local o Domicilio ya entregado), el pago debe cubrir la totalidad.
+            const esPendienteDomicilio = (tipoVenta === 'DOMICILIO' && estadoPedido === 'PENDIENTE');
+            
+            if (esPendienteDomicilio && pagosVenta.length === 0 && !$('#select-metodo').val()) {
+                // Permitido guardar vacío.
+            } else {
+                if (pagosVenta.length === 0 && $('#select-metodo').val()) {
+                    const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
+                    if (Math.abs(montoInput - totalGeneral) > 0.01) {
+                        alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+                        return;
+                    }
+                } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
+                    alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
+                    return;
+                }
+            }
+        } else {
+            // A CRÉDITO
+            if (totalPagado > totalGeneral) {
+                alert('El total pagado no puede ser mayor al total general de la venta a crédito.');
+                return;
+            }
+            if (!$('#input-fecha-limite').val()) {
+                alert('Debe especificar una fecha límite de pago para ventas a crédito.');
+                return;
+            }
+        }
+
         const payload = {
-            tipo_comprobante: tipo_comprobante,
-            doc_cliente: $('#venta-dni').val().trim(),
-            nombre_cliente: $('#venta-nombre').val().trim() || 'CLIENTE ANÓNIMO',
-            correo_cliente: $('#venta-correo').val().trim() || '',
-            tipo_doc_cliente: ($('#venta-dni').val().trim().length === 11) ? 'RUC' : 'DNI',
-            id_cliente: $('#venta-id-cliente').val() || null,
-            forma_pago: $('#venta-forma').val() || 'Efectivo',
-            tipo_pago: $('#venta-forma').val() || 'Efectivo',
-            total: parseFloat(total),
-            total_general: parseFloat(total),
-            forma_pago_venta: formaPagoVenta,
-            pago_inicial: parseFloat(pagoInicial),
-            deuda_total: parseFloat(deuda),
-            num_cuotas: formaPagoVenta === 'Credito' ? parseInt($('#credito-num-cuotas').val() || 0, 10) : 0,
-            intervalo_pago: formaPagoVenta === 'Credito' ? ($('#credito-intervalo').val() || '') : '',
-            cuotas: formaPagoVenta === 'Credito' ? cuotasCalculadas.map(c => ({
-                numero: parseInt(c.numero, 10),
-                monto: parseFloat(parseNumber(c.monto)),
-                fecha: c.fecha,
-                intervalo: c.intervalo || ''
-            })) : [],
-            detalle: sanitizeDetalle()
+            idPedido: parseInt($('#input-id-pedido').val(), 10) || null,
+            idCliente: clientId,
+            dniCliente: dniCliente,
+            nombreCliente: nombreCliente,
+            direccionCliente: direccionCliente,
+            telefonoCliente: telefonoCliente,
+            referenciaCliente: referenciaCliente,
+            idEmpleado: idMotorizado,
+            estadoPedido: $('#select-estado-pedido').val(),
+            tipoVenta: tipoVenta,
+            fechaLimitePago: condicion === 'CREDITO' ? $('#input-fecha-limite').val() + 'T23:59:59' : null,
+            pagos: pagosVenta.map(pago => ({
+                idMetodoPago: pago.idMetodoPago,
+                monto: pago.monto,
+                numOperacion: pago.numOperacion
+            })),
+            observaciones: $('#input-observaciones').val(),
+            detalles: detallesVenta.map(item => ({
+                idProducto: parseInt(item.idProducto, 10),
+                cantidad: item.cantidad,
+                precioUnitario: item.precioUnitario,
+                cantidadPrestada: item.cantidadPrestada || 0
+            }))
         };
 
-        console.log('Payload a enviar:', payload);
+        const btnSubmit = $(this).find('button[type="submit"]');
+        btnSubmit.prop('disabled', true).text('Guardando...');
 
-        const $btn = $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Guardando...');
         $.ajax({
-            url: 'views/Ventas.php?action=guardar',
-            method: 'POST',
-            data: JSON.stringify(payload),
+            url: '/ventas',
+            type: 'POST',
             contentType: 'application/json',
-            dataType: 'json',
-            timeout: 30000,
+            data: JSON.stringify(payload),
             success: function(resp) {
-                console.log('Respuesta servidor (success):', resp);
-                if (resp && resp.success) {
-                    alert('Venta registrada correctamente');
+                if (resp.status === 'OK') {
                     $('#modal-venta').modal('hide');
-                    location.reload();
+                    window.location.reload();
                 } else {
-                    alert('Error: ' + (resp && resp.message ? resp.message : 'Respuesta inválida'));
-                    console.error('Respuesta servidor (success=false):', resp);
+                    alert(resp.message || 'No se pudo registrar la venta.');
                 }
             },
-            error: function(xhr, status, err) {
-                var texto = xhr.responseText || err || status;
-                try {
-                    var obj = JSON.parse(texto);
-                    texto = obj.message || JSON.stringify(obj);
-                } catch (e) {
-                    // no es JSON
+            error: function(xhr) {
+                let message = 'Error al registrar la venta.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
                 }
-                alert('Error en servidor: ' + texto);
-                console.error('AJAX error', status, err, xhr);
+                alert(message);
             },
             complete: function() {
-                $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Guardar Venta');
+                btnSubmit.prop('disabled', false).text('Guardar Venta');
             }
         });
     });
 
-    // =========================
-    // Ver productos de una venta
-    // =========================
-
-    $(document).on('click', '.btn-ver-productos', function() {
-        const id_venta = $(this).data('id');
-        const $tbody = $('#tabla-detalle-productos tbody').empty();
-
-        $.getJSON('views/Ventas.php?action=detalle&id=' + encodeURIComponent(id_venta))
-            .done(function(resp) {
-                if (resp && resp.success && resp.data) {
-                    const productos = resp.data;
-                    if (productos.length === 0) {
-                        $tbody.append('<tr><td colspan="6" class="text-center">Sin productos</td></tr>');
-                    } else {
-                        productos.forEach(p => {
-                            const $tr = $('<tr>');
-                            $tr.append(`<td>${p.id_producto}</td>`);
-                            $tr.append(`<td>${p.producto || 'N/A'}</td>`);
-                            $tr.append(`<td class="text-center">${p.cantidad}</td>`);
-                            $tr.append(`<td class="text-right">S/ ${parseFloat(p.precio_unitario).toFixed(2)}</td>`);
-                            $tr.append(`<td class="text-right">S/ ${parseFloat(p.descuento || 0).toFixed(2)}</td>`);
-                            $tr.append(`<td class="text-right">S/ ${parseFloat(p.subtotal).toFixed(2)}</td>`);
-                            $tbody.append($tr);
-                        });
-                    }
-                    $('.modal-backdrop').remove();
-                    $('#modal-ver-productos').modal('show');
-                } else {
-                    alert('Error cargando detalles de la venta');
-                }
-            })
-            .fail(function() {
-                alert('Error conectando al servidor');
-            });
-    });
-
-    // =========================
-    // GESTIÓN DE CUOTAS Y PAGOS
-    // =========================
-
-    function cargarGestionCuotas(id_venta) {
-        const $tbody = $('#tabla-gestion-cuotas tbody').empty();
-        $.getJSON('views/Ventas.php?action=obtener_cuotas&id=' + encodeURIComponent(id_venta))
-            .done(function(resp) {
-                if (!resp || !resp.success) {
-                    $tbody.append('<tr><td colspan="5" class="text-center text-danger">Error cargando cuotas</td></tr>');
-                    return;
-                }
-                const cuotas = resp.data || [];
-                if (!cuotas.length) {
-                    $tbody.append('<tr><td colspan="5" class="text-center">Sin cuotas</td></tr>');
-                    return;
-                }
-
-                // VALIDACIÓN SECUENCIAL: determinar si se puede pagar cada cuota
-                let allPrevPaid = true;
-                cuotas.forEach(c => {
-                    const estadoRaw = (c.estado_cuota || c.estado || '').toString().toLowerCase();
-                    const estado = (estadoRaw === 'pagada' || estadoRaw === 'paid') ? 'Pagada' : 'Pendiente';
-                    const numero = c.numero_cuota || c.numero || '-';
-                    const monto = parseNumber(c.monto_cuota || c.monto || 0);
-                    const fechaProg = c.fecha_programada || c.fecha || '-';
-
-                    const $tr = $('<tr>');
-                    $tr.append(`<td class="text-center"><strong>${numero}</strong></td>`);
-                    $tr.append(`<td class="text-center">S/ ${formatoMoneda(monto)}</td>`);
-                    $tr.append(`<td class="text-center">${fechaProg}</td>`);
-                    $tr.append(`<td class="text-center">${estado === 'Pagada' ? '<span class="badge badge-success">Pagada</span>' : '<span class="badge badge-warning">Pendiente</span>'}</td>`);
-
-                    const $accionTd = $('<td class="text-center">');
-                    if (estado === 'Pagada') {
-                        // Si está pagada, mostrar botón deshabilitado
-                        $accionTd.append('<button class="btn btn-secondary btn-sm" disabled><i class="fas fa-check"></i> Pagada</button>');
-                    } else {
-                        // Si está pendiente, verificar si se puede pagar (validar secuencia)
-                        const id_cuota = c.id_cuota || c.id || 0;
-                        if (allPrevPaid) {
-                            // Todas las anteriores están pagadas, permitir pago
-                            $accionTd.append(`<button class="btn btn-success btn-sm btn-pagar-cuota-row" data-id="${id_cuota}" data-num="${numero}" data-monto="${monto}"><i class="fas fa-money-bill-wave"></i> Pagar</button>`);
-                        } else {
-                            // Hay cuotas anteriores pendientes, deshabilitar
-                            $accionTd.append(`<button class="btn btn-warning btn-sm" disabled title="Debe pagar las cuotas anteriores primero"><i class="fas fa-lock"></i> Bloqueada</button>`);
-                        }
-                        // Marcar esta cuota como pendiente para las siguientes
-                        allPrevPaid = false;
-                    }
-                    $tr.append($accionTd);
-                    $tbody.append($tr);
-                });
-            })
-            .fail(function() {
-                $tbody.append('<tr><td colspan="5" class="text-center text-danger">Error conectando al servidor</td></tr>');
-            });
-    }
-
-    // Abrir modal gestión de cuotas desde el botón "Pagar" de la fila de venta
-    $(document).on('click', '.btn-pagar-venta', function() {
-        const id_venta = $(this).data('id');
-        if (!id_venta) {
+    // Detail view
+    $(document).on('click', '.btn-ver-detalle-venta', function() {
+        const ventaId = $(this).data('id');
+        if (!ventaId) {
             alert('ID de venta inválido');
             return;
         }
-        currentGestionVentaId = id_venta;
-        $('#cuota-venta-id').text(id_venta);
-        cargarGestionCuotas(id_venta);
-        $('#modal-gestion-cuotas').modal('show');
-    });
 
-    // Abrir modal pago de cuota (desde la tabla de gestión de cuotas)
-    $(document).on('click', '.btn-pagar-cuota-row', function() {
-        const id_cuota = $(this).data('id');
-        const numero = $(this).data('num');
-        const monto = parseNumber($(this).data('monto') || 0);
+        $('#detalle-venta-body').empty();
+        $('#detalle-venta-sin-items').hide();
 
-        $('#pago-id-cuota').val(id_cuota);
-        $('#pago-numero-cuota').text(numero || '-');
-        $('#pago-monto-cuota').text('S/ ' + formatoMoneda(monto));
-        $('#pago-fecha').val(new Date().toISOString().split('T')[0]);
-        $('#pago-metodo').val('');
-        $('#modal-pago-cuota').modal('show');
-    });
-
-    // Guardar pago de cuota
-$('#btn-guardar-pago').on('click', function() {
-    const id_cuota = parseInt($('#pago-id-cuota').val() || 0, 10);
-    const metodo = $('#pago-metodo').val() || '';
-    const fecha_pago = $('#pago-fecha').val() || '';
-    const montoTxt = $('#pago-monto-cuota').text().replace(/[^\d.,-]+/g, '').replace(',', '.');
-    const monto = parseFloat(montoTxt || 0);
-
-    if (!id_cuota || !metodo || monto <= 0 || !fecha_pago) {
-        alert('Complete método, fecha y asegúrese del monto');
-        return;
-    }
-
-    const $btn = $(this).prop('disabled', true).text('Guardando...');
-    const payload = {
-        id_cuota: id_cuota,
-        metodo_pago: metodo,
-        monto: monto,
-        fecha_pago: fecha_pago
-    };
-
-    $.ajax({
-        url: 'views/Ventas.php?action=guardar_pago',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(payload),
-        dataType: 'json',
-        success: function(resp) {
-            if (resp && resp.success) {
-                $('#modal-pago-cuota').modal('hide');
-                $('#modal-gestion-cuotas').modal('hide');
-                if (currentGestionVentaId) {
-                    cargarGestionCuotas(currentGestionVentaId);
+        $.getJSON(`/ventas/detalle/${ventaId}`)
+            .done(function(data) {
+                const detalles = Array.isArray(data) ? data : data.detalles || [];
+                if (!Array.isArray(detalles) || detalles.length === 0) {
+                    $('#detalle-venta-sin-items').show();
+                    $('#modal-detalle-venta').modal('show');
+                    return;
                 }
-                console.log('✓ Pago registrado correctamente');
-                // Recarga la página de inmediato
-                location.reload();
-            } else {
-                alert('Error al registrar pago: ' + (resp && resp.message ? resp.message : 'respuesta inválida'));
-            }
-        },
-        error: function(xhr) {
-            var texto = xhr.responseText || 'Error en servidor';
-            try {
-                var obj = JSON.parse(texto);
-                texto = obj.message || texto;
-            } catch (e) {}
-            alert('Error: ' + texto);
-        },
-        complete: function() {
-            $btn.prop('disabled', false).text('Guardar Pago');
-        }
+
+                detalles.forEach(det => {
+                    const subtotal = parseMoney(det.subtotal || (det.precioUnitario * det.cantidad));
+                    const tr = $('<tr>');
+                    
+                    let productoNombre = det.producto || '';
+                    if (det.cantidadPrestada && det.cantidadPrestada > 0) {
+                        productoNombre += ` <span class="badge badge-warning">(${det.cantidadPrestada} prestado/s)</span>`;
+                    }
+
+                    tr.append(`<td>${productoNombre}</td>`);
+                    tr.append(`<td class="text-center">${det.cantidad || 0}</td>`);
+                    tr.append(`<td class="text-right">S/ ${formatMoney(det.precioUnitario)}</td>`);
+                    tr.append(`<td class="text-right">S/ ${formatMoney(subtotal)}</td>`);
+                    $('#detalle-venta-body').append(tr);
+                });
+
+                if (Array.isArray(data.pagos) && data.pagos.length > 0) {
+                    const pagosHtml = data.pagos.map(pago => `
+                        <div><strong>${pago.metodo}:</strong> S/ ${formatMoney(pago.monto)}${pago.numOperacion ? ' (' + pago.numOperacion + ')' : ''}</div>
+                    `).join('');
+                    $('#detalle-venta-body').append(`<tr><td colspan="4"><strong>Pagos:</strong><br>${pagosHtml}</td></tr>`);
+                }
+
+                $('#modal-detalle-venta').modal('show');
+            })
+            .fail(function() {
+                alert('No se pudo cargar el detalle de la venta. Intenta de nuevo.');
+            });
     });
-});
-
-    // =========================
-    // LIMPIEZA Y ESTADO INICIAL
-    // =========================
-
-    $('#modal-venta').on('hidden.bs.modal', function() {
-        detalle = [];
-        cuotasCalculadas = [];
-        creditoConfigured = false;
-        $('#venta-dni').val('');
-        $('#venta-nombre').val('');
-        $('#venta-correo').val('');
-        $('#venta-id-cliente').val('');
-        $('#venta-comprobante').val('');
-        $('#venta-nro-doc').val('');
-        $('#venta-forma').val('Efectivo');
-        $('#venta-forma-pago').val('Contado');
-        $('#btn-abrir-credito').hide();
-        $('#div-resumen-credito').hide();
-        $('#tabla-productos tbody').empty();
-        $('#venta-total').text('0.00');
-        $('body').removeAttr('data-pago-inicial');
-    });
-
-    $('#modal-credito').on('hidden.bs.modal', function() {
-        $('#credito-pago-inicial').val('0.00');
-        $('#credito-num-cuotas').val('');
-        $('#credito-intervalo').val('');
-        $('#credito-deuda-total').text('0.00');
-        $('#tabla-cuotas-credito tbody').empty();
-        $('#div-tabla-cuotas-credito').hide();
-    });
-
-    // Inicial
-    configurarEventoCambioFormaPago();
-    renderTablaProductos();
-    console.log('✓ Ventas.js cargado correctamente');
 });
