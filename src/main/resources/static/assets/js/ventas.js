@@ -1,3 +1,5 @@
+console.log("ventas.js cargado correctamente en el cliente");
+
 $(function() {
     let detallesVenta = [];
     let pagosVenta = [];
@@ -11,8 +13,40 @@ $(function() {
         return parseMoney(value).toFixed(2);
     }
 
+    // Toggle fields based on sale type (Local / Domicilio)
+    function actualizarCamposPorTipoVenta() {
+        const tipo = $('#select-tipo-venta').val();
+        if (tipo === 'LOCAL') {
+            $('.group-campos-domicilio').hide();
+            $('#input-direccion-cliente').val('');
+            $('#input-referencia-cliente').val('');
+            $('#select-motorizado').val('');
+            
+            // Forzar y ocultar select-estado-pedido a ENTREGADO
+            $('#select-estado-pedido').val('ENTREGADO');
+            $('#group-estado-pedido-parent').hide();
+        } else {
+            $('.group-campos-domicilio').show();
+            $('#group-estado-pedido-parent').show();
+            // Si el estado del pedido es ENTREGADO y es una nueva venta a domicilio, por defecto poner PENDIENTE
+            if (!$('#input-id-pedido').val() && $('#select-estado-pedido').val() === 'ENTREGADO') {
+                $('#select-estado-pedido').val('PENDIENTE');
+            }
+        }
+    }
+
+    $('#select-tipo-venta').on('change', function() {
+        actualizarCamposPorTipoVenta();
+    });
+
     function renderizarPagos() {
-        const tbody = $('#tabla-pagos').empty();
+        const tbody = $('#tabla-pagos-venta').empty();
+        if (pagosVenta.length === 0) {
+            tbody.append('<tr><td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td></tr>');
+            actualizarTotalPagos();
+            return;
+        }
+
         pagosVenta.forEach((pago, index) => {
             const tr = $(
                 `<tr>
@@ -32,8 +66,7 @@ $(function() {
     }
 
     function actualizarTotalPagos() {
-        const totalPagado = pagosVenta.reduce((sum, pago) => sum + parseMoney(pago.monto), 0);
-        $('#txt-total-pagado').text(formatMoney(totalPagado));
+        // No hay campo de texto acumulativo de pagos, pero si existiera, se actualizaría aquí.
     }
 
     function actualizarCamposMetodoPago() {
@@ -49,9 +82,14 @@ $(function() {
         }
     }
 
+    $('#select-metodo').on('change', function() {
+        actualizarCamposMetodoPago();
+    });
+
     function actualizarTotal() {
-        const total = detallesVenta.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
-        $('#txt-total-general').text(formatMoney(total));
+        const subtotal = detallesVenta.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
+        $('#txt-subtotal').text(formatMoney(subtotal));
+        $('#txt-total-general').text(formatMoney(subtotal));
     }
 
     function configurarLimitesFechaCredito() {
@@ -90,7 +128,9 @@ $(function() {
         $('#input-id-cliente').val('');
         $('#input-nombre-cliente').val('');
         $('#input-telefono-cliente').val('');
-        $('#input-nombre-cliente, #input-telefono-cliente').prop('readonly', false);
+        $('#input-direccion-cliente').val('');
+        $('#input-referencia-cliente').val('');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
         $('#cliente-feedback').text('Ingrese el DNI y busque el cliente, o complete los datos manualmente.');
     }
 
@@ -98,7 +138,9 @@ $(function() {
         $('#input-id-cliente').val(cliente.id);
         $('#input-nombre-cliente').val(cliente.nombre);
         $('#input-telefono-cliente').val(cliente.telefono);
-        $('#input-nombre-cliente, #input-telefono-cliente').prop('readonly', true);
+        $('#input-direccion-cliente').val(cliente.direccion || '');
+        $('#input-referencia-cliente').val(cliente.referencia || '');
+        $('#input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
         $('#cliente-feedback').text('Cliente encontrado. Si desea usar datos distintos, borre el DNI o comience nuevamente.');
     }
 
@@ -131,14 +173,19 @@ $(function() {
     }
 
     function renderizarFilas() {
+        const isMotorizado = $('#session-perfil-id').val() == '4';
+        const estadoPedido = $('#select-estado-pedido').val();
+        const isPedidoEditable = !$('#input-id-pedido').val() || estadoPedido === 'PENDIENTE';
+
         const tbody = $('#tabla-filas-venta').empty();
         detallesVenta.forEach((item, index) => {
             const subtotal = item.cantidad * item.precioUnitario;
             
-            // Siempre editable ya que el operador local edita detalles directamente
-            const inputPrestados = `<input type="number" class="form-control form-control-sm input-cantidad-prestada-fila" 
-                                           min="0" max="${item.cantidad}" value="${item.cantidadPrestada || 0}" 
-                                           style="width: 80px;" data-index="${index}">`;
+            const inputPrestados = isPedidoEditable 
+                ? `<input type="number" class="form-control form-control-sm input-cantidad-prestada-fila" 
+                          min="0" max="${item.cantidad}" value="${item.cantidadPrestada || 0}" 
+                          style="width: 80px;" data-index="${index}">`
+                : `<span>${item.cantidadPrestada || 0}</span>`;
 
             const tr = $(
                 `<tr>
@@ -147,7 +194,7 @@ $(function() {
                     <td>S/ ${formatMoney(item.precioUnitario)}</td>
                     <td>${inputPrestados}</td>
                     <td>S/ ${formatMoney(subtotal)}</td>
-                    <td class="text-center col-quitar-producto">
+                    <td class="text-center col-quitar-producto" ${isMotorizado ? 'style="display:none;"' : ''}>
                         <button type="button" class="btn btn-danger btn-sm btn-remover-item" data-index="${index}">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -157,39 +204,70 @@ $(function() {
             tbody.append(tr);
         });
         actualizarTotal();
+
+        if (isMotorizado) {
+            $('th.col-quitar-producto').hide();
+        } else {
+            $('th.col-quitar-producto').show();
+        }
     }
 
-    $('#btn-crear-venta').on('click', function() {
+    // Modal triggers for creating new sale (Local or Domicilio)
+    $(document).on('click', '.btn-crear-venta', function() {
+        const tipoDefault = $(this).data('tipo'); // LOCAL or DOMICILIO
+        
         detallesVenta = [];
         pagosVenta = [];
-        $('#form-venta')[0].reset();
+        
+        try {
+            if ($('#form-venta')[0]) {
+                $('#form-venta')[0].reset();
+            }
+        } catch(e) {
+            console.error("Error al reiniciar el formulario:", e);
+        }
+        
         $('#tabla-filas-venta').empty();
-        $('#tabla-pagos').empty();
+        $('#tabla-pagos-venta').html('<tr><td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td></tr>');
         $('#txt-total-general').text('0.00');
-        $('#txt-total-pagado').text('0.00');
+        $('#txt-subtotal').text('0.00');
 
         $('#input-id-pedido').val('');
         limpiarClienteSeleccionado();
         $('#input-dni-cliente').val('');
+        $('#select-motorizado').val('');
         $('#select-condicion-pago').val('CONTADO');
         $('#group-fecha-limite').hide();
         $('#input-fecha-limite').val('');
         $('#input-cantidad-prestada').val('0');
+        
+        // Configurar y bloquear el tipo de venta
+        $('#select-tipo-venta').val(tipoDefault).prop('disabled', true);
+        actualizarCamposPorTipoVenta();
         actualizarCamposMetodoPago();
-        $('.modal-title').text('Registrar nueva venta local');
+
+        const titulo = tipoDefault === 'LOCAL' ? 'Registrar nueva venta local' : 'Registrar nueva venta a domicilio';
+        $('#modal-title-venta').text(titulo);
+
+        // Mostrar el modal INMEDIATAMENTE
+        $('#modal-venta').modal('show');
+        $('#input-codigo').val('Cargando...');
 
         fetch('/api/correlativos/next?tipo=VENTA_NOTA&serie=NV001')
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error("Error HTTP " + r.status);
+                return r.json();
+            })
             .then(data => {
                 if (data && data.codigo) {
                     $('#input-codigo').val(data.codigo);
+                } else {
+                    $('#input-codigo').val('NV001-0000');
                 }
             })
-            .catch(() => {
+            .catch(err => {
+                console.warn("Fallo al obtener correlativo, usando por defecto:", err);
                 $('#input-codigo').val('NV001-0000');
-            })
-            .finally(() => {
-                $('#modal-venta').modal('show');
             });
     });
 
@@ -211,13 +289,26 @@ $(function() {
 
                 $('#input-id-pedido').val(data.idPedido);
                 $('#input-codigo').val(data.codigo);
-                $('.modal-title').text('Editar Venta Local: ' + data.codigo);
+                
+                const tipoStr = data.tipoVenta || 'LOCAL';
+                $('#select-tipo-venta').val(tipoStr).prop('disabled', true);
+                
+                const titulo = tipoStr === 'LOCAL' ? 'Editar Venta Local: ' : 'Editar Venta Domicilio: ';
+                $('#modal-title-venta').text(titulo + data.codigo);
 
                 $('#input-id-cliente').val(data.idCliente);
                 $('#input-dni-cliente').val(data.dniCliente);
                 $('#input-nombre-cliente').val(data.nombreCliente);
                 $('#input-telefono-cliente').val(data.telefonoCliente);
-                $('#input-observaciones').val(data.observaciones || '');
+                
+                actualizarCamposPorTipoVenta();
+                
+                if (tipoStr === 'DOMICILIO') {
+                    $('#input-direccion-cliente').val(data.direccionCliente || '');
+                    $('#input-referencia-cliente').val(data.referenciaCliente || '');
+                    $('#select-motorizado').val(data.idEmpleado || '');
+                    $('#select-estado-pedido').val(data.estadoPedido || 'PENDIENTE');
+                }
 
                 if (data.fechaLimitePago) {
                     $('#select-condicion-pago').val('CREDITO');
@@ -230,9 +321,24 @@ $(function() {
                     $('#input-fecha-limite').val('');
                 }
 
-                $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente').prop('readonly', false);
-                $('#btn-buscar-cliente').show();
-                $('#card-agregar-productos').show();
+                $('#input-observaciones').val(data.observaciones || '');
+
+                const perfilId = $('#session-perfil-id').val();
+                if (perfilId == '4') {
+                    // Bloqueo para motorizados
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', true);
+                    $('#btn-buscar-cliente').hide();
+                    $('#select-motorizado').prop('disabled', true);
+                    $('#input-observaciones').prop('readonly', true);
+                    $('#card-agregar-productos').hide();
+                } else {
+                    // Operador normal
+                    $('#input-dni-cliente, #input-nombre-cliente, #input-telefono-cliente, #input-direccion-cliente, #input-referencia-cliente').prop('readonly', false);
+                    $('#btn-buscar-cliente').show();
+                    $('#select-motorizado').prop('disabled', false);
+                    $('#input-observaciones').prop('readonly', false);
+                    $('#card-agregar-productos').show();
+                }
 
                 data.detalles.forEach(detalle => {
                     detallesVenta.push({
@@ -255,6 +361,7 @@ $(function() {
 
                 renderizarFilas();
                 renderizarPagos();
+                actualizarCamposMetodoPago();
                 $('#modal-venta').modal('show');
             })
             .catch(error => {
@@ -280,52 +387,28 @@ $(function() {
     });
 
     $('#btn-buscar-producto').on('click', function() {
-        $('#input-buscar-nombre').val('');
+        $('#buscar-producto-filtro').val('');
         $('#tabla-busqueda-productos tbody tr').show();
-
-        const selectCat = $('#select-buscar-categoria');
-        if (selectCat.length && selectCat.find('option').length <= 1) {
-            const seen = {};
-            selectCat.find('option:gt(0)').remove();
-            $('#tabla-busqueda-productos tbody tr').each(function() {
-                const row = $(this);
-                const catId = row.data('categoria');
-                const catName = row.find('td').eq(1).text().trim();
-                if (catId != null && catId !== '' && !seen[String(catId)]) {
-                    seen[String(catId)] = true;
-                    selectCat.append($('<option>').val(catId).text(catName));
-                }
-            });
-        }
-
-        if (selectCat.length) selectCat.val('');
+        $('#select-buscar-categoria').val('');
         $('#modal-buscar-producto').modal('show');
     });
 
-    $('#input-producto-nombre').on('keypress', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            const q = $(this).val().trim();
-            $('#input-buscar-nombre').val(q);
-            $('#select-buscar-categoria').val('');
-            filtrarProductos();
-            $('#modal-buscar-producto').modal('show');
-        }
-    });
+    $('#buscar-producto-filtro').on('input', filtrarProductosModal);
+    $('#select-buscar-categoria').on('change', filtrarProductosModal);
 
-    function filtrarProductos() {
-        const nombre = $('#input-buscar-nombre').val().trim().toLowerCase();
-        const categoria = $('#select-buscar-categoria').val();
+    function filtrarProductosModal() {
+        const text = $('#buscar-producto-filtro').val().toLowerCase().trim();
+        const cat = $('#select-buscar-categoria').val();
 
         $('#tabla-busqueda-productos tbody tr').each(function() {
             const row = $(this);
-            const nombreRow = (row.find('td').first().text() || '').toLowerCase();
-            const categoriaRow = row.data('categoria') != null ? String(row.data('categoria')) : '';
+            const name = row.find('td').eq(0).text().toLowerCase();
+            const rowCat = String(row.data('categoria') || '');
 
-            const matchNombre = nombre === '' || nombreRow.indexOf(nombre) !== -1;
-            const matchCategoria = !categoria || categoria === '' || String(categoriaRow) === String(categoria);
+            const matchText = name.indexOf(text) > -1;
+            const matchCat = !cat || rowCat === cat;
 
-            if (matchNombre && matchCategoria) {
+            if (matchText && matchCat) {
                 row.show();
             } else {
                 row.hide();
@@ -333,56 +416,19 @@ $(function() {
         });
     }
 
-    $('#btn-filtrar-productos').on('click', function() {
-        filtrarProductos();
-    });
-
-    $('#input-buscar-nombre').on('keypress', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            filtrarProductos();
-        }
-    });
-
     $(document).on('click', '.btn-seleccionar-producto', function() {
         const row = $(this).closest('tr');
         const id = row.data('id');
+        const nombre = row.data('nombre');
         const precio = row.data('precio');
-        const nombreData = row.data('nombre');
-        const categoria = row.data('categoria');
-        const capacidad = row.data('capacidad');
-        const unidad = row.data('unidad');
 
-        const nombre = (nombreData !== undefined && nombreData !== null) ? String(nombreData).trim() : row.attr('data-nombre') || row.find('td').first().text().trim();
+        $('#select-producto').val(id);
+        $('#input-producto-nombre').val(nombre);
+        $('#select-precio').val(precio);
+        $('#select-cantidad').val(1);
+        $('#input-cantidad-prestada').val(0);
 
-        function unidadLabel(u) {
-            if (!u) return '';
-            if (u === 'KG') return 'kg';
-            if (u === 'L') return 'L';
-            if (u === 'M') return 'm';
-            if (u === 'NO_APLICA' || u === 'NO APLICA') return '';
-            return u;
-        }
-
-        if (id) {
-            const labelUnidad = unidadLabel(unidad);
-            let displayName = nombre;
-            const capVal = (capacidad !== undefined && capacidad !== null && String(capacidad).trim() !== '') ? String(capacidad).trim() : '';
-            if (capVal !== '') {
-                displayName = `${nombre} - ${capVal}${labelUnidad ? ' ' + labelUnidad : ''}`;
-            }
-
-            $('#select-producto').val(id);
-            $('#input-producto-nombre').val(displayName);
-            $('#select-precio').val(formatMoney(precio));
-
-            $('#select-cantidad').val(1);
-            $('#modal-buscar-producto').modal('hide');
-        }
-    });
-
-    $('#select-metodo').on('change', function() {
-        actualizarCamposMetodoPago();
+        $('#modal-buscar-producto').modal('hide');
     });
 
     $('#btn-agregar-pago').on('click', function() {
@@ -396,7 +442,7 @@ $(function() {
             return;
         }
         if (monto <= 0) {
-            alert('Ingrese un monto de pago válido.');
+            alert('Ingrese un monto de pago mayor a cero.');
             return;
         }
         if ((metodoNombre.toLowerCase() === 'yape' || metodoNombre.toLowerCase() === 'plin') && !numOperacion) {
@@ -411,25 +457,28 @@ $(function() {
             numOperacion: numOperacion
         });
 
+        $('#select-metodo').val('');
         $('#input-monto-pago').val('');
         $('#input-num-operacion').val('');
+        actualizarCamposMetodoPago();
+        renderizarPagos();
+    });
+
+    $(document).on('click', '.btn-remover-pago', function() {
+        const index = $(this).data('index');
+        pagosVenta.splice(index, 1);
         renderizarPagos();
     });
 
     $('#btn-agregar-detalle').on('click', function() {
         const idProducto = $('#select-producto').val();
         const nombreProducto = $('#input-producto-nombre').val();
-        const cantidad = parseInt($('#select-cantidad').val(), 10);
+        const cantidad = parseInt($('#select-cantidad').val(), 10) || 0;
         const precio = parseMoney($('#select-precio').val());
         const cantidadPrestada = parseInt($('#input-cantidad-prestada').val(), 10) || 0;
 
         if (!idProducto || cantidad < 1 || precio <= 0) {
-            alert('Seleccione un producto y complete cantidad/precio.');
-            return;
-        }
-
-        if (cantidadPrestada < 0) {
-            alert('La cantidad de envases prestados no puede ser negativa.');
+            alert('Seleccione un producto y complete cantidad/precio válidos.');
             return;
         }
 
@@ -441,7 +490,7 @@ $(function() {
         const existente = detallesVenta.find(item => item.idProducto === idProducto);
         if (existente) {
             existente.cantidad += cantidad;
-            existente.cantidadPrestada += cantidadPrestada;
+            existente.cantidadPrestada = (existente.cantidadPrestada || 0) + cantidadPrestada;
             if (existente.cantidadPrestada > existente.cantidad) {
                 existente.cantidadPrestada = existente.cantidad;
             }
@@ -488,35 +537,36 @@ $(function() {
         }
     });
 
-    $(document).on('click', '.btn-remover-pago', function() {
-        const index = $(this).data('index');
-        pagosVenta.splice(index, 1);
-        renderizarPagos();
-    });
-
+    // Form submit validation & AJAX request
     $('#form-venta').on('submit', function(e) {
         e.preventDefault();
 
         if (detallesVenta.length === 0) {
-            alert('Debe agregar al menos un producto.');
+            alert('Debe agregar al menos un producto a la venta.');
             return;
         }
 
+        const tipoVenta = $('#select-tipo-venta').val();
         const clientId = parseInt($('#input-id-cliente').val(), 10) || null;
         const dniCliente = $('#input-dni-cliente').val().trim() || null;
         const nombreCliente = $('#input-nombre-cliente').val().trim();
+        const telefonoCliente = $('#input-telefono-cliente').val().trim() || null;
 
         if (!nombreCliente) {
             alert('Debe completar el nombre del cliente.');
             return;
         }
 
-        const metodoSeleccionado = $('#select-metodo option:selected').text().trim().toLowerCase();
-        const numOperacion = $('#input-num-operacion').val().trim() || null;
+        let direccionCliente = null;
+        let referenciaCliente = null;
+        let idMotorizado = null;
 
-        if (pagosVenta.length === 0 && $('#select-metodo').val()) {
-            if ((metodoSeleccionado === 'yape' || metodoSeleccionado === 'plin') && !numOperacion) {
-                alert('El número de operación es obligatorio para Yape y Plin.');
+        if (tipoVenta === 'DOMICILIO') {
+            direccionCliente = $('#input-direccion-cliente').val().trim() || null;
+            idMotorizado = parseInt($('#select-motorizado').val(), 10) || null;
+            referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
+            if (!direccionCliente) {
+                alert('Debe completar la dirección de envío para ventas a domicilio.');
                 return;
             }
         }
@@ -525,17 +575,26 @@ $(function() {
         const totalPagado = pagosVenta.reduce((sum, p) => sum + parseMoney(p.monto), 0);
         const condicion = $('#select-condicion-pago').val();
 
+        // VALIDACIÓN DE CONDICIÓN DE PAGO
         if (condicion === 'CONTADO') {
-            // Si el usuario no agregó pagos a la tabla pero seleccionó método + monto directo en inputs
-            if (pagosVenta.length === 0 && $('#select-metodo').val()) {
-                const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
-                if (Math.abs(montoInput - totalGeneral) > 0.01) {
-                    alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+            const estadoPedido = $('#select-estado-pedido').val();
+            // Para ventas a domicilio al contado en estado PENDIENTE, permitimos guardar sin pagos asociados.
+            // Para otros casos (Ventas Local o Domicilio ya entregado), el pago debe cubrir la totalidad.
+            const esPendienteDomicilio = (tipoVenta === 'DOMICILIO' && estadoPedido === 'PENDIENTE');
+            
+            if (esPendienteDomicilio && pagosVenta.length === 0 && !$('#select-metodo').val()) {
+                // Permitido guardar vacío.
+            } else {
+                if (pagosVenta.length === 0 && $('#select-metodo').val()) {
+                    const montoInput = parseMoney($('#input-monto-pago').val() || totalGeneral);
+                    if (Math.abs(montoInput - totalGeneral) > 0.01) {
+                        alert('Para ventas al contado, el pago debe cubrir la totalidad de la venta.');
+                        return;
+                    }
+                } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
+                    alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
                     return;
                 }
-            } else if (Math.abs(totalPagado - totalGeneral) > 0.01) {
-                alert('Para ventas al contado, el total de los pagos agregados debe ser igual al total general de la venta.');
-                return;
             }
         } else {
             // A CRÉDITO
@@ -554,14 +613,12 @@ $(function() {
             idCliente: clientId,
             dniCliente: dniCliente,
             nombreCliente: nombreCliente,
-            direccionCliente: null,
-            telefonoCliente: $('#input-telefono-cliente').val().trim() || null,
-            referenciaCliente: null,
-            idEmpleado: null,
-            idMetodoPago: parseInt($('#select-metodo').val(), 10) || null,
-            numOperacion: numOperacion,
-            estadoPedido: 'ENTREGADO',
-            tipoVenta: 'LOCAL',
+            direccionCliente: direccionCliente,
+            telefonoCliente: telefonoCliente,
+            referenciaCliente: referenciaCliente,
+            idEmpleado: idMotorizado,
+            estadoPedido: $('#select-estado-pedido').val(),
+            tipoVenta: tipoVenta,
             fechaLimitePago: condicion === 'CREDITO' ? $('#input-fecha-limite').val() + 'T23:59:59' : null,
             pagos: pagosVenta.map(pago => ({
                 idMetodoPago: pago.idMetodoPago,
@@ -606,9 +663,13 @@ $(function() {
         });
     });
 
+    // Detail view
     $(document).on('click', '.btn-ver-detalle-venta', function() {
         const ventaId = $(this).data('id');
-        if (!ventaId) return;
+        if (!ventaId) {
+            alert('ID de venta inválido');
+            return;
+        }
 
         $('#detalle-venta-body').empty();
         $('#detalle-venta-sin-items').hide();
@@ -616,7 +677,7 @@ $(function() {
         $.getJSON(`/ventas/detalle/${ventaId}`)
             .done(function(data) {
                 const detalles = Array.isArray(data) ? data : data.detalles || [];
-                if (detalles.length === 0) {
+                if (!Array.isArray(detalles) || detalles.length === 0) {
                     $('#detalle-venta-sin-items').show();
                     $('#modal-detalle-venta').modal('show');
                     return;
@@ -625,8 +686,13 @@ $(function() {
                 detalles.forEach(det => {
                     const subtotal = parseMoney(det.subtotal || (det.precioUnitario * det.cantidad));
                     const tr = $('<tr>');
-                    const loanNote = det.cantidadPrestada > 0 ? ` <small class="text-info font-weight-bold">(${det.cantidadPrestada} prestado/s)</small>` : '';
-                    tr.append(`<td>${det.producto || ''}${loanNote}</td>`);
+                    
+                    let productoNombre = det.producto || '';
+                    if (det.cantidadPrestada && det.cantidadPrestada > 0) {
+                        productoNombre += ` <span class="badge badge-warning">(${det.cantidadPrestada} prestado/s)</span>`;
+                    }
+
+                    tr.append(`<td>${productoNombre}</td>`);
                     tr.append(`<td class="text-center">${det.cantidad || 0}</td>`);
                     tr.append(`<td class="text-right">S/ ${formatMoney(det.precioUnitario)}</td>`);
                     tr.append(`<td class="text-right">S/ ${formatMoney(subtotal)}</td>`);
@@ -643,7 +709,7 @@ $(function() {
                 $('#modal-detalle-venta').modal('show');
             })
             .fail(function() {
-                alert('No se pudo cargar el detalle.');
+                alert('No se pudo cargar el detalle de la venta. Intenta de nuevo.');
             });
     });
 });

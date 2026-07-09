@@ -85,36 +85,33 @@ public class VentaController {
 
     @GetMapping("/local")
     public String ventasLocal(Model model, HttpSession session) {
-        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
-
-        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listByTipoVenta("LOCAL");
-
-        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("ventas", ventasList);
-        model.addAttribute("productos", productoService.listAll());
-        model.addAttribute("categorias", categoriaService.listAll());
-        model.addAttribute("metodosPago", metodoPagoService.listActive());
-        model.addAttribute("contenido", "views/ventas_local");
+        populateVentasModel(model, session, "local");
         return "components/layout";
     }
 
     @GetMapping("/domicilio")
     public String ventasDomicilio(Model model, HttpSession session) {
+        populateVentasModel(model, session, "domicilio");
+        return "components/layout";
+    }
+
+    private void populateVentasModel(Model model, HttpSession session, String activeTab) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         Long usuarioId = (Long) session.getAttribute("usuarioId");
 
-        List<PedidoDTO.SimpleResponse> ventasList = pedidoService.listByTipoVenta("DOMICILIO");
-        
+        List<PedidoDTO.SimpleResponse> ventasLocalList = pedidoService.listByTipoVenta("LOCAL");
+        List<PedidoDTO.SimpleResponse> ventasDomicilioList = pedidoService.listByTipoVenta("DOMICILIO");
+
         // Si es motorizado (perfil 4), solo ve las ventas que tiene asignadas
         if (perfilId != null && perfilId == 4L && usuarioId != null) {
             Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
             if (usuario != null && usuario.getEmpleado() != null) {
                 String nombreMoto = usuario.getEmpleado().getNombre();
-                ventasList = ventasList.stream()
+                ventasDomicilioList = ventasDomicilioList.stream()
                         .filter(v -> nombreMoto.equals(v.nombreEmpleado()))
                         .collect(Collectors.toList());
             } else {
-                ventasList = List.of(); // Si el motorizado no tiene empleado asociado
+                ventasDomicilioList = List.of();
             }
         }
 
@@ -126,13 +123,14 @@ public class VentaController {
                 .collect(Collectors.toList());
 
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("ventas", ventasList);
+        model.addAttribute("ventasLocal", ventasLocalList);
+        model.addAttribute("ventasDomicilio", ventasDomicilioList);
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("metodosPago", metodoPagoService.listActive());
         model.addAttribute("motorizados", motorizadosActivos);
-        model.addAttribute("contenido", "views/ventas_domicilio");
-        return "components/layout";
+        model.addAttribute("activeTab", activeTab);
+        model.addAttribute("contenido", "views/ventas");
     }
 
     @PostMapping
