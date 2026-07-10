@@ -82,6 +82,7 @@ public class Producto {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_categoria", nullable = false)
     @NotNull(message = "La categoría es obligatoria")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Categoria categoria;
 
     @Column(name = "capacidad", precision = 5, scale = 2)

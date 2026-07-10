@@ -72,7 +72,7 @@ public class PedidoServiceImplement implements PedidoService {
     @Transactional
     public List<PedidoDTO.SimpleResponse> listAll() {
         return pedidoRepository.findAll().stream()
-                .map(pedidoMapper::toSimpleResponse)
+                .map(this::mapToSimpleResponse)
                 .collect(Collectors.toList());
     }
 
@@ -80,8 +80,31 @@ public class PedidoServiceImplement implements PedidoService {
     @Transactional
     public List<PedidoDTO.SimpleResponse> listByTipoVenta(String tipoVenta) {
         return pedidoRepository.findByTipoVenta(tipoVenta).stream()
-                .map(pedidoMapper::toSimpleResponse)
+                .map(this::mapToSimpleResponse)
                 .collect(Collectors.toList());
+    }
+
+    private PedidoDTO.SimpleResponse mapToSimpleResponse(Pedido pedido) {
+        String nombreCliente = pedido.getCliente() != null ? pedido.getCliente().getNombre() : null;
+        String nombreEmpleado = pedido.getEmpleado() != null ? pedido.getEmpleado().getNombre() : null;
+        String metodoPagoNombre = pedido.getMetodoPago() != null ? pedido.getMetodoPago().getNombre() : null;
+        
+        PedidoDTO.SimpleResponse response = pedidoMapper.toSimpleResponse(pedido);
+        // Usar reflexión o crear un nuevo DTO con los valores extraídos
+        return new PedidoDTO.SimpleResponse(
+            response.idPedido(),
+            response.codigo(),
+            response.fechaSolicitud(),
+            nombreCliente,
+            nombreEmpleado,
+            response.estadoPedido(),
+            response.estadoPago(),
+            response.montoTotal(),
+            response.subtotal(),
+            metodoPagoNombre,
+            response.tipoVenta(),
+            response.fechaLimitePago()
+        );
     }
 
     @Override
@@ -376,7 +399,7 @@ public class PedidoServiceImplement implements PedidoService {
             }
         }
 
-        return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
+        return mapToSimpleResponse(pedidoRepository.save(pedidoGuardado));
     }
 
     @Override
@@ -398,7 +421,7 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.setEstadoPago("PAGADO");
         }
 
-        return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedido));
+        return mapToSimpleResponse(pedidoRepository.save(pedido));
     }
 
     @Override
@@ -445,7 +468,7 @@ public class PedidoServiceImplement implements PedidoService {
     public PedidoDTO.SimpleResponse findById(Long id) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
-        return pedidoMapper.toSimpleResponse(pedido);
+        return mapToSimpleResponse(pedido);
     }
 
     @Override

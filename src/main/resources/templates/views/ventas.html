@@ -425,14 +425,14 @@
                                 <tbody>
                                     <tr th:each="p : ${productos}" 
                                         class="fila-producto-busqueda" 
-                                        th:data-id="${p.id}" 
-                                        th:data-nombre="${p.nombre}" 
+                                        th:data-id="${p.id}"
+                                        th:data-nombre="${p.nombre}"
                                         th:data-precio="${p.precioVenta}"
-                                        th:data-categoria="${p.categoria != null ? p.categoria.id : ''}"
+                                        th:data-categoria="${p.idCategoria != null ? p.idCategoria : ''}"
                                         th:data-capacidad="${p.capacidad}"
                                         th:data-unidad="${p.unidadMedida}">
                                         <td th:text="|${p.nombre}${p.capacidad != null and p.unidadMedida != null ? ' - ' + p.capacidad + ' ' + p.unidadMedida : ''}|"></td>
-                                        <td th:text="${p.categoria != null ? p.categoria.nombre : '-'}"></td>
+                                        <td th:text="${p.nombreCategoria != null ? p.nombreCategoria : '-'}"></td>
                                         <td class="text-right" th:text="'S/ ' + ${p.precioVenta}"></td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>

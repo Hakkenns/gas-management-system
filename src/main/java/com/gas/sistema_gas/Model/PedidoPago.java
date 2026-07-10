@@ -28,10 +28,12 @@ public class PedidoPago {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Pedido pedido;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_metodo", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private MetodoPago metodoPago;
 
     @Column(name = "monto", nullable = false, precision = 12, scale = 2)

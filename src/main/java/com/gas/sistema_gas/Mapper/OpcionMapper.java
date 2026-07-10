@@ -16,8 +16,9 @@ public interface OpcionMapper {
     @Mapping(target = "perfiles", ignore = true)
     Opcion toEntity(OpcionDTO.Create createDto);
     
-    // Convertir Opcion a SimpleResponse
+    // Convertir Opcion a SimpleResponse - mapear hijos recursivamente
     @Mapping(source = "estado", target = "estado")
+    @Mapping(source = "hijos", target = "hijos")
     OpcionDTO.SimpleResponse toSimpleResponse(Opcion opcion);
     
     // Actualizar Opcion desde DTO Update

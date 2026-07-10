@@ -42,9 +42,11 @@ public class Opcion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_padre")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Opcion padre;
 
     @OneToMany(mappedBy = "padre", cascade = CascadeType.ALL)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<Opcion> hijos;
 
     // Relación ManyToMany con Perfil (lado inverso)
