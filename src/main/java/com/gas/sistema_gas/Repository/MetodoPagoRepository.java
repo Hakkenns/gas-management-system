@@ -9,4 +9,5 @@ import com.gas.sistema_gas.Model.MetodoPago;
 
 public interface MetodoPagoRepository extends JpaRepository<MetodoPago, Long> {
     List<MetodoPago> findByEstado(Integer estado);
+    java.util.Optional<MetodoPago> findByNombre(String nombre);
 }

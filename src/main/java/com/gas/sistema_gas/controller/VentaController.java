@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.util.LinkedHashMap;
+
 import com.gas.sistema_gas.Model.AsignacionMoto;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
@@ -86,12 +88,22 @@ public class VentaController {
 
     @GetMapping("/local")
     public String ventasLocal(Model model, HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        if (perfilId != null && perfilId == 4L) {
+            return "redirect:/motorizado/asignados";
+        }
+
         populateVentasModel(model, session, "local");
         return "components/layout";
     }
 
     @GetMapping("/domicilio")
     public String ventasDomicilio(Model model, HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        if (perfilId != null && perfilId == 4L) {
+            return "redirect:/motorizado/asignados";
+        }
+
         populateVentasModel(model, session, "domicilio");
         return "components/layout";
     }
@@ -103,14 +115,19 @@ public class VentaController {
         List<PedidoDTO.SimpleResponse> ventasLocalList = pedidoService.listByTipoVenta("LOCAL");
         List<PedidoDTO.SimpleResponse> ventasDomicilioList = pedidoService.listByTipoVenta("DOMICILIO");
 
-        // Si es motorizado (perfil 4), solo ve las ventas que tiene asignadas
-        if (perfilId != null && perfilId == 4L && usuarioId != null) {
-            Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
-            if (usuario != null && usuario.getEmpleado() != null) {
-                String nombreMoto = usuario.getEmpleado().getNombre();
-                ventasDomicilioList = ventasDomicilioList.stream()
-                        .filter(v -> nombreMoto.equals(v.nombreEmpleado()))
-                        .collect(Collectors.toList());
+        // Si es motorizado (perfil 4), NO mostrar la vista general y sólo ver sus domicilios asignados
+        if (perfilId != null && perfilId == 4L) {
+            ventasLocalList = List.of();
+            if (usuarioId != null) {
+                Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+                if (usuario != null && usuario.getEmpleado() != null) {
+                    String nombreMoto = usuario.getEmpleado().getNombre();
+                    ventasDomicilioList = ventasDomicilioList.stream()
+                            .filter(v -> nombreMoto.equals(v.nombreEmpleado()))
+                            .collect(Collectors.toList());
+                } else {
+                    ventasDomicilioList = List.of();
+                }
             } else {
                 ventasDomicilioList = List.of();
             }
@@ -221,5 +238,26 @@ public class VentaController {
         resultado.put("detalles", detalleItems);
         resultado.put("pagos", pagoItems);
         return ResponseEntity.ok(resultado);
+    }
+
+    @GetMapping("/estado-actual")
+    @ResponseBody
+    public ResponseEntity<List<Map<String, Object>>> estadoActualPedidos(HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        if (perfilId == null) {
+            return ResponseEntity.status(403).build();
+        }
+
+        List<PedidoDTO.SimpleResponse> pedidos = pedidoService.listByTipoVenta("DOMICILIO");
+        List<Map<String, Object>> respuesta = pedidos.stream().map(pedido -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("idPedido", pedido.idPedido());
+            item.put("estadoPedido", pedido.estadoPedido());
+            item.put("estadoPago", pedido.estadoPago());
+            item.put("metodoPago", pedido.metodoPago());
+            return item;
+        }).toList();
+
+        return ResponseEntity.ok(respuesta);
     }
 }

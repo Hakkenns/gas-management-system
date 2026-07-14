@@ -1,6 +1,76 @@
 console.log("ventas.js cargado correctamente en el cliente");
 
 $(function() {
+    function actualizarEstadosPedidosEnTabla() {
+        fetch('/ventas/estado-actual')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('No autorizado');
+                }
+                return response.json();
+            })
+            .then(estados => {
+                const mapaEstados = new Map(estados.map(estado => [estado.idPedido, estado]));
+                $('.tabla-ventas-dinamica tbody tr').each(function() {
+                    const idPedido = $(this).find('td').eq(0).text().trim();
+                    const estado = mapaEstados.get(Number(idPedido));
+                    if (!estado) return;
+
+                    const celdaEstadoPedido = $(this).find('td.estado-pedido');
+                    const celdaEstadoPago = $(this).find('td.estado-pago');
+                    const celdaMetodoPago = $(this).find('td.metodo-pago');
+                    const botonEditar = $(this).find('.btn-editar-venta');
+
+                    if (celdaEstadoPedido.length) {
+                        const badge = celdaEstadoPedido.find('.badge');
+                        let texto = estado.estadoPedido || 'PENDIENTE';
+                        let clase = 'badge-secondary';
+
+                        if (texto === 'ENTREGADO') clase = 'badge-success';
+                        else if (texto === 'PENDIENTE') clase = 'badge-warning';
+                        else if (texto === 'ANULADO') clase = 'badge-danger';
+                        else clase = 'badge-info';
+
+                        if (badge.length) {
+                            badge.attr('class', `badge ${clase}`);
+                            badge.text(texto);
+                        } else {
+                            celdaEstadoPedido.html(`<span class="badge ${clase}">${texto}</span>`);
+                        }
+                    }
+
+                    if (celdaEstadoPago.length) {
+                        const badgePago = celdaEstadoPago.find('.badge');
+                        let textoPago = estado.estadoPago || 'PENDIENTE';
+                        let clasePago = 'badge-secondary';
+
+                        if (textoPago === 'PAGADO') clasePago = 'badge-success';
+                        else if (textoPago === 'PENDIENTE') clasePago = 'badge-warning';
+                        else if (textoPago === 'CREDITO') clasePago = 'badge-primary';
+                        else if (textoPago === 'VENCIDO') clasePago = 'badge-danger';
+
+                        if (badgePago.length) {
+                            badgePago.attr('class', `badge ${clasePago}`);
+                            badgePago.text(textoPago);
+                        } else {
+                            celdaEstadoPago.html(`<span class="badge ${clasePago}">${textoPago}</span>`);
+                        }
+                    }
+
+                    if (celdaMetodoPago.length) {
+                        celdaMetodoPago.text(estado.metodoPago || '');
+                    }
+
+                    if (botonEditar.length) {
+                        const shouldShow = estado.estadoPedido === 'PENDIENTE';
+                        botonEditar.toggle(shouldShow);
+                    }
+                });
+            })
+            .catch(() => {});
+    }
+
+    setInterval(actualizarEstadosPedidosEnTabla, 3000);
     let detallesVenta = [];
     let pagosVenta = [];
 
@@ -21,23 +91,25 @@ $(function() {
             $('#input-direccion-cliente').val('');
             $('#input-referencia-cliente').val('');
             $('#select-motorizado').val('');
-            
-            // Forzar y ocultar select-estado-pedido a ENTREGADO
+
+            $('#group-condicion-pago').show();
+            $('.group-campos-pago').show();
+            $('#group-estado-pedido-parent').show();
             $('#select-estado-pedido').val('ENTREGADO');
-            $('#group-estado-pedido-parent').hide();
+            $('#input-estado-pedido-local').hide();
         } else {
             $('.group-campos-domicilio').show();
-            $('#group-estado-pedido-parent').show();
-            // Si el estado del pedido es ENTREGADO y es una nueva venta a domicilio, por defecto poner PENDIENTE
-            if (!$('#input-id-pedido').val() && $('#select-estado-pedido').val() === 'ENTREGADO') {
+            $('#group-condicion-pago').hide();
+            $('.group-campos-pago').hide();
+            $('#group-estado-pedido-parent').hide();
+            $('#select-estado-pedido').val('PENDIENTE');
+            $('#input-estado-pedido-local').hide();
+
+            if (!$('#input-id-pedido').val()) {
                 $('#select-estado-pedido').val('PENDIENTE');
             }
         }
     }
-
-    $('#select-tipo-venta').on('change', function() {
-        actualizarCamposPorTipoVenta();
-    });
 
     function renderizarPagos() {
         const tbody = $('#tabla-pagos-venta').empty();
@@ -567,6 +639,10 @@ $(function() {
             referenciaCliente = $('#input-referencia-cliente').val().trim() || null;
             if (!direccionCliente) {
                 alert('Debe completar la dirección de envío para ventas a domicilio.');
+                return;
+            }
+            if (!idMotorizado) {
+                alert('Debe seleccionar un motorizado para ventas a domicilio.');
                 return;
             }
         }

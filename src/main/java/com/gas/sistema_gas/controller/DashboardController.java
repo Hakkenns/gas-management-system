@@ -1,9 +1,11 @@
 package com.gas.sistema_gas.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -26,8 +28,20 @@ public class DashboardController {
      * GET: Ruta principal redirige al dashboard
      */
     @GetMapping("/")
-    public String home(Model model, HttpSession session) {
+    public String home(HttpServletRequest request, HttpServletResponse response, Model model, HttpSession session) {
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
+
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return "redirect:/login";
+        }
+
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        if (perfilId != null && perfilId.equals(4L)) {
+            return "redirect:/motorizado/asignados";
+        }
+
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("ventasHoyCount", pedidoService.countSalesToday());
         model.addAttribute("usuariosActivosCount", usuarioRepository.countByEstado(1));

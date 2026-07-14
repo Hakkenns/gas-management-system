@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil del Repartidor</title>
+    <link rel="stylesheet" href="dist/css/adminlte.min.css">
+    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <style>
+        body { padding-bottom: 85px !important; background-color: #f8f9fc; }
+        .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
+        .bottom-nav-custom a { text-align: center; text-decoration: none !important; color: #8b92a5; font-size: 0.75rem; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .bottom-nav-custom a i { font-size: 1.4rem; padding: 6px 20px; border-radius: 14px; }
+        .bottom-nav-custom a.active { color: #05a660; font-weight: 700; }
+        .bottom-nav-custom a.active i { background-color: #e8f7f0; color: #05a660; }
+        .profile-avatar { width: 72px; height: 72px; border-radius: 18px; background: #e9f7ef; display: flex; align-items: center; justify-content: center; }
+        .profile-avatar i { font-size: 28px; color: #05a660; }
+        .info-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #6c757d; }
+    </style>
+</head>
+<body>
+<div th:fragment="content">
+
+    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
+        <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
+        <div class="text-white-50 small">Perfil Repartidor</div>
+    </div>
+
+    <div class="content p-2 pb-5">
+        <div class="card shadow-sm border-0 rounded-lg mb-3">
+            <div class="card-body p-3 d-flex align-items-center">
+                <div class="profile-avatar mr-3"><i class="fas fa-user"></i></div>
+                <div>
+                    <h5 class="font-weight-bold mb-1">Roy Agapito Vegas</h5>
+                    <p class="text-muted mb-1">Repartidor activo</p>
+                    <small class="text-success"><i class="fas fa-check-circle"></i> Disponible para nuevas entregas</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-lg mb-3">
+            <div class="card-body p-3">
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <p class="info-label mb-1">Teléfono</p>
+                        <p class="font-weight-bold mb-0">987 654 321</p>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <p class="info-label mb-1">Correo</p>
+                        <p class="font-weight-bold mb-0">roy@example.com</p>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <p class="info-label mb-1">Placa</p>
+                        <p class="font-weight-bold mb-0">ABC-123</p>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <p class="info-label mb-1">Vehículo</p>
+                        <p class="font-weight-bold mb-0">Moto 125cc</p>
+                    </div>
+                    <div class="col-12">
+                        <p class="info-label mb-1">Dirección base</p>
+                        <p class="font-weight-bold mb-0">Av. Central 123, Lima</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-6 mb-3">
+                <div class="card shadow-sm border-0 rounded-lg bg-white">
+                    <div class="card-body p-3 text-center">
+                        <p class="text-muted mb-1">Pedidos hoy</p>
+                        <h4 class="font-weight-bold">8</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="card shadow-sm border-0 rounded-lg bg-white">
+                    <div class="card-body p-3 text-center">
+                        <p class="text-muted mb-1">Entregas completadas</p>
+                        <h4 class="font-weight-bold">124</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <a href="perfil-editar.html" class="btn btn-success btn-block font-weight-bold shadow-sm mb-2"><i class="fas fa-edit"></i> Editar perfil</a>
+        <button class="btn btn-outline-secondary btn-block font-weight-bold shadow-sm" onclick="cerrarSesion()"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</button>
+    </div>
+
+    <nav class="bottom-nav-custom">
+        <a href="asignados.html"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
+        <a href="historial.html"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
+        <a href="perfil.html" class="active"><i class="far fa-user"></i><span>Perfil</span></a>
+    </nav>
+
+    <script>
+        function cerrarSesion() {
+            alert('Sesión cerrada.');
+            window.location.href = 'asignados.html';
+        }
+    </script>
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="dist/js/adminlte.min.js"></script>
+</div>
+</body>
+</html>

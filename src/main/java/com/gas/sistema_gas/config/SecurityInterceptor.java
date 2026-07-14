@@ -43,7 +43,32 @@ public class SecurityInterceptor implements HandlerInterceptor {
             response.sendRedirect("/login");
             return false;
         }
-        
+
+        // Desactivar cache en todas las rutas protegidas para evitar que el navegador
+        // muestre vistas antiguas al usar atrás/recargar
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
+
+        // Protección adicional: evitar que perfiles distintos accedan a rutas de motorizado/ventas
+        Long perfilId = session.getAttribute("usuarioPerfilId") instanceof Long ? (Long) session.getAttribute("usuarioPerfilId") : null;
+
+        // Si la ruta es /motorizado/*, sólo permitir perfil motorizado (4)
+        if (requestURI != null && requestURI.startsWith("/motorizado")) {
+            if (perfilId == null || perfilId != 4L) {
+                response.sendRedirect("/");
+                return false;
+            }
+        }
+
+        // Si la ruta es /ventas/* y el usuario es motorizado, redirigir a su panel
+        if (requestURI != null && requestURI.startsWith("/ventas")) {
+            if (perfilId != null && perfilId == 4L) {
+                response.sendRedirect("/motorizado/asignados");
+                return false;
+            }
+        }
+
         return true;
     }
 

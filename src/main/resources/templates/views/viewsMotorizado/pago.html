@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Pago</title>
+    <link rel="stylesheet" href="dist/css/adminlte.min.css">
+    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" href="plugins/sweetalert2/sweetalert2.min.css">
+    <style>
+        body { padding-bottom: 85px !important; background-color: #f8f9fc; }
+        .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
+        .bottom-nav-custom a { text-align: center; text-decoration: none !important; color: #8b92a5; font-size: 0.75rem; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .bottom-nav-custom a i { font-size: 1.4rem; padding: 6px 20px; border-radius: 14px; }
+        .bottom-nav-custom a.active { color: #05a660; font-weight: 700; }
+        .bottom-nav-custom a.active i { background-color: #e8f7f0; color: #05a660; }
+        .pay-method { border: 1px solid #dee2e6; border-radius: 8px; padding: 15px 10px; text-align: center; cursor: pointer; background: white;}
+        .pay-method.active { border-color: #28a745; background-color: #f0fdf4; }
+    </style>
+</head>
+<body>
+<div th:fragment="content">
+
+    <div class="content p-2 pb-5 mt-2">
+        <div class="d-flex align-items-center mb-3">
+            <a href="detalle.html" class="text-dark mr-3"><i class="fas fa-arrow-left fa-lg"></i></a>
+            <h5 class="m-0 font-weight-bold">Registro de Pago</h5>
+        </div>
+
+        <div class="card border-0 rounded-lg shadow-sm mb-3">
+            <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                <span class="text-muted font-weight-bold text-sm">TOTAL A COBRAR</span>
+                <span class="font-weight-bold text-success" style="font-size: 1.3rem;">S/ 230.00</span>
+            </div>
+        </div>
+
+        <div class="d-flex mb-3 border rounded overflow-hidden shadow-sm bg-white">
+            <button id="btnUnico" class="btn btn-success flex-fill rounded-0 font-weight-bold border-0" onclick="setTipoPago('unico')"><i class="fas fa-money-bill"></i> Único (100%)</button>
+            <button id="btnMixto" class="btn btn-white flex-fill rounded-0 font-weight-bold text-muted border-0" onclick="setTipoPago('mixto')"><i class="fas fa-circle-half-stroke"></i> Mixto / Cruzado</button>
+        </div>
+
+<div id="pago-unico-container">
+    <p class="text-muted font-weight-bold text-xs mb-2">MÉTODOS DISPONIBLES</p>
+    <div class="row">
+        <div class="col-6 mb-2 pr-1">
+            <div class="pay-method active" onclick="seleccionarMetodo(this)">
+                <img src="img/YAPE.png" alt="Yape" height="30" style="object-fit: contain;">
+                <br><span class="font-weight-bold text-sm">Yape</span><br>
+                <small class="text-success font-weight-bold">S/ 230.00</small>
+            </div>
+        </div>
+        <div class="col-6 mb-2 pl-1">
+            <div class="pay-method" onclick="seleccionarMetodo(this)">
+                <img src="img/PLIN.png" alt="Plin" height="30" class="mb-2" style="object-fit: contain;">
+                <br><span class="font-weight-bold text-sm">Plin</span><br>
+                <small class="text-success font-weight-bold">S/ 230.00</small>
+            </div>
+        </div>
+        <div class="col-6 mb-2 pl-1">
+            <div class="pay-method" onclick="seleccionarMetodo(this)">
+                <img src="img/EFECTIVO.png" alt="Efectivo" height="40" class="mb-2" style="object-fit: contain;">
+                <br><span class="font-weight-bold text-sm">Efectivo</span><br>
+                <small class="text-success font-weight-bold">S/ 230.00</small>
+            </div>
+        </div>
+    </div>
+</div>
+        <div id="pago-mixto-container" class="card shadow-sm mb-3 border-0 rounded-lg" style="display:none;">
+            <div class="card-body p-3">
+                <div class="form-group mb-2">
+                    <label class="text-xs text-muted">Método 1</label>
+                    <div class="d-flex"><select class="form-control mr-2 border-light bg-light"><option>Yape</option><option>Efectivo</option></select><input type="number" class="form-control w-50 border-light bg-light" value="115.00"></div>
+                </div>
+                <div class="form-group mb-0">
+                    <label class="text-xs text-muted">Método 2</label>
+                    <div class="d-flex"><select class="form-control mr-2 border-light bg-light"><option>Efectivo</option><option>Plin</option></select><input type="number" class="form-control w-50 border-light bg-light" value="115.00"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-3 text-center bg-white" style="border: 2px dashed #6c757d; cursor: pointer;">
+            <div class="card-body p-4 text-muted"><i class="fas fa-camera fa-2x mb-2"></i><p class="m-0 font-weight-bold text-sm">TOMAR FOTO DE EVIDENCIA</p></div>
+        </div>
+
+        <button class="btn btn-success btn-block font-weight-bold btn-lg shadow-sm" onclick="finalizarEntrega()"><i class="fas fa-check-double"></i> CONFIRMAR Y FINALIZAR</button>
+    </div>
+
+    <nav class="bottom-nav-custom">
+        <a href="asignados.html"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
+        <a href="historial.html"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
+        <a href="perfil.html" class="active"><i class="far fa-user"></i><span>Perfil</span></a>
+    </nav>
+
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="plugins/sweetalert2/sweetalert2.min.js"></script>
+    <script src="dist/js/adminlte.min.js"></script>
+    <script>
+        const ORDER_STATUS_KEY = 'fastfuel-order-status';
+        let selectedMetodo = 'Yape';
+
+        function setTipoPago(tipo) {
+            document.getElementById('btnUnico').classList.toggle('btn-success', tipo === 'unico');
+            document.getElementById('btnUnico').classList.toggle('btn-white', tipo !== 'unico');
+            document.getElementById('btnUnico').classList.toggle('text-muted', tipo !== 'unico');
+            document.getElementById('btnMixto').classList.toggle('btn-success', tipo === 'mixto');
+            document.getElementById('btnMixto').classList.toggle('btn-white', tipo !== 'mixto');
+            document.getElementById('btnMixto').classList.toggle('text-muted', tipo !== 'mixto');
+            document.getElementById('pago-unico-container').style.display = tipo === 'unico' ? 'block' : 'none';
+            document.getElementById('pago-mixto-container').style.display = tipo === 'mixto' ? 'block' : 'none';
+        }
+
+        function seleccionarMetodo(element) {
+            document.querySelectorAll('.pay-method').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            selectedMetodo = element.textContent.trim();
+        }
+
+        function finalizarEntrega() {
+            localStorage.setItem(ORDER_STATUS_KEY, 'delivered');
+            Swal.fire({
+                icon: 'success',
+                title: 'Pago completado',
+                text: 'El pago se realizó correctamente. El pedido se marcó como entregado.',
+                confirmButtonText: 'Aceptar'
+            }).then(() => {
+                window.location.href = 'historial.html';
+            });
+        }
+    </script>
+</div>
+</body>
+</html>

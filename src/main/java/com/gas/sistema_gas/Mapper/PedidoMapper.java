@@ -29,8 +29,9 @@ public interface PedidoMapper {
     // Para la respuesta, NO accedemos a relaciones lazy - se maneja en el servicio
     @Mapping(source = "id", target = "idPedido")
     @Mapping(target = "nombreCliente", ignore = true)
+    @Mapping(target = "direccionCliente", ignore = true)
     @Mapping(target = "nombreEmpleado", ignore = true)
-    @Mapping(target = "metodoPago", ignore = true)
+    @Mapping(source = "metodoPago.nombre", target = "metodoPago")
     PedidoDTO.SimpleResponse toSimpleResponse(Pedido pedido);
 
     // Actualizar campos modificables de pedido

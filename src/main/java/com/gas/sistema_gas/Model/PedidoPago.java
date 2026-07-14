@@ -41,6 +41,13 @@ public class PedidoPago {
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a cero")
     private BigDecimal monto;
 
+    @Column(name = "vuelto", precision = 10, scale = 2)
+    private BigDecimal vuelto;
+
     @Column(name = "num_operacion", length = 50)
     private String numOperacion;
+
+    // Agrégalo dentro de tu clase PedidoPago:
+    @OneToMany(mappedBy = "pedidoPago", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<Evidencia> evidencias;
 }

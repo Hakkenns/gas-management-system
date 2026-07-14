@@ -59,7 +59,7 @@
                                     <td th:text="${venta.fechaSolicitud}"></td>
                                     <td th:text="${venta.nombreCliente}"></td>
                                     <td th:text="'S/ ' + ${venta.montoTotal}"></td>
-                                    <td>
+                                    <td class="estado-pago">
                                         <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
                                         <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
                                         <span class="badge badge-primary" th:if="${venta.estadoPago == 'CREDITO' and (venta.fechaLimitePago == null or !venta.fechaLimitePago.isBefore(#temporals.createNow()))}">A CRÉDITO</span>
@@ -67,7 +67,7 @@
                                         <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE' and venta.estadoPago != 'CREDITO'}" th:text="${venta.estadoPago}"></span>
                                     </td>
                                     <td th:text="${venta.fechaLimitePago != null ? #temporals.format(venta.fechaLimitePago, 'dd/MM/yyyy') : '-'}"></td>
-                                    <td th:text="${venta.metodoPago}"></td>
+                                    <td class="metodo-pago" th:text="${venta.metodoPago}"></td>
                                     <td>
                                         <button type="button" class="btn btn-info btn-sm btn-ver-detalle-venta" th:data-id="${venta.idPedido}">
                                             <i class="fas fa-eye"></i>
@@ -115,13 +115,13 @@
                                     <td th:text="${venta.fechaSolicitud}"></td>
                                     <td th:text="${venta.nombreCliente}"></td>
                                     <td th:text="'S/ ' + ${venta.montoTotal}"></td>
-                                    <td>
+                                    <td class="estado-pedido">
                                         <span class="badge badge-success" th:if="${venta.estadoPedido == 'ENTREGADO'}">ENTREGADO</span>
                                         <span class="badge badge-warning" th:if="${venta.estadoPedido == 'PENDIENTE'}">PENDIENTE</span>
                                         <span class="badge badge-danger" th:if="${venta.estadoPedido == 'ANULADO'}">ANULADO</span>
                                         <span class="badge badge-secondary" th:if="${venta.estadoPedido != 'ENTREGADO' and venta.estadoPedido != 'PENDIENTE' and venta.estadoPedido != 'ANULADO'}" th:text="${venta.estadoPedido}"></span>
                                     </td>
-                                    <td>
+                                    <td class="estado-pago">
                                         <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
                                         <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
                                         <span class="badge badge-primary" th:if="${venta.estadoPago == 'CREDITO' and (venta.fechaLimitePago == null or !venta.fechaLimitePago.isBefore(#temporals.createNow()))}">A CRÉDITO</span>
@@ -130,7 +130,7 @@
                                     </td>
                                     <td th:text="${venta.fechaLimitePago != null ? #temporals.format(venta.fechaLimitePago, 'dd/MM/yyyy') : '-'}"></td>
                                     <td th:text="${venta.nombreEmpleado != null and venta.nombreEmpleado != '' ? venta.nombreEmpleado : 'Sin Asignar'}"></td>
-                                    <td th:text="${venta.metodoPago}"></td>
+                                    <td class="metodo-pago" th:text="${venta.metodoPago}"></td>
                                     <td>
                                         <button type="button" class="btn btn-info btn-sm btn-ver-detalle-venta" th:data-id="${venta.idPedido}">
                                             <i class="fas fa-eye"></i>
@@ -193,7 +193,7 @@
                                     <label>Teléfono <small class="text-muted">(opcional)</small></label>
                                     <input type="text" class="form-control" id="input-telefono-cliente" placeholder="9 dígitos" maxlength="9">
                                 </div>
-                                <div class="form-group col-md-4">
+                                <div class="form-group col-md-4" id="group-condicion-pago">
                                     <label>Condición de Pago</label>
                                     <select class="form-control" id="select-condicion-pago">
                                         <option value="CONTADO">Al Contado</option>
@@ -219,7 +219,7 @@
                                 </div>
                             </div>
 
-                            <div class="row">
+                            <div class="row group-campos-pago">
                                 <div class="form-group col-md-3">
                                     <label>Método de Pago</label>
                                     <select class="form-control" id="select-metodo">
@@ -243,7 +243,7 @@
                                 </div>
                             </div>
 
-                            <div class="row">
+                            <div class="row group-campos-pago">
                                 <div class="form-group col-md-12">
                                     <label class="text-secondary font-weight-bold">Pagos Registrados</label>
                                     <table class="table table-sm table-bordered">
@@ -270,9 +270,9 @@
                                     <input type="text" class="form-control" id="input-codigo" placeholder="NV001-0001" readonly>
                                 </div>
                                 <div class="form-group col-md-4 group-campos-domicilio" style="display:none;">
-                                    <label>Motorizado / Repartidor <small class="text-muted">(opcional)</small></label>
+                                    <label>Motorizado / Repartidor <small class="text-muted">(obligatorio)</small></label>
                                     <select class="form-control" id="select-motorizado">
-                                        <option value="">-- Sin motorizado --</option>
+                                        <option value="">-- Seleccione motorizado --</option>
                                         <option th:each="motorizado : ${motorizados}" th:value="${motorizado.id}" th:text="${motorizado.nombre}"></option>
                                     </select>
                                 </div>

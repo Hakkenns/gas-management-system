@@ -1,5 +1,8 @@
 package com.gas.sistema_gas.controller;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 
@@ -30,13 +33,21 @@ public class LoginController {
      * GET: Muestra el formulario de login
      */
     @GetMapping("/login")
-    public String showLoginForm(Model model, HttpSession session) {
-        
-        // Si ya hay un usuario en sesión, redirigir al dashboard
-        if (session.getAttribute("usuarioLogueado") != null) {
-            return "redirect:/";
+    public String showLoginForm(Model model, HttpServletRequest request, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
+
+        HttpSession session = request.getSession(false);
+        if (session != null && session.getAttribute("usuarioLogueado") != null) {
+            session.invalidate();
+            Cookie cookie = new Cookie("JSESSIONID", "");
+            cookie.setPath(request.getContextPath().isEmpty() ? "/" : request.getContextPath());
+            cookie.setMaxAge(0);
+            cookie.setHttpOnly(true);
+            response.addCookie(cookie);
         }
-        
+
         return "views/login";
     }
 
@@ -48,12 +59,19 @@ public class LoginController {
     @ResponseBody
     public LoginDTO.Response processLogin(
             @Valid @RequestBody LoginDTO.Request request,
-            HttpSession session) {
+            HttpServletRequest requestHttp) {
         
         try {
             // Autenticar usuario
             LoginDTO.Response usuario = authService.authenticate(request);
             
+            // Invalidar sesión anterior si existía, para evitar mezcla de usuarios
+            HttpSession previousSession = requestHttp.getSession(false);
+            if (previousSession != null) {
+                previousSession.invalidate();
+            }
+            HttpSession session = requestHttp.getSession(true);
+
             // Guardar en sesión
             session.setAttribute("usuarioLogueado", usuario);
             session.setAttribute("usuarioId", usuario.id());
@@ -76,8 +94,25 @@ public class LoginController {
      * GET: Cierra la sesión del usuario
      */
     @GetMapping("/logout")
-    public String logout(HttpSession session) {
-        session.invalidate();
+    public String logout(HttpServletRequest request, HttpServletResponse response) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.removeAttribute("usuarioLogueado");
+            session.removeAttribute("usuarioPerfilId");
+            session.removeAttribute("usuarioPerfil");
+            session.invalidate();
+        }
+
+        Cookie cookie = new Cookie("JSESSIONID", "");
+        cookie.setPath(request.getContextPath().isEmpty() ? "/" : request.getContextPath());
+        cookie.setMaxAge(0);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        response.addCookie(cookie);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
+
         return "redirect:/login";
     }
 
@@ -91,6 +126,11 @@ public class LoginController {
 
         if (perfilId == null) {
             return java.util.Map.of("path", "/");
+        }
+
+        // Motorizado ve su pantalla asignada
+        if (perfilId.equals(4L)) {
+            return java.util.Map.of("path", "/motorizado/asignados");
         }
 
         // Admin ve dashboard
