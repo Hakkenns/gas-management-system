@@ -27,15 +27,18 @@ public class ControlEnvase {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_producto")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Producto producto;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_cliente", nullable = false)
     @NotNull(message = "El cliente es obligatorio")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Cliente cliente;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Pedido pedido;
 
     @Column(name = "cantidad_prestada", nullable = false)

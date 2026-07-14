@@ -33,7 +33,24 @@ document.addEventListener('DOMContentLoaded', function() {
             performLogin();
         });
     }
+
+    // Restaurar estado en caso de volver con el botón atrás
+    window.addEventListener('pageshow', function(event) {
+        resetLoginButton();
+    });
+
+    resetLoginButton();
 });
+
+/**
+ * Restaurar el estado del botón de login
+ */
+function resetLoginButton() {
+    const btnLogin = document.getElementById('btn-login');
+    if (!btnLogin) return;
+    btnLogin.disabled = false;
+    btnLogin.textContent = 'Ingresar';
+}
 
 /**
  * Valida que el username no esté vacío
@@ -143,6 +160,12 @@ function performLogin() {
     .then(usuarioData => {
         // Login exitoso
         console.log('Usuario logueado:', usuarioData);
+
+        // Si el perfil es motorizado, forzar su vista asignados
+        if (usuarioData.idPerfil === 4 || (usuarioData.nombrePerfil && usuarioData.nombrePerfil.toUpperCase() === 'MOTORIZADO')) {
+            window.location.href = '/motorizado/asignados';
+            return;
+        }
 
         // Solicitar ruta de landing según el perfil en sesión
         fetch('/api/landing')

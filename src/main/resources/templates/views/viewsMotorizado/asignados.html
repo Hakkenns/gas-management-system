@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asignados - FastFuel</title>
+    <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.css}">
+    <style>
+        body { padding-bottom: 85px !important; background-color: #f8f9fc; }
+        .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
+        .bottom-nav-custom a { text-align: center; text-decoration: none !important; color: #8b92a5; font-size: 0.75rem; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .bottom-nav-custom a i { font-size: 1.4rem; padding: 6px 20px; border-radius: 14px; }
+        .bottom-nav-custom a.active { color: #05a660; font-weight: 700; }
+        .bottom-nav-custom a.active i { background-color: #e8f7f0; color: #05a660; }
+        .btn-detalles-custom {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff !important;
+            border: 1px solid #1d4ed8;
+            border-radius: 10px;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.82rem;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.22);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .btn-detalles-custom:hover {
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+        }
+    </style>
+</head>
+<body>
+<div th:fragment="content">
+
+    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
+        <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
+        <a href="/logout" class="text-white " style="font-size: 0.9rem;">
+            <i class="fas fa-sign-out-alt"></i> Salir
+        </a>
+    </div>
+
+    <div class="content p-2 pb-5">
+        <h5 class="mb-3 mt-2 font-weight-bold">
+            <i class="fas fa-motorcycle text-success"></i> Mis Entregas Asignadas
+        </h5>
+
+        <div th:if="${ordenesAsignadas == null or ordenesAsignadas.isEmpty()}" class="card card-outline card-secondary shadow-sm mb-3">
+            <div class="card-body p-3 text-center text-muted">
+                <p class="mb-1 font-weight-bold">No tienes entregas asignadas en este momento.</p>
+                <p class="mb-0">Cuando recibas una nueva orden, aparecerá aquí automáticamente.</p>
+            </div>
+        </div>
+
+                <!-- INICIO DE LA TARJETA REESTRUCTURADA -->
+        <div th:each="orden : ${ordenesAsignadas}" class="card card-outline card-success shadow-sm mb-3" th:id="${'pedido-' + orden.idPedido}">
+            <!-- CABECERA: [N°venta] a la izquierda y [estado] a la derecha -->
+            <div class="card-header p-2">
+                <div class="row w-100 m-0 align-items-center">
+                    <div class="col-6 p-0">
+                        <span class="font-weight-bold text-sm" th:text="${orden.codigo}"></span>
+                    </div>
+                    <div class="col-6 p-0 text-right">
+                        <span class="badge" th:text="${orden.estadoPedido}" th:classappend="${orden.estadoPedido == 'PENDIENTE'} ? ' badge-warning' : (${orden.estadoPedido == 'ENTREGADO'} ? ' badge-success' : ' badge-secondary')">ASIGNADO</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body p-3">
+                <!-- CUERPO SUPERIOR: [Informacion del cliente] a la izquierda y [detalles] a la derecha -->
+                <div class="row align-items-center mb-4">
+                    <div class="col-7 d-flex align-items-center">
+                        <div class="bg-light rounded-circle d-flex justify-content-center align-items-center mr-2" style="width: 35px; height: 35px; min-width: 35px;">
+                            <i class="fas fa-user text-success"></i>
+                        </div>
+                        <div class="text-truncate">
+                            <h6 class="m-0 text-xs text-muted mb-1">CLIENTE</h6>
+                            <h6 class="m-0 font-weight-bold text-sm" th:text="${orden.nombreCliente != null ? orden.nombreCliente : 'Cliente desconocido'}">Cliente nombre</h6>
+                            <small class="text-muted d-block" th:text="${orden.direccionCliente != null and !#strings.isEmpty(orden.direccionCliente) ? orden.direccionCliente : 'Sin dirección registrada'}">Dirección</small>
+                            <small class="text-muted d-block" th:text="${orden.fechaSolicitud != null ? #temporals.format(orden.fechaSolicitud, 'dd/MM/yyyy HH:mm') : 'Sin fecha'}">Fecha</small>
+                        </div>
+                    </div>
+                    <!-- Botón Detalles alineado a la derecha en la misma fila -->
+                    <div class="col-5 text-right">
+                        <a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-detalles-custom font-weight-bold">
+                            <i class="fas fa-list"></i> Detalles
+                        </a>
+                    </div>
+                </div>
+
+                <!-- ACCIONES INFERIORES -->
+                <div class="row" th:if="${orden.estadoPedido == 'PENDIENTE'}">
+                    <div class="col-6 pr-2">
+                        <form th:action="@{/motorizado/pedido/estado}" method="post" class="w-100">
+                            <input type="hidden" name="id" th:value="${orden.idPedido}" />
+                            <input type="hidden" name="estado" value="ACEPTADO" />
+                            <button type="submit" class="btn btn-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
+                                <i class="fas fa-check"></i> Aceptar
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-6 pl-2">
+                        <button type="button" class="btn btn-danger btn-block btn-sm font-weight-bold py-2 shadow-sm" data-toggle="modal" data-target="#modal-rechazo" th:onclick="|prepararRechazo(${orden.idPedido})|">
+                            <i class="fas fa-times"></i> Rechazar
+                        </button>
+                    </div>
+                </div>
+                <div class="row" th:unless="${orden.estadoPedido == 'PENDIENTE'}">
+                    <div class="col-12">
+                        <a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-outline-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
+                            <i class="fas fa-route"></i> Ver proceso
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Monto total real de la venta -->
+                <div class="mt-2 text-right text-muted x-small" style="font-size: 0.75rem;">
+                    <span class="font-weight-bold text-dark">Monto total:</span>
+                    <span th:text="${orden.montoTotal != null ? 'S/ ' + #numbers.formatDecimal(orden.montoTotal, 1, 2) : 'S/ 0.00'}">S/ 0.00</span>
+                </div>
+            </div>
+        </div>
+        <!-- FIN DE LA TARJETA -->
+
+    </div>
+
+    <nav class="bottom-nav-custom">
+        <a th:href="@{/motorizado/asignados}" class="active"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
+        <a th:href="@{/motorizado/historial}"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
+        <a th:href="@{/motorizado/perfil}"><i class="far fa-user"></i><span>Perfil</span></a>
+    </nav>
+
+    <div class="modal fade" id="modal-rechazo" tabindex="-1" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-dark">
+                    <h6 class="modal-title text-white">Motivo de rechazo</h6>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="rechazo-id">
+                    <select class="form-control mb-3" id="motivoRechazo">
+                        <option value="">Seleccione un motivo...</option>
+                        <option value="distancia">Distancia excesiva</option>
+                        <option value="moto">Moto averiada</option>
+                        <option value="fuera_horario">Fuera de horario</option>
+                    </select>
+                    <div class="row">
+                        <div class="col-6 pr-1"><button class="btn btn-secondary btn-block" data-dismiss="modal">Cancelar</button></div>
+                        <div class="col-6 pl-1"><button class="btn btn-danger btn-block" onclick="confirmarRechazo()">Rechazar</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function aceptarPedido(id) {
+            window.location.href = '/motorizado/pedido/estado?id=' + id + '&estado=ACEPTADO';
+        }
+
+        function prepararRechazo(id) {
+            document.getElementById('rechazo-id').value = id;
+            document.getElementById('motivoRechazo').value = '';
+        }
+
+        function confirmarRechazo() {
+            const motivo = document.getElementById('motivoRechazo').value;
+            const id = document.getElementById('rechazo-id').value;
+
+            if (!motivo) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione un motivo.', icon: 'warning' });
+                return;
+            }
+
+            const badge = document.getElementById('badge-' + id);
+            badge.className = 'badge badge-danger';
+            badge.textContent = 'RECHAZADO';
+
+            document.getElementById('botones-accion-' + id).style.display = 'none';
+            $('#modal-rechazo').modal('hide');
+
+            Swal.fire({
+                title: 'Pedido rechazado',
+                text: 'La entrega quedó cancelada.',
+                icon: 'error',
+                timer: 900,
+                showConfirmButton: false
+            });
+        }
+
+        function iniciarRuta(id) {
+            Swal.fire({
+                title: 'Ruta iniciada',
+                text: 'Se abrirá el detalle de la entrega.',
+                icon: 'success',
+                timer: 700,
+                showConfirmButton: false
+            }).then(() => {
+                window.location.href = 'detalle.html?id=' + id;
+            });
+        }
+    </script>
+    <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.js}"></script>
+    <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
+</div>
+</body>
+</html>

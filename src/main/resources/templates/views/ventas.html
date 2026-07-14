@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+
+<body>
+    <div th:fragment="content">
+
+        <div class="content p-3">
+            <h3 class="mb-3">
+                <i class="fas fa-cash-register"></i>
+                <strong>Gestión de Ventas</strong>
+            </h3>
+            <hr>
+
+            <!-- Bootstrap Tabs Navigation -->
+            <ul class="nav nav-tabs mb-3" id="tab-ventas" role="tablist">
+                <li class="nav-item" th:if="${session.usuarioPerfilId != 4}">
+                    <a class="nav-link" th:classappend="${activeTab == 'local' ? 'active' : ''}" id="local-tab" data-toggle="tab" href="#local-content" role="tab" aria-controls="local" aria-selected="true">
+                        <i class="fas fa-store"></i> Ventas Local
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${(activeTab == 'domicilio' or session.usuarioPerfilId == 4) ? 'active' : ''}" id="domicilio-tab" data-toggle="tab" href="#domicilio-content" role="tab" aria-controls="domicilio" aria-selected="false">
+                        <i class="fas fa-motorcycle"></i> Ventas Domicilio
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="tab-ventas-content">
+                
+                <!-- Tab 1: Ventas Local -->
+                <div class="tab-pane fade" th:classappend="${activeTab == 'local' ? 'show active' : ''}" id="local-content" role="tabpanel" aria-labelledby="local-tab" th:if="${session.usuarioPerfilId != 4}">
+                    <button id="btn-crear-venta-local" class="btn btn-info mb-3 btn-crear-venta" data-tipo="LOCAL">
+                        <i class="fas fa-plus"></i> Nueva venta local
+                    </button>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped tabla-ventas-dinamica" id="tabla-ventas-local">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Código</th>
+                                    <th>Fecha</th>
+                                    <th>Cliente</th>
+                                    <th>Monto Total</th>
+                                    <th>Estado Pago</th>
+                                    <th>Vence</th>
+                                    <th>Método Pago</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(ventasLocal)}">
+                                    <td colspan="9" class="text-center">No hay ventas registradas</td>
+                                </tr>
+                                <tr th:each="venta : ${ventasLocal}">
+                                    <td th:text="${venta.idPedido}"></td>
+                                    <td th:text="${venta.codigo}"></td>
+                                    <td th:text="${venta.fechaSolicitud}"></td>
+                                    <td th:text="${venta.nombreCliente}"></td>
+                                    <td th:text="'S/ ' + ${venta.montoTotal}"></td>
+                                    <td class="estado-pago">
+                                        <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
+                                        <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
+                                        <span class="badge badge-primary" th:if="${venta.estadoPago == 'CREDITO' and (venta.fechaLimitePago == null or !venta.fechaLimitePago.isBefore(#temporals.createNow()))}">A CRÉDITO</span>
+                                        <span class="badge badge-danger" th:if="${venta.estadoPago == 'CREDITO' and venta.fechaLimitePago != null and venta.fechaLimitePago.isBefore(#temporals.createNow())}">VENCIDO</span>
+                                        <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE' and venta.estadoPago != 'CREDITO'}" th:text="${venta.estadoPago}"></span>
+                                    </td>
+                                    <td th:text="${venta.fechaLimitePago != null ? #temporals.format(venta.fechaLimitePago, 'dd/MM/yyyy') : '-'}"></td>
+                                    <td class="metodo-pago" th:text="${venta.metodoPago}"></td>
+                                    <td>
+                                        <button type="button" class="btn btn-info btn-sm btn-ver-detalle-venta" th:data-id="${venta.idPedido}">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-warning btn-sm btn-editar-venta" th:data-id="${venta.idPedido}" title="Editar Venta">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Ventas Domicilio -->
+                <div class="tab-pane fade" th:classappend="${(activeTab == 'domicilio' or session.usuarioPerfilId == 4) ? 'show active' : ''}" id="domicilio-content" role="tabpanel" aria-labelledby="domicilio-tab">
+                    <button id="btn-crear-venta-domicilio" class="btn btn-info mb-3 btn-crear-venta" data-tipo="DOMICILIO" th:if="${session.usuarioPerfilId != 4}">
+                        <i class="fas fa-plus"></i> Nueva venta a domicilio
+                    </button>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped tabla-ventas-dinamica" id="tabla-ventas-domicilio">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Código</th>
+                                    <th>Fecha</th>
+                                    <th>Cliente</th>
+                                    <th>Monto Total</th>
+                                    <th>Estado Pedido</th>
+                                    <th>Estado Pago</th>
+                                    <th>Vence</th>
+                                    <th>Motorizado</th>
+                                    <th>Método Pago</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(ventasDomicilio)}">
+                                    <td colspan="11" class="text-center">No hay ventas registradas</td>
+                                </tr>
+                                <tr th:each="venta : ${ventasDomicilio}">
+                                    <td th:text="${venta.idPedido}"></td>
+                                    <td th:text="${venta.codigo}"></td>
+                                    <td th:text="${venta.fechaSolicitud}"></td>
+                                    <td th:text="${venta.nombreCliente}"></td>
+                                    <td th:text="'S/ ' + ${venta.montoTotal}"></td>
+                                    <td class="estado-pedido">
+                                        <span class="badge badge-success" th:if="${venta.estadoPedido == 'ENTREGADO'}">ENTREGADO</span>
+                                        <span class="badge badge-warning" th:if="${venta.estadoPedido == 'PENDIENTE'}">PENDIENTE</span>
+                                        <span class="badge badge-danger" th:if="${venta.estadoPedido == 'ANULADO'}">ANULADO</span>
+                                        <span class="badge badge-secondary" th:if="${venta.estadoPedido != 'ENTREGADO' and venta.estadoPedido != 'PENDIENTE' and venta.estadoPedido != 'ANULADO'}" th:text="${venta.estadoPedido}"></span>
+                                    </td>
+                                    <td class="estado-pago">
+                                        <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
+                                        <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
+                                        <span class="badge badge-primary" th:if="${venta.estadoPago == 'CREDITO' and (venta.fechaLimitePago == null or !venta.fechaLimitePago.isBefore(#temporals.createNow()))}">A CRÉDITO</span>
+                                        <span class="badge badge-danger" th:if="${venta.estadoPago == 'CREDITO' and venta.fechaLimitePago != null and venta.fechaLimitePago.isBefore(#temporals.createNow())}">VENCIDO</span>
+                                        <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE' and venta.estadoPago != 'CREDITO'}" th:text="${venta.estadoPago}"></span>
+                                    </td>
+                                    <td th:text="${venta.fechaLimitePago != null ? #temporals.format(venta.fechaLimitePago, 'dd/MM/yyyy') : '-'}"></td>
+                                    <td th:text="${venta.nombreEmpleado != null and venta.nombreEmpleado != '' ? venta.nombreEmpleado : 'Sin Asignar'}"></td>
+                                    <td class="metodo-pago" th:text="${venta.metodoPago}"></td>
+                                    <td>
+                                        <button type="button" class="btn btn-info btn-sm btn-ver-detalle-venta" th:data-id="${venta.idPedido}">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-warning btn-sm btn-editar-venta" th:data-id="${venta.idPedido}" title="Editar Venta" th:if="${session.usuarioPerfilId != 4 or venta.estadoPedido == 'PENDIENTE'}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- UNIFIED REGISTER/EDIT MODAL -->
+        <div class="modal fade" id="modal-venta" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title" id="modal-title-venta">Registrar nueva venta</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="form-venta">
+                            <input type="hidden" id="input-id-pedido">
+                            <input type="hidden" id="session-perfil-id" th:value="${session.usuarioPerfilId}">
+                            
+                            <div class="row">
+                                <div class="form-group col-md-4">
+                                    <label>Tipo de Venta</label>
+                                    <select class="form-control font-weight-bold" id="select-tipo-venta" required>
+                                        <option value="LOCAL">Venta Local</option>
+                                        <option value="DOMICILIO">Venta a Domicilio</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label>DNI del cliente (opcional)</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="input-dni-cliente" placeholder="Ej: 12345678" maxlength="8">
+                                        <div class="input-group-append">
+                                            <button type="button" id="btn-buscar-cliente" class="btn btn-secondary">Buscar</button>
+                                        </div>
+                                    </div>
+                                    <small id="cliente-feedback" class="form-text text-muted">Ingrese DNI y busque, o complete datos manualmente.</small>
+                                    <input type="hidden" id="input-id-cliente">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label>Nombre del cliente</label>
+                                    <input type="text" class="form-control" id="input-nombre-cliente" placeholder="Nombre del cliente" required>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="form-group col-md-4">
+                                    <label>Teléfono <small class="text-muted">(opcional)</small></label>
+                                    <input type="text" class="form-control" id="input-telefono-cliente" placeholder="9 dígitos" maxlength="9">
+                                </div>
+                                <div class="form-group col-md-4" id="group-condicion-pago">
+                                    <label>Condición de Pago</label>
+                                    <select class="form-control" id="select-condicion-pago">
+                                        <option value="CONTADO">Al Contado</option>
+                                        <option value="CREDITO">A Crédito (Máx 2 días)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4" id="group-fecha-limite" style="display:none;">
+                                    <label>Fecha Límite de Pago</label>
+                                    <input type="date" class="form-control" id="input-fecha-limite">
+                                    <small class="form-text text-muted">Plazo máximo de 2 días.</small>
+                                </div>
+                            </div>
+
+                            <!-- Domicilio Specific Fields -->
+                            <div class="row group-campos-domicilio" style="display:none;">
+                                <div class="form-group col-md-6">
+                                    <label>Dirección de Envío</label>
+                                    <input type="text" class="form-control" id="input-direccion-cliente" placeholder="Dirección de envío">
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>Referencia</label>
+                                    <input type="text" class="form-control" id="input-referencia-cliente" placeholder="Referencia (opcional)">
+                                </div>
+                            </div>
+
+                            <div class="row group-campos-pago">
+                                <div class="form-group col-md-3">
+                                    <label>Método de Pago</label>
+                                    <select class="form-control" id="select-metodo">
+                                        <option value="">-- Seleccione método --</option>
+                                        <option th:each="metodo : ${metodosPago}" th:value="${metodo.id}" th:text="${metodo.nombre}"></option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label>Monto de pago</label>
+                                    <input type="number" class="form-control" id="input-monto-pago" step="0.01" min="0.01" placeholder="S/ 0.00">
+                                </div>
+                                <div class="form-group col-md-3" id="row-num-operacion" style="display:none;">
+                                    <label>Número de operación</label>
+                                    <input type="text" class="form-control" id="input-num-operacion" placeholder="Número de operación" maxlength="50">
+                                    <small class="form-text text-muted">Requerido para Yape o Plin.</small>
+                                </div>
+                                <div class="form-group col-md-3 d-flex align-items-end">
+                                    <button type="button" id="btn-agregar-pago" class="btn btn-primary btn-block">
+                                        <i class="fas fa-plus"></i> Agregar pago
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="row group-campos-pago">
+                                <div class="form-group col-md-12">
+                                    <label class="text-secondary font-weight-bold">Pagos Registrados</label>
+                                    <table class="table table-sm table-bordered">
+                                        <thead>
+                                            <tr class="bg-light">
+                                                <th>Método de Pago</th>
+                                                <th>Monto</th>
+                                                <th>Operación</th>
+                                                <th width="10%">Quitar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-pagos-venta">
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="form-group col-md-4">
+                                    <label>Código de Venta</label>
+                                    <input type="text" class="form-control" id="input-codigo" placeholder="NV001-0001" readonly>
+                                </div>
+                                <div class="form-group col-md-4 group-campos-domicilio" style="display:none;">
+                                    <label>Motorizado / Repartidor <small class="text-muted">(obligatorio)</small></label>
+                                    <select class="form-control" id="select-motorizado">
+                                        <option value="">-- Seleccione motorizado --</option>
+                                        <option th:each="motorizado : ${motorizados}" th:value="${motorizado.id}" th:text="${motorizado.nombre}"></option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4" id="group-estado-pedido-parent">
+                                    <label>Estado del Pedido</label>
+                                    <!-- Para local se forzará a ENTREGADO como label estático, para Domicilio es select -->
+                                    <select class="form-control" id="select-estado-pedido">
+                                        <option value="PENDIENTE">PENDIENTE</option>
+                                        <option value="ENTREGADO">ENTREGADO (COMPLETADO)</option>
+                                    </select>
+                                    <input type="text" class="form-control" id="input-estado-pedido-local" value="ENTREGADO" readonly style="display:none;">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Observaciones</label>
+                                <textarea id="input-observaciones" class="form-control" rows="2" placeholder="Opcional"></textarea>
+                            </div>
+
+                            <!-- CARD AGREGAR PRODUCTOS -->
+                            <div class="card border-secondary mt-3" id="card-agregar-productos">
+                                <div class="card-header bg-secondary text-white py-2">Agregar productos al detalle</div>
+                                <div class="card-body row align-items-end py-3">
+                                    <div class="form-group col-md-4 mb-0">
+                                        <label>Producto</label>
+                                        <div class="input-group">
+                                            <input type="hidden" id="select-producto" />
+                                            <input type="text" class="form-control" id="input-producto-nombre" placeholder="Buscar/Seleccionar producto">
+                                            <div class="input-group-append">
+                                                <button type="button" id="btn-buscar-producto" class="btn btn-secondary" title="Buscar producto">
+                                                    <i class="fas fa-search"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <label>Cantidad</label>
+                                        <input type="number" class="form-control" id="select-cantidad" min="1" value="1">
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <label>Precio Unitario</label>
+                                        <input type="number" class="form-control" id="select-precio" step="0.01" min="0.01">
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <label>Prestados</label>
+                                        <input type="number" class="form-control" id="input-cantidad-prestada" min="0" value="0">
+                                    </div>
+                                    <div class="form-group col-md-2 mb-0">
+                                        <button type="button" id="btn-agregar-detalle" class="btn btn-success btn-block">
+                                            <i class="fas fa-plus"></i> Añadir
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TABLA DETALLES DEL PEDIDO -->
+                            <div class="table-responsive mt-3">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th width="12%">Cantidad</th>
+                                            <th width="15%">P. Unitario</th>
+                                            <th width="15%">Prestados</th>
+                                            <th width="18%">Subtotal</th>
+                                            <th width="10%" class="col-quitar-producto">Quitar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabla-filas-venta">
+                                        <!-- Carga dinámica -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="row justify-content-end pr-3 mt-2">
+                                <div class="text-right">
+                                    <h5>Subtotal: <strong>S/ <span id="txt-subtotal">0.00</span></strong></h5>
+                                    <h4>Total: <strong>S/ <span id="txt-total-general" class="text-danger">0.00</span></strong></h4>
+                                </div>
+                            </div>
+
+                            <div class="modal-footer bg-light mt-3">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-success">Guardar Venta</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DETALLE VENTA -->
+        <div class="modal fade" id="modal-detalle-venta" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-info text-white py-2">
+                        <h5 class="modal-title">Detalle de la Venta</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table table-sm table-striped table-bordered">
+                            <thead>
+                                <tr class="bg-light">
+                                    <th>Producto</th>
+                                    <th width="15%" class="text-center">Cantidad</th>
+                                    <th width="20%" class="text-right">Precio Unitario</th>
+                                    <th width="20%" class="text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detalle-venta-body"></tbody>
+                        </table>
+                        <div id="detalle-venta-sin-items" class="alert alert-warning text-center" style="display:none;">
+                            No se encontraron detalles para este pedido.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL BÚSQUEDA DE PRODUCTOS -->
+        <div class="modal fade" id="modal-buscar-producto" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white py-2">
+                        <h5 class="modal-title">Buscar Producto</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <input type="text" class="form-control" id="buscar-producto-filtro" placeholder="Filtrar por nombre...">
+                            </div>
+                            <div class="col-md-6">
+                                <select class="form-control" id="select-buscar-categoria">
+                                    <option value="">-- Todas las categorías --</option>
+                                    <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nombre}"></option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-striped" id="tabla-busqueda-productos">
+                                <thead class="bg-secondary text-white">
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Categoría</th>
+                                        <th width="20%">Precio Venta</th>
+                                        <th width="15%">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="p : ${productos}" 
+                                        class="fila-producto-busqueda" 
+                                        th:data-id="${p.id}"
+                                        th:data-nombre="${p.nombre}"
+                                        th:data-precio="${p.precioVenta}"
+                                        th:data-categoria="${p.idCategoria != null ? p.idCategoria : ''}"
+                                        th:data-capacidad="${p.capacidad}"
+                                        th:data-unidad="${p.unidadMedida}">
+                                        <td th:text="|${p.nombre}${p.capacidad != null and p.unidadMedida != null ? ' - ' + p.capacidad + ' ' + p.unidadMedida : ''}|"></td>
+                                        <td th:text="${p.nombreCategoria != null ? p.nombreCategoria : '-'}"></td>
+                                        <td class="text-right" th:text="'S/ ' + ${p.precioVenta}"></td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/ventas.js}"></script>
+    </div>
+</body>
+
+</html>

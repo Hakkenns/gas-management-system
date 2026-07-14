@@ -72,16 +72,51 @@ public class PedidoServiceImplement implements PedidoService {
     @Transactional
     public List<PedidoDTO.SimpleResponse> listAll() {
         return pedidoRepository.findAll().stream()
-                .map(pedidoMapper::toSimpleResponse)
+                .map(this::mapToSimpleResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
     public List<PedidoDTO.SimpleResponse> listByTipoVenta(String tipoVenta) {
-        return pedidoRepository.findByTipoVenta(tipoVenta).stream()
-                .map(pedidoMapper::toSimpleResponse)
+        return pedidoRepository.findByTipoVentaWithMetodoPago(tipoVenta).stream()
+                .map(this::mapToSimpleResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public List<PedidoDTO.SimpleResponse> listByTipoVentaAndEmpleadoId(String tipoVenta, Long empleadoId) {
+        return pedidoRepository.findByTipoVentaAndEmpleadoIdWithMetodoPago(tipoVenta, empleadoId).stream()
+                .map(this::mapToSimpleResponse)
+                .collect(Collectors.toList());
+    }
+
+    private PedidoDTO.SimpleResponse mapToSimpleResponse(Pedido pedido) {
+        String nombreCliente = pedido.getCliente() != null ? pedido.getCliente().getNombre() : null;
+        String direccionCliente = pedido.getCliente() != null ? pedido.getCliente().getDireccion() : null;
+        String nombreEmpleado = pedido.getEmpleado() != null ? pedido.getEmpleado().getNombre() : null;
+        String metodoPagoNombre = pedido.getMetodoPago() != null ? pedido.getMetodoPago().getNombre() : null;
+        
+        PedidoDTO.SimpleResponse response = pedidoMapper.toSimpleResponse(pedido);
+        Long empleadoId = pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null;
+        return new PedidoDTO.SimpleResponse(
+            response.idPedido(),
+            response.codigo(),
+            response.fechaSolicitud(),
+            nombreCliente,
+            direccionCliente,
+            empleadoId,
+            pedido.getObservaciones(),
+            nombreEmpleado,
+            pedido.getEstadoPedido(),
+            pedido.getEstadoPago(),
+            response.montoTotal(),
+            response.subtotal(),
+            metodoPagoNombre,
+            response.tipoVenta(),
+            response.fechaLimitePago()
+        );
     }
 
     @Override
@@ -204,6 +239,12 @@ public class PedidoServiceImplement implements PedidoService {
         pedido.setUsuario(usuario);
         pedido.setEmpleado(empleado);
         pedido.setFechaSolicitud(LocalDateTime.now());
+
+        // Validación de motorizado para domicilio
+        if ("DOMICILIO".equalsIgnoreCase(pedido.getTipoVenta()) && pedido.getEmpleado() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Debe seleccionar un motorizado para ventas a domicilio.");
+        }
 
         // Lógica de estados según tipo de venta
         if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
@@ -376,7 +417,7 @@ public class PedidoServiceImplement implements PedidoService {
             }
         }
 
-        return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedidoGuardado));
+        return mapToSimpleResponse(pedidoRepository.save(pedidoGuardado));
     }
 
     @Override
@@ -398,7 +439,48 @@ public class PedidoServiceImplement implements PedidoService {
             pedido.setEstadoPago("PAGADO");
         }
 
-        return pedidoMapper.toSimpleResponse(pedidoRepository.save(pedido));
+        return mapToSimpleResponse(pedidoRepository.save(pedido));
+    }
+
+    @Override
+    @Transactional
+    public PedidoDTO.SimpleResponse updateEstadoPedido(Long id, String nuevoEstado) {
+        if (nuevoEstado == null || nuevoEstado.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estado del pedido es obligatorio");
+        }
+
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        String estadoActual = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "PENDIENTE";
+        String estadoNormalizado = nuevoEstado.trim().toUpperCase();
+        List<String> estadosValidos = List.of("PENDIENTE", "ACEPTADO", "CARGADO", "EN_CAMINO", "EN_DOMICILIO", "ENTREGADO", "ANULADO");
+        if (!estadosValidos.contains(estadoNormalizado)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de pedido inválido: " + nuevoEstado);
+        }
+
+        List<String> secuencia = List.of("PENDIENTE", "ACEPTADO", "CARGADO", "EN_CAMINO", "EN_DOMICILIO", "ENTREGADO");
+        int indiceActual = secuencia.indexOf(estadoActual);
+        int indiceNuevo = secuencia.indexOf(estadoNormalizado);
+
+        if (estadoNormalizado.equals("ANULADO")) {
+            if (!"PENDIENTE".equals(estadoActual)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede cancelarse desde PENDIENTE");
+            }
+        } else if (indiceActual == -1 || indiceNuevo == -1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de pedido no permitido para este flujo");
+        } else if (indiceNuevo != indiceActual + 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estado del pedido no puede retroceder");
+        }
+
+        pedido.setEstadoPedido(estadoNormalizado);
+
+        if ("ENTREGADO".equals(estadoNormalizado)) {
+            pedido.setFechaEntrega(pedido.getFechaEntrega() != null ? pedido.getFechaEntrega() : LocalDateTime.now());
+            pedido.setEstadoPago("PAGADO");
+        }
+
+        return mapToSimpleResponse(pedidoRepository.save(pedido));
     }
 
     @Override
@@ -445,7 +527,21 @@ public class PedidoServiceImplement implements PedidoService {
     public PedidoDTO.SimpleResponse findById(Long id) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
-        return pedidoMapper.toSimpleResponse(pedido);
+        return mapToSimpleResponse(pedido);
+    }
+
+    @Override
+    @Transactional
+    public PedidoDTO.SimpleResponse findByIdAndEmpleadoId(Long id, Long empleadoId) {
+        Pedido pedido = pedidoRepository.findByIdAndEmpleadoId(id, empleadoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no asignado a este motorizado"));
+        return mapToSimpleResponse(pedido);
+    }
+
+    @Override
+    @Transactional
+    public boolean existsByIdAndEmpleadoId(Long id, Long empleadoId) {
+        return pedidoRepository.findByIdAndEmpleadoId(id, empleadoId).isPresent();
     }
 
     @Override

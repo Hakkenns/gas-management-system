@@ -28,10 +28,12 @@ public class PedidoPago {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Pedido pedido;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_metodo", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private MetodoPago metodoPago;
 
     @Column(name = "monto", nullable = false, precision = 12, scale = 2)
@@ -39,6 +41,13 @@ public class PedidoPago {
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a cero")
     private BigDecimal monto;
 
+    @Column(name = "vuelto", precision = 10, scale = 2)
+    private BigDecimal vuelto;
+
     @Column(name = "num_operacion", length = 50)
     private String numOperacion;
+
+    // Agrégalo dentro de tu clase PedidoPago:
+    @OneToMany(mappedBy = "pedidoPago", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<Evidencia> evidencias;
 }

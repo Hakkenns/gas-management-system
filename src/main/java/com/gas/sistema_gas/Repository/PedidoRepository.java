@@ -1,16 +1,21 @@
 package com.gas.sistema_gas.Repository;
 
+import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
+
+
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
 public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     // Buscar por el código único (ej: PED-0001)
@@ -23,10 +28,26 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByClienteId(Long idCliente);
 
     // Listar pedidos por tipo de venta
-    List<Pedido> findByTipoVenta(String tipoVenta);
+    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta")
+    List<Pedido> findByTipoVentaWithMetodoPago(@Param("tipoVenta") String tipoVenta);
 
     // Listar pedidos por tipo de venta y empleado (motorizado)
-    List<Pedido> findByTipoVentaAndEmpleadoId(String tipoVenta, Long idEmpleado);
+    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta AND p.empleado.id = :empleadoId")
+    List<Pedido> findByTipoVentaAndEmpleadoIdWithMetodoPago(@Param("tipoVenta") String tipoVenta, @Param("empleadoId") Long empleadoId);
+
+    @Modifying
+    @Query("UPDATE Pedido p SET p.estadoPago = :estadoPago, p.metodoPago = :metodoPago WHERE p.id = :id")
+    int updateEstadoPagoAndMetodoById(@Param("id") Long id,
+                                     @Param("estadoPago") String estadoPago,
+                                     @Param("metodoPago") MetodoPago metodoPago);
+
+    // Buscar un pedido por ID y motorizado asignado
+    @Query("SELECT p FROM Pedido p WHERE p.id = :id AND p.empleado.id = :empleadoId")
+    Optional<Pedido> findByIdAndEmpleadoId(@Param("id") Long id, @Param("empleadoId") Long empleadoId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Pedido p WHERE p.id = :id")
+    Optional<Pedido> findByIdForUpdate(@Param("id") Long id);
 
     // Reporte de ventas entre fechas (Muy útil para el cierre de caja)
     @Query("SELECT p FROM Pedido p WHERE p.fechaSolicitud BETWEEN :inicio AND :fin")

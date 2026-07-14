@@ -20,20 +20,7 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        Optional<Opcion> opcionVentas = opcionRepository.findByRuta("ventas");
-        if (opcionVentas.isEmpty()) {
-            Opcion ventas = new Opcion();
-            ventas.setIcono("fas fa-cash-register");
-            ventas.setNombre("Ventas");
-            ventas.setRuta("ventas");
-            ventas.setEstado(1);
-            opcionRepository.save(ventas);
-        } else {
-            Opcion existente = opcionVentas.get();
-            if (existente.getEstado() == 0) {
-                existente.setEstado(1);
-                opcionRepository.save(existente);
-            }
-        }
+        // La inicialización del menú "Ventas" general ha sido deshabilitada ya que fue
+        // reemplazada por los menús específicos "Ventas Local" y "Ventas Domicilio".
     }
 }

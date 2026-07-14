@@ -26,10 +26,11 @@ public interface PedidoMapper {
     @Mapping(target = "updatedAt", ignore = true)
     Pedido toEntity(PedidoDTO.Create createDto);
 
-    // Para la respuesta, extraemos los nombres de las relaciones
+    // Para la respuesta, NO accedemos a relaciones lazy - se maneja en el servicio
     @Mapping(source = "id", target = "idPedido")
-    @Mapping(source = "cliente.nombre", target = "nombreCliente")
-    @Mapping(source = "empleado.nombre", target = "nombreEmpleado")
+    @Mapping(target = "nombreCliente", ignore = true)
+    @Mapping(target = "direccionCliente", ignore = true)
+    @Mapping(target = "nombreEmpleado", ignore = true)
     @Mapping(source = "metodoPago.nombre", target = "metodoPago")
     PedidoDTO.SimpleResponse toSimpleResponse(Pedido pedido);
 

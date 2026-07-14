@@ -55,6 +55,7 @@ public class Usuario {
     // Relación de Muchos a uno con Perfil
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_perfil", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Perfil perfil;
 
     @Column(name = "correo", nullable = false, length = 150, unique = true)
@@ -65,6 +66,7 @@ public class Usuario {
     // Relación uno a uno con Empleado (Mantiene la clave foránea id_empleado)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_empleado")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Empleado empleado;
 
     @PrePersist
