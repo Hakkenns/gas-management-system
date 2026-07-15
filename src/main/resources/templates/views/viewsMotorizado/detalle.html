@@ -72,7 +72,6 @@
                 <div class="mb-3">
                     <small class="text-muted text-uppercase">Cliente</small>
                     <h6 class="mb-1 font-weight-bold" th:text="${pedido != null and pedido.nombreCliente != null ? pedido.nombreCliente : 'Cliente desconocido'}"></h6>
-                    <p class="mb-0 text-muted" th:text="${pedido != null and pedido.direccionCliente != null and !#strings.isEmpty(pedido.direccionCliente) ? pedido.direccionCliente : 'Sin dirección registrada'}"></p>
                 </div>
                 <div class="mb-3">
                     <small class="text-muted text-uppercase">Monto Total</small>
@@ -80,7 +79,11 @@
                 </div>
                 <div class="mb-0">
                     <small class="text-muted text-uppercase">Observación</small>
-                    <p class="mb-0 text-muted" th:text="${pedido != null and pedido.observaciones != null and !#strings.isEmpty(pedido.observaciones) ? pedido.observaciones : 'Sin observaciones'}"></p>
+                    <div th:if="${pedido != null and pedido.observaciones != null and !#strings.isEmpty(pedido.observaciones) and !#strings.equalsIgnoreCase(pedido.observaciones, 'Sin observaciones')}" class="alert alert-light border rounded p-2 d-flex align-items-start mb-0 mt-1">
+                        <i class="fas fa-info-circle text-warning mr-2 mt-1"></i>
+                        <span class="text-dark" th:text="${pedido.observaciones}"></span>
+                    </div>
+                    <p th:unless="${pedido != null and pedido.observaciones != null and !#strings.isEmpty(pedido.observaciones) and !#strings.equalsIgnoreCase(pedido.observaciones, 'Sin observaciones')}" class="mb-0 text-muted mt-1">Sin observaciones</p>
                 </div>
             </div>
         </div>
@@ -127,16 +130,16 @@
                 </iframe>
                 <div class="p-3">
                     <small class="text-muted">Destino:</small>
-                    <p class="mb-0 font-weight-bold">Calle Los Tulipanes 123, Miraflores</p>
+                    <p class="mb-0 font-weight-bold text-dark" style="font-size: 1rem;" th:text="${pedido != null and pedido.direccionCliente != null and !#strings.isEmpty(pedido.direccionCliente) ? pedido.direccionCliente : 'Sin dirección registrada'}"></p>
                 </div>
             </div>
         </div>
     </div>
 
     <nav class="bottom-nav-custom">
-        <a href="asignados.html" class="active"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a href="historial.html"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a href="perfil.html"><i class="far fa-user"></i><span>Perfil</span></a>
+        <a th:href="@{/motorizado/asignados}" class="active"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
+        <a th:href="@{/motorizado/historial}"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
+        <a th:href="@{/motorizado/perfil}"><i class="far fa-user"></i><span>Perfil</span></a>
     </nav>
 
     <div class="modal fade payment-modal" id="modal-pago" tabindex="-1" role="dialog" aria-labelledby="modalPagoLabel" aria-hidden="true">

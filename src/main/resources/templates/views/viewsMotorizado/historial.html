@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historial de Entregas</title>
-    <link rel="stylesheet" href="dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <title>Historial - FastFuel</title>
+    <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
     <style>
         body { padding-bottom: 85px !important; background-color: #f8f9fc; }
         .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
@@ -13,6 +13,116 @@
         .bottom-nav-custom a i { font-size: 1.4rem; padding: 6px 20px; border-radius: 14px; }
         .bottom-nav-custom a.active { color: #05a660; font-weight: 700; }
         .bottom-nav-custom a.active i { background-color: #e8f7f0; color: #05a660; }
+        .info-box-custom {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .info-box-custom .info-box-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            margin-right: 1rem;
+        }
+        .info-box-custom .info-box-content {
+            flex: 1;
+        }
+        .info-box-custom .info-box-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        .info-box-custom .info-box-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin: 0;
+        }
+        .pedidos-container {
+            height: calc(100vh - 380px);
+            min-height: 300px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+        }
+        .loading-spinner.active {
+            display: block;
+        }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            overflow: visible;
+            z-index: 2000;
+        }
+        .dropdown-menu {
+            z-index: 9999 !important;
+            position: absolute !important;
+            top: calc(100% + 0.35rem) !important;
+            left: 0 !important;
+            right: auto !important;
+            margin: 0;
+            min-width: 160px !important;
+            max-width: 170px !important;
+            max-height: 300px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.16);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 0.75rem;
+            padding: 0.35rem 0;
+            display: none;
+            transform: translate3d(0, 0, 0) !important;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 0.55rem 0.75rem;
+            font-size: 0.9rem;
+        }
+        .dropdown-item.active,
+        .dropdown-item:active,
+        .dropdown-item:focus {
+            background-color: #f8f9fa !important;
+            color: #333 !important;
+        }
+        .dropdown-item .option-content {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 100%;
+        }
+        .dropdown-item .option-content .option-label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-width: 0;
+        }
+        .dropdown-item .check-icon {
+            margin-left: 0.45rem;
+            flex-shrink: 0;
+        }
+        .dropdown-footer {
+            border-top: 1px solid #e9ecef;
+            padding: 0.6rem 0.9rem 0.3rem;
+        }
+        .dropdown-footer .btn {
+            width: 100%;
+            border-radius: 0.6rem;
+        }
+        .bottom-nav-custom {
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -20,88 +130,438 @@
 
     <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
         <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
-        <div class="text-white-50 small">Sist. Web</div>
+        <a th:href="@{/logout}" class="text-white" style="font-size: 0.9rem;">
+            <i class="fas fa-sign-out-alt"></i> Salir
+        </a>
     </div>
 
-    <div class="content p-2 pb-5 mt-2">
-        <div class="input-group mb-3 shadow-sm rounded">
-            <div class="input-group-prepend"><span class="input-group-text bg-white border-right-0 border-light"><i class="fas fa-search text-muted"></i></span></div>
-            <input type="text" class="form-control border-left-0 border-light" placeholder="Buscar por ID o cliente...">
-        </div>
+    <div class="content p-2 pb-5">
+        <h5 class="mb-3 mt-2 font-weight-bold">
+            <i class="fas fa-history text-success"></i> Historial de Entregas
+        </h5>
 
-        <div class="d-flex mb-3" style="overflow-x: auto; white-space: nowrap;">
-            <button class="btn btn-success btn-sm rounded-pill mr-2 px-3 font-weight-bold"><i class="far fa-calendar-alt"></i> Hoy</button>
-            <button class="btn btn-outline-secondary btn-sm rounded-pill mr-2 px-3 bg-white text-dark border-light shadow-sm"><i class="fas fa-sync-alt"></i> Esta semana</button>
-            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3 bg-white text-dark border-light shadow-sm"><i class="fas fa-sliders-h"></i> Filtros</button>
-        </div>
-
+        <!-- Info Boxes para estadísticas -->
         <div class="row mb-3">
             <div class="col-6 pr-1">
-                <div class="card bg-success mb-0 shadow-sm border-0 rounded-lg">
-                    <div class="card-body p-2 text-center"><span class="d-block text-xs font-weight-bold">COMPLETADOS</span><h4 class="m-0 font-weight-bold">25</h4></div>
+                <div class="info-box-custom bg-white">
+                    <div class="info-box-icon bg-success text-white">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <span class="info-box-text">COMPLETADOS</span>
+                        <p class="info-box-number text-success" id="completados-count">0</p>
+                    </div>
                 </div>
             </div>
             <div class="col-6 pl-1">
-                <div class="card mb-0 shadow-sm border-0 rounded-lg">
-                    <div class="card-body p-2 text-center"><span class="d-block text-xs font-weight-bold text-muted">TOTAL RECAUDADO</span><h4 class="m-0 font-weight-bold text-success">S/ 2,465.50</h4></div>
+                <div class="info-box-custom bg-white">
+                    <div class="info-box-icon bg-info text-white">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <div class="info-box-content">
+                        <span class="info-box-text">TOTAL RECAUDADO</span>
+                        <p class="info-box-number text-info" id="total-recaudado">S/ 0.00</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buscador -->
+        <div class="input-group mb-3 shadow-sm rounded">
+            <div class="input-group-prepend">
+                <span class="input-group-text bg-white border-right-0 border-light">
+                    <i class="fas fa-search text-muted"></i>
+                </span>
+            </div>
+            <input type="text" class="form-control border-left-0 border-light" id="buscador" placeholder="Buscar por ID o cliente...">
+        </div>
+
+        <!-- Filtros rápidos -->
+        <div class="d-flex mb-3" style="overflow-x: visible; white-space: nowrap;">
+            <button class="btn btn-success btn-sm rounded-pill mr-2 px-3 font-weight-bold" data-periodo="hoy" onclick="setPeriodo('hoy')">
+                <i class="far fa-calendar-alt"></i> Hoy
+            </button>
+            <button class="btn btn-outline-secondary btn-sm rounded-pill mr-2 px-3 bg-white text-dark border-light shadow-sm" data-periodo="semana" onclick="setPeriodo('semana')">
+                <i class="fas fa-sync-alt"></i> Esta semana
+            </button>
+            <button class="btn btn-outline-secondary btn-sm rounded-pill mr-2 px-3 bg-white text-dark border-light shadow-sm" data-periodo="mes" onclick="setPeriodo('mes')">
+                <i class="fas fa-calendar"></i> Este mes
+            </button>
+            <div class="dropdown d-inline-block" style="position: relative !important;">
+                <button class="btn btn-light dropdown-toggle" type="button" id="btnFiltros" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="background-color: #ffffff; color: #333333; border: 1px solid #d1d5db;">
+                    <i class="fas fa-sliders-h mr-1"></i> Filtros
+                </button>
+                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="btnFiltros" style="position: absolute !important; right: 0 !important; left: auto !important; min-width: 160px !important; max-width: 170px !important; z-index: 1050;">
+                    <h6 class="dropdown-header">Método de pago</h6>
+                    <a class="dropdown-item" href="#" data-value="TODOS">
+                        <span class="option-content">
+                            <span class="option-label"><i class="fas fa-list mr-2 text-primary"></i> Todos</span>
+                            <span class="check-icon"><i class="fas fa-check text-success d-none"></i></span>
+                        </span>
+                    </a>
+                    <a class="dropdown-item" href="#" data-value="EFECTIVO">
+                        <span class="option-content">
+                            <span class="option-label"><i class="fas fa-money-bill-wave mr-2 text-success"></i> Efectivo</span>
+                            <span class="check-icon"><i class="fas fa-check text-success d-none"></i></span>
+                        </span>
+                    </a>
+                    <a class="dropdown-item" href="#" data-value="YAPE">
+                        <span class="option-content">
+                            <span class="option-label"><i class="fas fa-mobile-alt mr-2 text-info"></i> Yape</span>
+                            <span class="check-icon"><i class="fas fa-check text-success d-none"></i></span>
+                        </span>
+                    </a>
+                    <a class="dropdown-item" href="#" data-value="PLIN">
+                        <span class="option-content">
+                            <span class="option-label"><i class="fas fa-mobile-alt mr-2 text-warning"></i> Plin</span>
+                            <span class="check-icon"><i class="fas fa-check text-success d-none"></i></span>
+                        </span>
+                    </a>
                 </div>
             </div>
         </div>
 
         <h6 class="text-muted font-weight-bold text-xs mb-2">HISTORIAL RECIENTE</h6>
 
-        <a href="venta-detalle.html" class="text-dark text-decoration-none">
-          <div class="card shadow-sm mb-2 border-0 rounded-lg">
-            <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                    <span class="font-weight-bold text-sm">NV001-0005</span>
-                    <span class="badge badge-success px-2 py-1"><i class="fas fa-check"></i> ENTREGADO</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-end">
-                    <div>
-                        <h6 class="m-0 font-weight-bold">Maria Rodriguez</h6>
-                        <small class="text-muted"><i class="far fa-calendar-alt"></i> 09/06/2026</small>
-                    </div>
-                    <div class="text-right">
-                        <h6 class="m-0 font-weight-bold text-success">S/ 45.00</h6>
-                        <span class="badge border border-warning text-warning mt-1 px-2" style="background-color: #fff9e6;">● YAPE | EFECTIVO</span>
-                    </div>
+        <!-- Contenedor con scroll independiente -->
+        <div class="pedidos-container" id="pedidos-container">
+            <div id="pedidos-list">
+                <!-- Los pedidos se cargarán dinámicamente aquí -->
+            </div>
+            <div class="loading-spinner" id="loading-spinner">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted small mt-2">Cargando más pedidos...</p>
+            </div>
+            <div id="no-pedidos" class="card card-outline card-secondary shadow-sm mb-3" style="display: none;">
+                <div class="card-body p-4 text-center text-muted">
+                    <i class="fas fa-inbox fa-3x mb-3 text-muted"></i>
+                    <p class="mb-1 font-weight-bold">No hay pedidos entregados</p>
+                    <p class="mb-0 small" id="no-pedidos-message">Intenta con otros filtros de búsqueda.</p>
                 </div>
             </div>
-          </div>
-        </a>
-
-        <a href="venta-detalle.html" class="text-dark text-decoration-none">
-          <div class="card shadow-sm mb-2 border-0 rounded-lg">
-            <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                    <span class="font-weight-bold text-sm">NV001-0004</span>
-                    <span class="badge badge-success px-2 py-1"><i class="fas fa-check"></i> ENTREGADO</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-end">
-                    <div>
-                        <h6 class="m-0 font-weight-bold">Carlos Rodriguez Pérez</h6>
-                        <small class="text-muted"><i class="far fa-calendar-alt"></i> 09/06/2026</small>
-                    </div>
-                    <div class="text-right">
-                        <h6 class="m-0 font-weight-bold text-success">S/ 450.00</h6>
-                        <span class="badge border border-success text-success mt-1 px-2" style="background-color: #e8f7f0;">● EFECTIVO</span>
-                    </div>
-                </div>
-            </div>
-          </div>
-        </a>
+        </div>
     </div>
 
-    <nav class="bottom-nav-custom">
-        <a href="asignados.html"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a href="historial.html" class="active"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a href="perfil.html"><i class="far fa-user"></i><span>Perfil</span></a>
-    </nav>
+    <div th:replace="~{fragments/bottom-nav :: bottom-nav('historial')}"></div>
 
-    <script src="plugins/jquery/jquery.min.js"></script>
-    <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="dist/js/adminlte.min.js"></script>
+    <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
+    <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
+    <script>
+        // Variables de estado
+        let currentPage = 0;
+        let totalPages = 0;
+        let isLoading = false;
+        let currentFilters = {
+            buscar: '',
+            periodo: 'hoy', // Por defecto cargar pedidos de hoy
+            metodoPago: ''
+        };
+        let totalElements = 0;
+        let loadedPedidos = [];
+
+        // Función debounce para el buscador
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Cargar pedidos con AJAX
+        async function cargarPedidos(reset = false) {
+            if (isLoading) return;
+
+            if (reset) {
+                document.getElementById('pedidos-list').innerHTML = '';
+            }
+
+            isLoading = true;
+            document.getElementById('loading-spinner').classList.add('active');
+
+            try {
+                const params = new URLSearchParams();
+                if (currentFilters.metodoPago) {
+                    params.set('metodoPago', currentFilters.metodoPago);
+                }
+
+                const response = await fetch(`/api/motorizado/historial/data${params.toString() ? `?${params.toString()}` : ''}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    console.error('Error:', result.message);
+                    document.getElementById('no-pedidos').style.display = 'block';
+                    document.getElementById('no-pedidos-message').textContent = 'No se pudo cargar el historial.';
+                    return;
+                }
+
+                const pedidos = result.pedidos || [];
+                loadedPedidos = pedidos;
+                const totalPedidos = pedidos.length;
+                const totalRecaudado = pedidos
+                    .map(pedido => Number(pedido.montoTotal || 0))
+                    .reduce((sum, monto) => sum + monto, 0);
+
+                actualizarEstadisticas(totalPedidos, totalRecaudado);
+                renderizarPedidos(pedidos);
+            } catch (error) {
+                console.error('Error de conexión:', error);
+                document.getElementById('no-pedidos').style.display = 'block';
+                document.getElementById('no-pedidos-message').textContent = 'Error al cargar el historial.';
+            } finally {
+                isLoading = false;
+                document.getElementById('loading-spinner').classList.remove('active');
+            }
+        }
+
+        // Renderizar pedidos en el contenedor
+        function renderizarPedidos(pedidos) {
+            const container = document.getElementById('pedidos-list');
+            const terminoBusqueda = (currentFilters.buscar || '').trim().toLowerCase();
+            container.innerHTML = '';
+
+            const pedidosMostrados = terminoBusqueda
+                ? pedidos.filter(pedido => {
+                    const nombreCliente = String(pedido.nombreCliente || '').toLowerCase();
+                    const notaVenta = String(
+                        pedido.codigo ||
+                        pedido.notaVenta ||
+                        pedido.numeroPedido ||
+                        pedido.serieCorrelativo ||
+                        pedido.idPedido ||
+                        pedido.id ||
+                        pedido.idVenta ||
+                        pedido.codigoVenta ||
+                        pedido.numero ||
+                        ''
+                    ).toLowerCase();
+
+                    return nombreCliente.includes(terminoBusqueda) || notaVenta.includes(terminoBusqueda);
+                })
+                : pedidos;
+
+            if (!pedidosMostrados.length) {
+                document.getElementById('no-pedidos').style.display = 'block';
+                document.getElementById('no-pedidos-message').textContent = 'No hay pedidos entregados que coincidan con la búsqueda.';
+                return;
+            }
+
+            document.getElementById('no-pedidos').style.display = 'none';
+
+            pedidosMostrados.forEach(pedido => {
+                const fecha = pedido.fechaSolicitud ? new Date(pedido.fechaSolicitud) : null;
+                const fechaFormateada = fecha ? fecha.toLocaleDateString('es-PE') : 'Sin fecha';
+                const horaFormateada = fecha ? fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '';
+                const montoTotal = Number(pedido.montoTotal || 0).toFixed(2);
+                const metodoPago = pedido.metodoPago ? pedido.metodoPago.toUpperCase() : 'EFECTIVO';
+                const metodoBadge = metodoPago === 'YAPE' || metodoPago === 'PLIN' ? 'badge-warning' : 'badge-success';
+                const notaVenta = String(
+                    pedido.codigo ||
+                    pedido.notaVenta ||
+                    pedido.numeroPedido ||
+                    pedido.serieCorrelativo ||
+                    pedido.idPedido ||
+                    pedido.id ||
+                    pedido.idVenta ||
+                    pedido.codigoVenta ||
+                    pedido.numero ||
+                    'N/A'
+                );
+
+                const pedidoId = pedido.id || pedido.idPedido || pedido.idVenta || pedido.pedidoId || '';
+
+                container.insertAdjacentHTML('beforeend', `
+                    <div class="card card-outline card-success shadow-sm mb-3 card-pedido" data-id="${pedidoId}" data-nota-venta="${notaVenta}">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="mb-1"><strong class="text-dark">${notaVenta}</strong></div>
+                                    <h6 class="mb-1 font-weight-bold">${pedido.nombreCliente || 'Cliente desconocido'}</h6>
+                                    <p class="mb-1 text-muted">${pedido.direccionCliente || 'Sin dirección'}</p>
+                                    <p class="mb-0"><strong>Método de pago:</strong> ${pedido.metodoPago || 'Efectivo'}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="badge badge-success px-2 py-1">ENTREGADO</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="badge ${metodoBadge}">${metodoPago}</span>
+                                <strong class="text-success">S/ ${montoTotal}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="text-muted small">${fechaFormateada} ${horaFormateada}</div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-ver-detalle" data-id="${pedidoId}">
+                                    <i class="fas fa-eye mr-1"></i>Ver detalle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            });
+        }
+
+        // Actualizar estadísticas
+        function actualizarEstadisticas(totalPedidos, totalRecaudado) {
+            document.getElementById('completados-count').textContent = totalPedidos || 0;
+            document.getElementById('total-recaudado').textContent = 'S/ ' + Number(totalRecaudado || 0).toFixed(2);
+        }
+
+        // Scroll infinito
+        function handleScroll() {
+            const container = document.getElementById('pedidos-container');
+            const scrollPosition = container.scrollTop + container.clientHeight;
+            const scrollHeight = container.scrollHeight;
+            
+            // Cargar más cuando estemos a 50px del final
+            if (scrollPosition >= scrollHeight - 50 && !isLoading && currentPage < totalPages - 1) {
+                currentPage++;
+                cargarPedidos(false);
+            }
+        }
+
+        // Establecer periodo
+        function setPeriodo(periodo) {
+            currentFilters.periodo = periodo;
+            
+            // Actualizar estilos de botones
+            document.querySelectorAll('[data-periodo]').forEach(btn => {
+                if (btn.dataset.periodo === periodo) {
+                    btn.classList.remove('btn-outline-secondary', 'bg-white', 'text-dark', 'border-light');
+                    btn.classList.add('btn-success');
+                } else {
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-secondary', 'bg-white', 'text-dark', 'border-light');
+                }
+            });
+            
+            cargarPedidos(true);
+        }
+
+        let selectedMetodoPago = ['TODOS'];
+
+        function sincronizarChecks() {
+            document.querySelectorAll('.dropdown-item').forEach(option => {
+                const value = (option.dataset.value || '').toUpperCase();
+                const checkIcon = option.querySelector('.check-icon i');
+                const isSelected = selectedMetodoPago.includes(value);
+                option.classList.toggle('active', isSelected);
+                if (checkIcon) {
+                    checkIcon.classList.toggle('d-none', !isSelected);
+                }
+            });
+        }
+
+        function cerrarDropdownFiltros() {
+            $('#btnFiltros').dropdown('toggle');
+        }
+
+        function aplicarFiltroMetodoPago() {
+            const valorParaApi = selectedMetodoPago.includes('TODOS') ? 'TODOS' : selectedMetodoPago.join(',');
+            currentFilters.metodoPago = valorParaApi === 'TODOS' ? '' : valorParaApi;
+            currentPage = 0;
+            loadedPedidos = [];
+            document.getElementById('pedidos-list').innerHTML = '';
+            cargarPedidos(true);
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const buscador = document.getElementById('buscador');
+            const container = document.getElementById('pedidos-container');
+            const botonFiltros = document.getElementById('btnFiltros');
+            if (botonFiltros) {
+                botonFiltros.classList.remove('active', 'focus');
+                botonFiltros.blur();
+                botonFiltros.style.backgroundColor = '#ffffff';
+                botonFiltros.style.color = '#333333';
+                botonFiltros.style.border = '1px solid #d1d5db';
+            }
+
+            if (window.jQuery && typeof window.jQuery.fn.dropdown === 'function') {
+                $('#btnFiltros').dropdown();
+            }
+            
+            // Debounce para el buscador
+            const debouncedSearch = debounce((value) => {
+                currentFilters.buscar = value;
+                renderizarPedidos(loadedPedidos);
+            }, 200);
+            
+            buscador.addEventListener('input', (e) => {
+                debouncedSearch(e.target.value);
+            });
+            
+            // Scroll infinito
+            container.addEventListener('scroll', handleScroll);
+
+            document.querySelectorAll('.dropdown-item').forEach(option => {
+                option.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const valorSeleccionado = (this.dataset.value || '').toUpperCase();
+
+                    if (valorSeleccionado === 'TODOS') {
+                        selectedMetodoPago = ['TODOS'];
+                    } else {
+                        if (selectedMetodoPago.includes('TODOS')) {
+                            selectedMetodoPago = [];
+                        }
+
+                        if (selectedMetodoPago.includes(valorSeleccionado)) {
+                            selectedMetodoPago = selectedMetodoPago.filter(item => item !== valorSeleccionado);
+                        } else {
+                            selectedMetodoPago.push(valorSeleccionado);
+                        }
+
+                        if (!selectedMetodoPago.length) {
+                            selectedMetodoPago = ['TODOS'];
+                        }
+                    }
+
+                    sincronizarChecks();
+                    aplicarFiltroMetodoPago();
+                });
+            });
+
+            if (botonFiltros) {
+                botonFiltros.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+            }
+
+            document.addEventListener('click', (event) => {
+                const detalleButton = event.target.closest('.btn-ver-detalle');
+                if (detalleButton) {
+                    event.preventDefault();
+                    const pedidoId = detalleButton.dataset.id || detalleButton.closest('.card-pedido')?.dataset.id;
+
+                    if (!pedidoId || pedidoId === 'undefined' || pedidoId === 'null') {
+                        console.warn('Ver detalle: id de pedido no disponible');
+                        return;
+                    }
+
+                    window.location.href = '/motorizado/detalle?id=' + pedidoId;
+                    return;
+                }
+
+                const dropdownEl = document.querySelector('.dropdown');
+                if (!dropdownEl) return;
+                if (!dropdownEl.contains(event.target)) {
+                    $('#btnFiltros').dropdown('hide');
+                }
+            });
+
+            sincronizarChecks();
+            
+            // Cargar pedidos iniciales
+            cargarPedidos(true);
+        });
+    </script>
 </div>
 </body>
 </html>

@@ -47,8 +47,16 @@ public class Empleado {
 
     @Column(nullable = false, length = 9, unique = true)
     @NotBlank(message = "El teléfono es obligatorio")
-    @Pattern(regexp = "9\\d{8}", message = "El teléfono debe empezar con 9 y tener 9 dígitos")
+    @Pattern(regexp = "^9\\d{8}$", message = "El teléfono debe tener 9 dígitos y empezar con 9")
     private String telefono;
+
+    @Column(name = "direccion")
+    private String direccion;
+
+    @Column(name = "correo")
+    @NotBlank(message = "El correo es obligatorio")
+    @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@gmail\\.com$", message = "Debe ser un correo de Gmail válido")
+    private String correo;
 
     @Column(nullable = false)
     private Integer estado = 1;

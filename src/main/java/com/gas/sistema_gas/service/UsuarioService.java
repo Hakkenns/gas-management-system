@@ -9,6 +9,7 @@ public interface UsuarioService {
     UsuarioDTO.SimpleResponse createUser(UsuarioDTO.Create createDto);
     List<UsuarioDTO.SimpleResponse> listAll();
     UsuarioDTO.SimpleResponse findById(Long id);
+    UsuarioDTO.PerfilResponse obtenerPerfilMotorizado(Long usuarioId);
     UsuarioDTO.SimpleResponse updateUser(Long id, UsuarioDTO.Update createDto);
     UsuarioDTO.SimpleResponse setState(Long id, Integer estado);
     void deleteUser(Long id);

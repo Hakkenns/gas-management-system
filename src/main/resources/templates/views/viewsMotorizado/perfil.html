@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perfil del Repartidor</title>
-    <link rel="stylesheet" href="dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
     <style>
         body { padding-bottom: 85px !important; background-color: #f8f9fc; }
         .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
@@ -27,39 +27,45 @@
     </div>
 
     <div class="content p-2 pb-5">
-        <div class="card shadow-sm border-0 rounded-lg mb-3">
+        <div th:if="${usuario != null}" class="card shadow-sm border-0 rounded-lg mb-3">
             <div class="card-body p-3 d-flex align-items-center">
                 <div class="profile-avatar mr-3"><i class="fas fa-user"></i></div>
                 <div>
-                    <h5 class="font-weight-bold mb-1">Roy Agapito Vegas</h5>
+                    <h5 class="font-weight-bold mb-1" th:text="${#strings.defaultString(usuario.nombre, 'Sin nombre')}">Sin nombre</h5>
                     <p class="text-muted mb-1">Repartidor activo</p>
                     <small class="text-success"><i class="fas fa-check-circle"></i> Disponible para nuevas entregas</small>
                 </div>
             </div>
         </div>
 
-        <div class="card shadow-sm border-0 rounded-lg mb-3">
+        <div th:unless="${usuario != null}" class="card shadow-sm border-0 rounded-lg mb-3">
+            <div class="card-body p-3 text-center text-muted">
+                <p class="mb-0">No hay información del repartidor disponible.</p>
+            </div>
+        </div>
+
+        <div th:if="${usuario != null}" class="card shadow-sm border-0 rounded-lg mb-3">
             <div class="card-body p-3">
                 <div class="row">
                     <div class="col-6 mb-3">
-                        <p class="info-label mb-1">Teléfono</p>
-                        <p class="font-weight-bold mb-0">987 654 321</p>
+                        <p class="info-label mb-1">Usuario</p>
+                        <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.userName, 'No registrado')}">usuario</p>
                     </div>
                     <div class="col-6 mb-3">
                         <p class="info-label mb-1">Correo</p>
-                        <p class="font-weight-bold mb-0">roy@example.com</p>
+                        <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.correo, 'No registrado')}">correo@example.com</p>
                     </div>
                     <div class="col-6 mb-3">
-                        <p class="info-label mb-1">Placa</p>
-                        <p class="font-weight-bold mb-0">ABC-123</p>
+                        <p class="info-label mb-1">DNI</p>
+                        <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.dni, 'No registrado')}">00000000</p>
                     </div>
                     <div class="col-6 mb-3">
-                        <p class="info-label mb-1">Vehículo</p>
-                        <p class="font-weight-bold mb-0">Moto 125cc</p>
+                        <p class="info-label mb-1">Teléfono</p>
+                        <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.telefono, 'No registrado')}">987 654 321</p>
                     </div>
                     <div class="col-12">
-                        <p class="info-label mb-1">Dirección base</p>
-                        <p class="font-weight-bold mb-0">Av. Central 123, Lima</p>
+                        <p class="info-label mb-1">Perfil</p>
+                        <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.perfil, 'No registrado')}">Repartidor</p>
                     </div>
                 </div>
             </div>
@@ -70,7 +76,7 @@
                 <div class="card shadow-sm border-0 rounded-lg bg-white">
                     <div class="card-body p-3 text-center">
                         <p class="text-muted mb-1">Pedidos hoy</p>
-                        <h4 class="font-weight-bold">8</h4>
+                        <h4 class="font-weight-bold" th:text="${pedidosHoy != null ? pedidosHoy : 0}">0</h4>
                     </div>
                 </div>
             </div>
@@ -78,31 +84,21 @@
                 <div class="card shadow-sm border-0 rounded-lg bg-white">
                     <div class="card-body p-3 text-center">
                         <p class="text-muted mb-1">Entregas completadas</p>
-                        <h4 class="font-weight-bold">124</h4>
+                        <h4 class="font-weight-bold" th:text="${entregasTotales != null ? entregasTotales : 0}">0</h4>
                     </div>
                 </div>
             </div>
         </div>
 
-        <a href="perfil-editar.html" class="btn btn-success btn-block font-weight-bold shadow-sm mb-2"><i class="fas fa-edit"></i> Editar perfil</a>
-        <button class="btn btn-outline-secondary btn-block font-weight-bold shadow-sm" onclick="cerrarSesion()"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</button>
+        <a th:href="@{/motorizado/perfil/editar}" class="btn btn-success btn-block font-weight-bold shadow-sm mb-2"><i class="fas fa-edit"></i> Editar perfil</a>
+        <a th:href="@{/logout}" class="btn btn-outline-secondary btn-block font-weight-bold shadow-sm"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>
 
-    <nav class="bottom-nav-custom">
-        <a href="asignados.html"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a href="historial.html"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a href="perfil.html" class="active"><i class="far fa-user"></i><span>Perfil</span></a>
-    </nav>
+    <div th:replace="~{fragments/bottom-nav :: menú}"></div>
 
-    <script>
-        function cerrarSesion() {
-            alert('Sesión cerrada.');
-            window.location.href = 'asignados.html';
-        }
-    </script>
-    <script src="plugins/jquery/jquery.min.js"></script>
-    <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="dist/js/adminlte.min.js"></script>
+    <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
+    <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
 </div>
 </body>
 </html>

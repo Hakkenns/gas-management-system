@@ -23,6 +23,12 @@ public interface UsuarioMapper {
     @Mapping(source = "empleado.nombre", target = "nombre")
     UsuarioDTO.SimpleResponse toSimpleResponse(Usuario usuario);
 
+    @Mapping(source = "empleado.nombre", target = "nombre")
+    @Mapping(source = "empleado.dni", target = "dni")
+    @Mapping(source = "empleado.telefono", target = "telefono")
+    @Mapping(source = "perfil.nombrePerfil", target = "perfil")
+    UsuarioDTO.PerfilResponse toPerfilResponse(Usuario usuario);
+
     @Mapping(source = "perfil.nombrePerfil", target = "nombrePerfil")
     @Mapping(source = "perfil.id", target = "idPerfil")
     @Mapping(source = "empleado.nombre", target = "nombre")

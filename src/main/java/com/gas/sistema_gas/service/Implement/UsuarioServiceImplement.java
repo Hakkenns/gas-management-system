@@ -140,4 +140,17 @@ public class UsuarioServiceImplement implements UsuarioService {
                 .map(usuarioMapper::toSimpleResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UsuarioDTO.PerfilResponse obtenerPerfilMotorizado(Long usuarioId) {
+        Usuario usuario = usuarioRepository.findByIdAndEstado(usuarioId, 1)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        if (usuario.getEmpleado() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado");
+        }
+
+        return usuarioMapper.toPerfilResponse(usuario);
+    }
 }

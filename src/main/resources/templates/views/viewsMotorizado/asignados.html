@@ -125,11 +125,7 @@
 
     </div>
 
-    <nav class="bottom-nav-custom">
-        <a th:href="@{/motorizado/asignados}" class="active"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a th:href="@{/motorizado/historial}"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a th:href="@{/motorizado/perfil}"><i class="far fa-user"></i><span>Perfil</span></a>
-    </nav>
+    <div th:replace="~{fragments/bottom-nav :: bottom-nav('asignados')}"></div>
 
     <div class="modal fade" id="modal-rechazo" tabindex="-1" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-sm">

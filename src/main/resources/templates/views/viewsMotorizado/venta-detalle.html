@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalle de venta realizada</title>
-    <link rel="stylesheet" href="dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
     <style>
         body { padding-bottom: 85px !important; background-color: #f8f9fc; }
         .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
@@ -18,7 +18,7 @@
 <body>
 <div th:fragment="content">
     <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
-        <a href="historial.html" class="text-white"><i class="fas fa-arrow-left"></i></a>
+        <a th:href="@{/motorizado/historial}" class="text-white"><i class="fas fa-arrow-left"></i></a>
         <div class="font-weight-bold">Detalle de venta</div>
         <div class="text-white-50 small">Realizada</div>
     </div>
@@ -73,9 +73,9 @@
     </div>
 
     <nav class="bottom-nav-custom">
-        <a href="asignados.html"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a href="historial.html" class="active"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a href="perfil.html"><i class="far fa-user"></i><span>Perfil</span></a>
+        <a th:href="@{/motorizado/asignados}"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
+        <a th:href="@{/motorizado/historial}" class="active"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
+        <a th:href="@{/motorizado/perfil}"><i class="far fa-user"></i><span>Perfil</span></a>
     </nav>
 
     <script src="plugins/jquery/jquery.min.js"></script>

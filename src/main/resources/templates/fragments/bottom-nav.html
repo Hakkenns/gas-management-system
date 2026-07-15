@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div th:fragment="bottom-nav(activePage)">
+        <nav class="bottom-nav-custom" role="navigation" aria-label="Navegación inferior">
+            <a th:href="@{/motorizado/asignados}"
+               th:classappend="${activePage == 'asignados'} ? 'active' : ''">
+                <i class="fas fa-truck-fast"></i><span>Asignados</span>
+            </a>
+            <a th:href="@{/motorizado/historial}"
+               th:classappend="${activePage == 'historial'} ? 'active' : ''">
+                <i class="fas fa-clock-rotate-left"></i><span>Historial</span>
+            </a>
+            <a th:href="@{/motorizado/perfil}"
+               th:classappend="${activePage == 'perfil'} ? 'active' : ''">
+                <i class="far fa-user"></i><span>Perfil</span>
+            </a>
+        </nav>
+    </div>
+
+    <div th:fragment="menú">
+        <nav class="bottom-nav-custom" role="navigation" aria-label="Navegación inferior">
+            <a th:href="@{/motorizado/asignados}">
+                <i class="fas fa-truck-fast"></i><span>Asignados</span>
+            </a>
+            <a th:href="@{/motorizado/historial}">
+                <i class="fas fa-clock-rotate-left"></i><span>Historial</span>
+            </a>
+            <a th:href="@{/motorizado/perfil}" class="active">
+                <i class="far fa-user"></i><span>Perfil</span>
+            </a>
+        </nav>
+    </div>
+</body>
+</html>

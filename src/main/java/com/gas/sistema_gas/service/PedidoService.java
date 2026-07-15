@@ -2,6 +2,8 @@ package com.gas.sistema_gas.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+
 import com.gas.sistema_gas.dto.PedidoDTO;
 
 public interface PedidoService {
@@ -18,4 +20,6 @@ public interface PedidoService {
     boolean existsByIdAndEmpleadoId(Long id, Long empleadoId);
     PedidoDTO.EditResponse getEditData(Long id);
     long countSalesToday();
+    List<PedidoDTO.SimpleResponse> listEntregadosByEmpleadoId(Long empleadoId);
+    Page<PedidoDTO.SimpleResponse> listEntregadosByEmpleadoIdWithFilters(Long empleadoId, String buscar, String metodoPago, java.time.LocalDateTime fechaInicio, java.time.LocalDateTime fechaFin, org.springframework.data.domain.Pageable pageable);
 }

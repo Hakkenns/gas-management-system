@@ -11,7 +11,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.EmpleadoMapper;
 import com.gas.sistema_gas.Model.Empleado;
+import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.EmpleadoDTO;
 import com.gas.sistema_gas.service.EmpleadoService;
 
@@ -20,6 +22,9 @@ public class EmpleadoServiceImplement implements EmpleadoService {
 
     @Autowired
     private EmpleadoRepository empleadoRepository;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
 
     @Autowired
     private EmpleadoMapper empleadoMapper;
@@ -97,6 +102,30 @@ public class EmpleadoServiceImplement implements EmpleadoService {
         empleadoMapper.updateEntityFromDTO(updateDto, emp);
         Empleado actualizado = empleadoRepository.save(emp);
         return empleadoMapper.toSimpleResponse(actualizado);
+    }
+
+    @Override
+    @Transactional
+    public void updatePerfil(Long id, String nombre, String telefono, String direccion, String correo) {
+        Empleado emp = empleadoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado"));
+
+        emp.setNombre(nombre != null ? nombre : emp.getNombre());
+        emp.setTelefono(telefono != null ? telefono : emp.getTelefono());
+        emp.setDireccion(direccion != null ? direccion : emp.getDireccion());
+        emp.setCorreo(correo != null ? correo : emp.getCorreo());
+
+        empleadoRepository.save(emp);
+
+        Usuario usuario = usuarioRepository.findAll().stream()
+                .filter(u -> u.getEmpleado() != null && id.equals(u.getEmpleado().getId()))
+                .findFirst()
+                .orElse(null);
+
+        if (usuario != null && correo != null && !correo.isBlank()) {
+            usuario.setCorreo(correo);
+            usuarioRepository.save(usuario);
+        }
     }
 
     @Override

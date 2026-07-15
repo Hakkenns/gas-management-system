@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -595,5 +598,20 @@ public class PedidoServiceImplement implements PedidoService {
             detallesDto,
             pagosDto
         );
+    }
+
+    @Override
+    @Transactional
+    public List<PedidoDTO.SimpleResponse> listEntregadosByEmpleadoId(Long empleadoId) {
+        return pedidoRepository.findEntregadosByEmpleadoId(empleadoId).stream()
+                .map(this::mapToSimpleResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public Page<PedidoDTO.SimpleResponse> listEntregadosByEmpleadoIdWithFilters(Long empleadoId, String buscar, String metodoPago, LocalDateTime fechaInicio, LocalDateTime fechaFin, Pageable pageable) {
+        Page<Pedido> pedidosPage = pedidoRepository.findEntregadosByEmpleadoIdWithFilters(empleadoId, buscar, metodoPago, fechaInicio, fechaFin, pageable);
+        return pedidosPage.map(this::mapToSimpleResponse);
     }
 }

@@ -34,6 +34,17 @@ public class UsuarioDTO {
             Long idPerfil
     ) {}
 
+    public record PerfilResponse(
+            Long id,
+            String nombre,
+            String userName,
+            String correo,
+            String dni,
+            String telefono,
+            String perfil,
+            Integer estado
+    ) {}
+
     public record Update(
             @NotBlank(message = "El username es obligatorio")
             String userName,

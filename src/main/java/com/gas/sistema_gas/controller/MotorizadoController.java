@@ -1,19 +1,27 @@
 package com.gas.sistema_gas.controller;
 
 import jakarta.servlet.http.HttpSession;
-
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -22,8 +30,22 @@ import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.PedidoPagosService;
 
 import com.gas.sistema_gas.Model.Empleado;
+import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Repository.EmpleadoRepository;
+import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
+import com.gas.sistema_gas.dto.EmpleadoDTO;
+import com.gas.sistema_gas.service.EmpleadoService;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.service.UsuarioService;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/motorizado")
@@ -37,6 +59,18 @@ public class MotorizadoController {
 
     @Autowired
     private PedidoPagosService pedidoPagosService;
+
+    @Autowired
+    private UsuarioService usuarioService;
+
+    @Autowired
+    private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private EmpleadoRepository empleadoRepository;
+
+    @Autowired
+    private EmpleadoService empleadoService;
 
     @GetMapping
     public String root(HttpSession session) {
@@ -73,19 +107,176 @@ public class MotorizadoController {
     }
 
     @GetMapping("/historial")
-    public String historial(HttpSession session) {
+    public String historial(Model model, HttpSession session) {
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
             return "redirect:/login";
         }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return "redirect:/login";
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        var pedidosEntregados = usuarioOpt
+                .map(usuario -> {
+                    var empleado = usuario.getEmpleado();
+                    if (empleado == null || empleado.getId() == null) {
+                        return java.util.List.<PedidoDTO.SimpleResponse>of();
+                    }
+                    return pedidoService.listEntregadosByEmpleadoId(empleado.getId());
+                })
+                .orElseGet(java.util.List::of);
+
+        model.addAttribute("pedidosEntregados", pedidosEntregados);
         return "views/viewsMotorizado/historial";
     }
 
+    private PedidoDTO.SimpleResponse mapPedidoToSimpleResponse(Pedido pedido) {
+        return new PedidoDTO.SimpleResponse(
+                pedido.getId(),
+                pedido.getCodigo(),
+                pedido.getFechaSolicitud(),
+                pedido.getCliente() != null ? pedido.getCliente().getNombre() : null,
+                pedido.getCliente() != null ? pedido.getCliente().getDireccion() : null,
+                pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
+                pedido.getObservaciones(),
+                pedido.getEmpleado() != null ? pedido.getEmpleado().getNombre() : null,
+                pedido.getEstadoPedido(),
+                pedido.getEstadoPago(),
+                pedido.getMontoTotal(),
+                pedido.getSubtotal(),
+                pedido.getMetodoPago() != null ? pedido.getMetodoPago().getNombre() : null,
+                pedido.getTipoVenta(),
+                pedido.getFechaLimitePago()
+        );
+    }
+
     @GetMapping("/perfil")
-    public String perfil(HttpSession session) {
+    public String perfil(Model model, HttpSession session) {
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
             return "redirect:/login";
         }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return "redirect:/login";
+        }
+
+        try {
+            var usuarioDTO = usuarioService.obtenerPerfilMotorizado(usuarioId);
+            model.addAttribute("usuario", usuarioDTO);
+            model.addAttribute("empleado", usuarioDTO);
+
+            Long empleadoId = null;
+            if (usuarioDTO != null) {
+                try {
+                    empleadoId = usuarioRepository.findById(usuarioId)
+                            .flatMap(u -> java.util.Optional.ofNullable(u.getEmpleado()))
+                            .map(e -> e.getId())
+                            .orElse(null);
+                } catch (Exception ignored) {
+                    empleadoId = null;
+                }
+            }
+
+            if (empleadoId != null) {
+                var hoyInicio = java.time.LocalDate.now().atStartOfDay();
+                var hoyFin = hoyInicio.plusDays(1);
+                Long pedidosHoy = pedidoRepository.countPedidosHoyPorEmpleado(empleadoId, hoyInicio, hoyFin);
+                Long entregasTotales = pedidoRepository.countEntregasPorEmpleadoYEstado(empleadoId, "ENTREGADO");
+
+                model.addAttribute("pedidosHoy", pedidosHoy != null ? pedidosHoy : 0L);
+                model.addAttribute("entregasTotales", entregasTotales != null ? entregasTotales : 0L);
+            } else {
+                model.addAttribute("pedidosHoy", 0L);
+                model.addAttribute("entregasTotales", 0L);
+            }
+        } catch (Exception ex) {
+            model.addAttribute("usuario", null);
+            model.addAttribute("empleado", null);
+            model.addAttribute("pedidosHoy", 0L);
+            model.addAttribute("entregasTotales", 0L);
+        }
+
         return "views/viewsMotorizado/perfil";
+    }
+
+    @GetMapping("/perfil/editar")
+    public String perfilEditar(Model model, HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return "redirect:/login";
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return "redirect:/login";
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null) {
+            return "redirect:/login";
+        }
+
+        var usuario = usuarioOpt.get();
+        var empleado = usuario.getEmpleado();
+
+        var empleadoForm = new Empleado();
+        empleadoForm.setId(empleado.getId());
+        empleadoForm.setNombre(empleado.getNombre());
+        empleadoForm.setDni(empleado.getDni());
+        empleadoForm.setTelefono(empleado.getTelefono());
+        empleadoForm.setCorreo(usuario.getCorreo());
+
+        model.addAttribute("empleado", empleadoForm);
+        return "views/viewsMotorizado/perfil-editar";
+    }
+
+    @PostMapping("/perfil/actualizar")
+    @ResponseBody
+    public ResponseEntity<?> actualizarPerfil(@Valid @ModelAttribute("empleado") Empleado empleado,
+                                               BindingResult bindingResult,
+                                               HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(java.util.Map.of("success", false, "message", "No autenticado"));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(java.util.Map.of("success", false, "message", "No autenticado"));
+        }
+
+        if (bindingResult.hasErrors()) {
+            Map<String, String> errors = new LinkedHashMap<>();
+            for (FieldError error : bindingResult.getFieldErrors()) {
+                errors.put(error.getField(), error.getDefaultMessage());
+            }
+            return ResponseEntity.badRequest().body(java.util.Map.of("success", false, "errors", errors));
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null || usuarioOpt.get().getEmpleado().getId() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(java.util.Map.of("success", false, "message", "Empleado no válido"));
+        }
+
+        Long empleadoId = usuarioOpt.get().getEmpleado().getId();
+        var empleadoActual = empleadoRepository.findById(empleadoId).orElse(null);
+        if (empleadoActual == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(java.util.Map.of("success", false, "message", "Empleado no encontrado"));
+        }
+
+        empleadoActual.setNombre(empleado.getNombre() != null ? empleado.getNombre() : empleadoActual.getNombre());
+        empleadoActual.setTelefono(empleado.getTelefono() != null ? empleado.getTelefono() : empleadoActual.getTelefono());
+
+        empleadoService.updatePerfil(
+                empleadoId,
+                empleadoActual.getNombre(),
+                empleadoActual.getTelefono(),
+                null,
+                empleado.getCorreo() != null ? empleado.getCorreo() : usuarioOpt.get().getCorreo()
+        );
+
+        return ResponseEntity.ok(java.util.Map.of("success", true, "message", "Cambios guardados correctamente"));
     }
 
     @PostMapping("/pedido/estado")
@@ -130,13 +321,16 @@ public class MotorizadoController {
         return "redirect:/motorizado/detalle?id=" + id;
     }
 
-    @GetMapping("/detalle")
-    public String detalle(@RequestParam(value = "id", required = false) Long id, Model model, HttpSession session) {
+    @GetMapping({"/detalle", "/detalle/{id}"})
+    public String detalle(@PathVariable(value = "id", required = false) Long id,
+                          @RequestParam(value = "id", required = false) Long queryId,
+                          Model model, HttpSession session) {
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
             return "redirect:/login";
         }
 
-        if (id == null) {
+        Long pedidoId = id != null ? id : queryId;
+        if (pedidoId == null) {
             return "redirect:/motorizado/asignados";
         }
 
@@ -151,13 +345,46 @@ public class MotorizadoController {
         }
 
         try {
-            var pedido = pedidoService.findByIdAndEmpleadoId(id, usuarioOpt.get().getEmpleado().getId());
+            var pedido = pedidoService.findByIdAndEmpleadoId(pedidoId, usuarioOpt.get().getEmpleado().getId());
             model.addAttribute("pedido", pedido);
         } catch (Exception ex) {
             return "redirect:/motorizado/asignados";
         }
 
         return "views/viewsMotorizado/detalle";
+    }
+
+    @GetMapping({"/venta-detalle", "/venta-detalle/{id}"})
+    public String ventaDetalle(@PathVariable(value = "id", required = false) Long id,
+                               @RequestParam(value = "id", required = false) Long queryId,
+                               Model model, HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return "redirect:/login";
+        }
+
+        Long pedidoId = id != null ? id : queryId;
+        if (pedidoId == null) {
+            return "redirect:/motorizado/historial";
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return "redirect:/login";
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null || usuarioOpt.get().getEmpleado().getId() == null) {
+            return "redirect:/motorizado/historial";
+        }
+
+        try {
+            var pedido = pedidoService.findByIdAndEmpleadoId(pedidoId, usuarioOpt.get().getEmpleado().getId());
+            model.addAttribute("pedido", pedido);
+        } catch (Exception ex) {
+            return "redirect:/motorizado/historial";
+        }
+
+        return "views/viewsMotorizado/venta-detalle";
     }
 
     @PostMapping("/pedido/pagar-yape")
