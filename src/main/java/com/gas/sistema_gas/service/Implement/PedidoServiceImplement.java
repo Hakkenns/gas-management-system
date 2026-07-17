@@ -61,6 +61,8 @@ public class PedidoServiceImplement implements PedidoService {
     @Autowired
     private PedidoPagoRepository pedidoPagoRepository;
     @Autowired
+    private com.gas.sistema_gas.Repository.EvidenciaRepository evidenciaRepository;
+    @Autowired
     private MetodoPagoRepository metodoPagoRepository;
     @Autowired
     private CorrelativoService correlativoService;
@@ -109,6 +111,19 @@ public class PedidoServiceImplement implements PedidoService {
                 metodoPagoNombre = primerPago.getMetodoPago().getNombre();
             }
         }
+
+        // Cargar evidencias del pedido (incluyendo PAGO y VUELTO)
+        java.util.List<PedidoDTO.EvidenciaResponse> evidencias = pagosPedido.stream()
+                .flatMap(pago -> {
+                    java.util.List<com.gas.sistema_gas.Model.Evidencia> evs = evidenciaRepository.findByPedidoPago_Id(pago.getId());
+                    return evs.stream();
+                })
+                .map(ev -> new PedidoDTO.EvidenciaResponse(
+                        ev.getId(),
+                        ev.getUrlImagen(),
+                        ev.getTipoEvidencia()
+                ))
+                .collect(java.util.stream.Collectors.toList());
         
         PedidoDTO.SimpleResponse response = pedidoMapper.toSimpleResponse(pedido);
         Long empleadoId = pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null;
@@ -127,7 +142,8 @@ public class PedidoServiceImplement implements PedidoService {
             response.subtotal(),
             metodoPagoNombre,
             response.tipoVenta(),
-            response.fechaLimitePago()
+            response.fechaLimitePago(),
+            evidencias
         );
     }
 

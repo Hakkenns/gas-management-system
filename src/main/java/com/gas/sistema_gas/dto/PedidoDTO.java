@@ -63,7 +63,8 @@ public class PedidoDTO {
         BigDecimal subtotal,
         String metodoPago,
         String tipoVenta,
-        LocalDateTime fechaLimitePago
+        LocalDateTime fechaLimitePago,
+        List<EvidenciaResponse> evidencias
     ){}
 
     public record Update(
@@ -105,6 +106,12 @@ public class PedidoDTO {
         String metodoNombre,
         BigDecimal monto,
         String numOperacion
+    ){}
+
+    public record EvidenciaResponse(
+        Long idEvidencia,
+        String urlImagen,
+        String tipoEvidencia
     ){}
 
     /*

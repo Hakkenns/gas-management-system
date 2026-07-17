@@ -410,6 +410,7 @@ public class MotorizadoController {
             @RequestParam("idPedido") Long idPedido,
             @RequestParam("pagosJson") String pagosJson,
             @RequestPart(value = "evidencias", required = false) List<MultipartFile> evidencias,
+            @RequestPart(value = "evidenciaVuelto", required = false) MultipartFile evidenciaVuelto,
             HttpSession session) {
 
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
@@ -442,7 +443,7 @@ public class MotorizadoController {
                     mapper.getTypeFactory().constructCollectionType(List.class, PagoRegistroDTO.class));
 
             ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(idPedido, pagos);
-            List<PedidoPago> pagosGuardados = pedidoPagosService.registrarPagosMultiples(dto, evidencias);
+            List<PedidoPago> pagosGuardados = pedidoPagosService.registrarPagosMultiples(dto, evidencias, evidenciaVuelto);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,

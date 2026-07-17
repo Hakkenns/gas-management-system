@@ -47,8 +47,8 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Autowired
     private EvidenciaRepository evidenciaRepository;
 
-    @Value("${app.product-images.dir:uploads/product-images}")
-    private String productoImagesDir;
+    @Value("${app.evidencias.dir:src/main/resources/static/imagenes-sistema}")
+    private String evidenciasDir;
 
     @Override
     @Transactional
@@ -124,6 +124,12 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Override
     @Transactional
     public List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias) {
+        return registrarPagosMultiples(dto, evidencias, null);
+    }
+
+    @Override
+    @Transactional
+    public List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias, MultipartFile evidenciaVuelto) {
         if (dto == null || dto.idPedido == null || dto.pagos == null || dto.pagos.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos de pago inválidos");
         }
@@ -175,6 +181,18 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             pagosGuardados.add(pagoGuardado);
         }
 
+        // Guardar evidencia de vuelto si se proporcionó
+        if (evidenciaVuelto != null && !evidenciaVuelto.isEmpty() && !pagosGuardados.isEmpty()) {
+            // Asociar la evidencia de vuelto al último pago registrado
+            PedidoPago ultimoPago = pagosGuardados.get(pagosGuardados.size() - 1);
+            String url = almacenarImagen(evidenciaVuelto);
+            Evidencia ev = new Evidencia();
+            ev.setPedidoPago(ultimoPago);
+            ev.setUrlImagen(url);
+            ev.setTipoEvidencia("VUELTO");
+            evidenciaRepository.save(ev);
+        }
+
         // Marcar pedido como ENTREGADO y PAGADO
         pedido.setEstadoPedido("ENTREGADO");
         if (pedido.getFechaEntrega() == null) {
@@ -197,8 +215,8 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             return null;
         }
 
-        if (archivoImagen.getSize() > 5 * 1024 * 1024) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "La imagen no puede superar los 5 MB");
+        if (archivoImagen.getSize() > 15 * 1024 * 1024) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "La imagen no puede superar los 15 MB");
         }
 
         String contentType = archivoImagen.getContentType();
@@ -214,12 +232,12 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         }
 
         String filename = UUID.randomUUID().toString() + extension;
-        Path uploadPath = Paths.get(productoImagesDir).toAbsolutePath().normalize();
+        Path uploadPath = Paths.get(evidenciasDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(uploadPath);
             Path target = uploadPath.resolve(filename);
             Files.copy(archivoImagen.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-            return "/images/" + filename;
+            return "/imagenes-sistema/" + filename;
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo almacenar la imagen", ex);
         }

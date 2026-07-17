@@ -31,6 +31,7 @@ public interface PedidoMapper {
     @Mapping(target = "direccionCliente", ignore = true)
     @Mapping(target = "nombreEmpleado", ignore = true)
     @Mapping(target = "metodoPago", ignore = true)
+    @Mapping(target = "evidencias", ignore = true)
     PedidoDTO.SimpleResponse toSimpleResponse(Pedido pedido);
 
     // Actualizar campos modificables de pedido

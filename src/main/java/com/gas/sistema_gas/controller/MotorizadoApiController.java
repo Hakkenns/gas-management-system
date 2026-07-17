@@ -17,8 +17,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.gas.sistema_gas.Model.Evidencia;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
+import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -30,13 +32,16 @@ public class MotorizadoApiController {
     private final UsuarioRepository usuarioRepository;
     private final PedidoRepository pedidoRepository;
     private final PedidoPagoRepository pedidoPagoRepository;
+    private final EvidenciaRepository evidenciaRepository;
 
     public MotorizadoApiController(UsuarioRepository usuarioRepository,
                                    PedidoRepository pedidoRepository,
-                                   PedidoPagoRepository pedidoPagoRepository) {
+                                   PedidoPagoRepository pedidoPagoRepository,
+                                   EvidenciaRepository evidenciaRepository) {
         this.usuarioRepository = usuarioRepository;
         this.pedidoRepository = pedidoRepository;
         this.pedidoPagoRepository = pedidoPagoRepository;
+        this.evidenciaRepository = evidenciaRepository;
     }
 
     @GetMapping("/api/motorizado/historial/data")
@@ -118,6 +123,19 @@ public class MotorizadoApiController {
                 .collect(Collectors.joining(", "));
         }
 
+        // Cargar evidencias del pedido (incluyendo PAGO y VUELTO)
+        List<PedidoDTO.EvidenciaResponse> evidencias = pagos.stream()
+                .flatMap(pago -> {
+                    List<Evidencia> evs = evidenciaRepository.findByPedidoPago_Id(pago.getId());
+                    return evs.stream();
+                })
+                .map(ev -> new PedidoDTO.EvidenciaResponse(
+                        ev.getId(),
+                        ev.getUrlImagen(),
+                        ev.getTipoEvidencia()
+                ))
+                .collect(Collectors.toList());
+
         return new PedidoDTO.SimpleResponse(
                 pedido.getId(),
                 pedido.getCodigo(),
@@ -133,7 +151,8 @@ public class MotorizadoApiController {
                 pedido.getSubtotal(),
                 metodoPagoStr,
                 pedido.getTipoVenta(),
-                pedido.getFechaLimitePago()
+                pedido.getFechaLimitePago(),
+                evidencias
         );
     }
 }

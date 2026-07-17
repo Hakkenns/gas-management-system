@@ -3,7 +3,9 @@ package com.gas.sistema_gas.Repository;
 import com.gas.sistema_gas.Model.Evidencia;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
+import java.util.function.Predicate;
 
 public interface EvidenciaRepository extends JpaRepository<Evidencia, Long> {
-    // Aquí Hibernate ya sabe hacer guardar, buscar y eliminar evidencias automáticamente
+    List<Evidencia> findByPedidoPago_Id(Long idPago);
 }

@@ -480,11 +480,12 @@
                             </div>
                         </div>
                         <div class="mixto-evidence-wrapper mt-2">
-                            <label class="upload-evidence-box w-100 py-3 ${row.evidenciaAdjunta ? 'is-valid' : ''}">
+                            <label class="upload-evidence-box w-100 py-3 ${row.evidenciaAdjunta ? 'is-valid' : ''}" id="evidenceLabel_${row.id}">
                                 <div class="text-muted text-xs mb-2">EVIDENCIA ${row.metodo.toUpperCase()}</div>
-                                ${row.evidenciaAdjunta ? '<img class="preview-image" src="data:image/png;base64,placeholder" alt="preview">' : '<i class="fas fa-camera fa-2x mb-2"></i>'}
-                                <div class="small">${row.evidenciaAdjunta ? 'Imagen adjunta: OK' : 'Tocar para subir imagen'}</div>
-                                <input type="file" accept="image/*" onchange="actualizarEvidenciaMixto(${row.id}, this.files && this.files.length > 0, this)">
+                                <div id="evidenceIcon_${row.id}" style="${row.evidenciaAdjunta ? 'display:none;' : ''}"><i class="fas fa-camera fa-2x mb-2"></i></div>
+                                <img id="evidencePreview_${row.id}" class="preview-image" src="" alt="preview" style="${row.evidenciaAdjunta ? '' : 'display:none;'}">
+                                <div class="small" id="evidenceText_${row.id}">${row.evidenciaAdjunta ? 'Imagen adjunta: OK' : 'Tocar para subir imagen'}</div>
+                                <input type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaMixto(${row.id}, this.files && this.files.length > 0, this)">
                             </label>
                         </div>
                     </div>
@@ -552,17 +553,28 @@
             const row = mixedRows.find(item => item.id === id);
             if (row) {
                 row.evidenciaAdjunta = adjunta;
+                const preview = document.getElementById('evidencePreview_' + id);
+                const icon = document.getElementById('evidenceIcon_' + id);
+                const text = document.getElementById('evidenceText_' + id);
+                const label = document.getElementById('evidenceLabel_' + id);
                 if (adjunta && inputElement && inputElement.files && inputElement.files[0]) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
-                        const preview = inputElement.parentElement.querySelector('.preview-image');
                         if (preview) {
                             preview.src = e.target.result;
+                            preview.style.display = 'block';
                         }
+                        if (icon) icon.style.display = 'none';
+                        if (text) text.textContent = 'Imagen adjunta: OK';
+                        if (label) label.classList.add('is-valid');
                         actualizarResumenMixto();
                     };
                     reader.readAsDataURL(inputElement.files[0]);
                 } else {
+                    if (preview) { preview.src = ''; preview.style.display = 'none'; }
+                    if (icon) icon.style.display = '';
+                    if (text) text.textContent = 'Tocar para subir imagen';
+                    if (label) label.classList.remove('is-valid');
                     actualizarResumenMixto();
                 }
                 actualizarEstadoBotonMixto();
@@ -916,18 +928,20 @@
                     fd.append('idPedido', document.getElementById('pedidoIdInput').value);
                     fd.append('pagosJson', JSON.stringify(pagosList));
 
-                    // Adjuntar evidencias en orden
-                    mixedRows.forEach(row => {
-                        const fileInput = document.querySelector(`.mixto-row .upload-evidence-box input[type="file"]`);
-                        // Buscar el input file de cada fila mixta
-                    });
-                    // Recolectar evidencias de cada fila mixta
+                    // Recolectar evidencias de cada fila mixta en el mismo orden de los pagos
                     const evidenciaInputs = document.querySelectorAll('#mixtoRowsContainer .mixto-row .upload-evidence-box input[type="file"]');
-                    evidenciaInputs.forEach((input, index) => {
+                    evidenciaInputs.forEach((input) => {
                         if (input && input.files && input.files.length > 0) {
                             fd.append('evidencias', input.files[0]);
                         }
                     });
+
+                    // Adjuntar evidencia de vuelto si el checkbox está marcado y hay imagen
+                    const confirmarVueltoCheckbox = document.getElementById('confirmarVueltoCheckboxMixto');
+                    const evidenciaVueltoInput = document.getElementById('evidenciaVueltoMixtoInput');
+                    if (confirmarVueltoCheckbox && confirmarVueltoCheckbox.checked && evidenciaVueltoInput && evidenciaVueltoInput.files && evidenciaVueltoInput.files.length > 0) {
+                        fd.append('evidenciaVuelto', evidenciaVueltoInput.files[0]);
+                    }
 
                     const res = await fetch('/motorizado/pedido/confirmar-entrega', {
                         method: 'POST',
