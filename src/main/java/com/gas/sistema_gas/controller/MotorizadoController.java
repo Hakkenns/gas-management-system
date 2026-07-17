@@ -25,12 +25,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
+import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.PedidoPagosService;
 
 import com.gas.sistema_gas.Model.Empleado;
-import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -139,26 +141,6 @@ public class MotorizadoController {
 
         model.addAttribute("pedidosEntregados", pedidosEntregados);
         return "views/viewsMotorizado/historial";
-    }
-
-    private PedidoDTO.SimpleResponse mapPedidoToSimpleResponse(Pedido pedido) {
-        return new PedidoDTO.SimpleResponse(
-                pedido.getId(),
-                pedido.getCodigo(),
-                pedido.getFechaSolicitud(),
-                pedido.getCliente() != null ? pedido.getCliente().getNombre() : null,
-                pedido.getCliente() != null ? pedido.getCliente().getDireccion() : null,
-                pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null,
-                pedido.getObservaciones(),
-                pedido.getEmpleado() != null ? pedido.getEmpleado().getNombre() : null,
-                pedido.getEstadoPedido(),
-                pedido.getEstadoPago(),
-                pedido.getMontoTotal(),
-                pedido.getSubtotal(),
-                pedido.getMetodoPago() != null ? pedido.getMetodoPago().getNombre() : null,
-                pedido.getTipoVenta(),
-                pedido.getFechaLimitePago()
-        );
     }
 
     @GetMapping("/perfil")
@@ -420,5 +402,56 @@ public class MotorizadoController {
             return ResponseEntity.ok(java.util.Map.of("success", true, "idPago", pago.getId()));
         }
         return "redirect:/motorizado/asignados";
+    }
+
+    @PostMapping("/pedido/confirmar-entrega")
+    @ResponseBody
+    public ResponseEntity<?> confirmarEntrega(
+            @RequestParam("idPedido") Long idPedido,
+            @RequestParam("pagosJson") String pagosJson,
+            @RequestPart(value = "evidencias", required = false) List<MultipartFile> evidencias,
+            HttpSession session) {
+
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null || usuarioOpt.get().getEmpleado().getId() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", "Empleado no válido"));
+        }
+
+        Long empleadoId = usuarioOpt.get().getEmpleado().getId();
+        if (!pedidoService.existsByIdAndEmpleadoId(idPedido, empleadoId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", "Pedido no asignado a este motorizado"));
+        }
+
+        try {
+            // Parsear JSON de pagos
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            List<PagoRegistroDTO> pagos = mapper.readValue(pagosJson,
+                    mapper.getTypeFactory().constructCollectionType(List.class, PagoRegistroDTO.class));
+
+            ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(idPedido, pagos);
+            List<PedidoPago> pagosGuardados = pedidoPagosService.registrarPagosMultiples(dto, evidencias);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Pago registrado correctamente",
+                    "totalPagos", pagosGuardados.size()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("success", false, "message", "Error al procesar el pago: " + e.getMessage()));
+        }
     }
 }

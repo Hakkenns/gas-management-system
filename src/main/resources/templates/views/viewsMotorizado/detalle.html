@@ -235,12 +235,12 @@
                                 </div>
 
                                 <div class="mixto-evidence-wrapper mt-3">
-                                    <label class="upload-evidence-box w-100 py-3" for="evidenciaMetodoInput">
-                                        <div class="text-muted text-xs mb-2">EVIDENCIA DEL MÉTODO</div>
-                                        <i class="fas fa-camera fa-2x mb-2"></i>
-                                        <div class="small" id="evidenceMetodoText">Tocar para subir imagen</div>
-                                        <input id="evidenciaMetodoInput" type="file" accept="image/*" onchange="actualizarEvidenciaMetodo(this)">
-                                    </label>
+                                            <label class="upload-evidence-box w-100 py-3" for="evidenciaMetodoInput">
+                                                <div class="text-muted text-xs mb-2">EVIDENCIA DEL MÉTODO</div>
+                                                <i class="fas fa-camera fa-2x mb-2"></i>
+                                                <div class="small" id="evidenceMetodoText">Tocar para subir imagen</div>
+                                                <input id="evidenciaMetodoInput" type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaMetodo(this)">
+                                            </label>
                                 </div>
 
                                 <div class="mt-3 p-3 rounded bg-light border">
@@ -271,7 +271,7 @@
                                                 <div class="text-muted text-xs mb-2">EVIDENCIA DE VUELTO</div>
                                                 <i class="fas fa-camera fa-2x mb-2"></i>
                                                 <div class="small" id="evidenceVueltoSingleText">Tocar para subir imagen</div>
-                                                <input id="evidenciaVueltoSingleInput" type="file" accept="image/*" onchange="actualizarEvidenciaVueltoSingle(this)">
+                                                <input id="evidenciaVueltoSingleInput" type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaVueltoSingle(this)">
                                             </label>
                                         </div>
                                     </div>
@@ -320,7 +320,7 @@
                                             <div class="text-muted text-xs mb-2">EVIDENCIA DE VUELTO</div>
                                             <i class="fas fa-camera fa-2x mb-2"></i>
                                             <div class="small" id="evidenceVueltoMixtoText">Tocar para subir imagen</div>
-                                            <input id="evidenciaVueltoMixtoInput" type="file" accept="image/*" onchange="actualizarEvidenciaVueltoMixto(this)">
+                                                <input id="evidenciaVueltoMixtoInput" type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaVueltoMixto(this)">
                                         </label>
                                     </div>
                                 </div>
@@ -897,6 +897,56 @@
                 }
                 localStorage.setItem('fastfuel-mixed-change', JSON.stringify({ vuelto: vuelto.toFixed(2) }));
                 window.__ultimoVueltoMixto = vuelto.toFixed(2);
+
+                // Construir lista de pagos para enviar al backend
+                const pagosList = mixedRows
+                    .filter(row => parseFloat(row.monto) > 0)
+                    .map(row => {
+                        const metodoId = row.metodo === 'Efectivo' ? 1 : row.metodo === 'Yape' ? 2 : row.metodo === 'Plin' ? 3 : 0;
+                        return {
+                            idMetodo: metodoId,
+                            monto: parseFloat(row.monto),
+                            numOperacion: row.operacion || '',
+                            vuelto: 0
+                        };
+                    });
+
+                try {
+                    const fd = new FormData();
+                    fd.append('idPedido', document.getElementById('pedidoIdInput').value);
+                    fd.append('pagosJson', JSON.stringify(pagosList));
+
+                    // Adjuntar evidencias en orden
+                    mixedRows.forEach(row => {
+                        const fileInput = document.querySelector(`.mixto-row .upload-evidence-box input[type="file"]`);
+                        // Buscar el input file de cada fila mixta
+                    });
+                    // Recolectar evidencias de cada fila mixta
+                    const evidenciaInputs = document.querySelectorAll('#mixtoRowsContainer .mixto-row .upload-evidence-box input[type="file"]');
+                    evidenciaInputs.forEach((input, index) => {
+                        if (input && input.files && input.files.length > 0) {
+                            fd.append('evidencias', input.files[0]);
+                        }
+                    });
+
+                    const res = await fetch('/motorizado/pedido/confirmar-entrega', {
+                        method: 'POST',
+                        body: fd,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const json = await res.json().catch(() => null);
+                    if (!res.ok || (json && json.success === false)) {
+                        const message = (json && json.message) ? json.message : 'Error al procesar el pago mixto en el servidor';
+                        throw new Error(message);
+                    }
+                } catch (err) {
+                    Swal.fire({ title: 'Error', text: err.message || 'No se pudo procesar el pago mixto', icon: 'error' }).then(() => {
+                        window.__pagoEnProgreso = false;
+                        if (confirmarBtnElem) confirmarBtnElem.disabled = false;
+                    });
+                    return;
+                }
             } else {
                 const totalCobrar = getTotalCobrarPedido();
                 const monto = parseFloat(document.getElementById('montoRecibidoInput')?.value || document.getElementById('montoRecibidoEfectivoInput')?.value || '0');
@@ -967,7 +1017,8 @@
                     text: 'El pago se realizó correctamente. El pedido se marcó como entregado.',
                     confirmButtonText: 'Aceptar'
                 });
-                renderOrderState();
+                // Redirigir automáticamente a la vista de pedidos asignados
+                window.location.href = '/motorizado/asignados';
             } finally {
                 window.__pagoEnProgreso = false;
                 if (confirmarBtnElem) confirmarBtnElem.disabled = false;

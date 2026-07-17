@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +25,8 @@ import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
+import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
+import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.PedidoPagosService;
 
@@ -105,21 +109,87 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             evidenciaRepository.save(ev);
         }
 
-        // 3) Marcar pedido como ENTREGADO y PAGADO, además registrar método de pago en el pedido
+        // 3) Marcar pedido como ENTREGADO y PAGADO
         pedido.setEstadoPedido("ENTREGADO");
-        pedido.setNumOperacion(dto.numOperacion);
         if (pedido.getFechaEntrega() == null) {
             pedido.setFechaEntrega(java.time.LocalDateTime.now());
         }
-
-        // Actualización explícita de la tabla pedidos para garantizar que se guarde id_metodo y estado_pago
-        pedidoRepository.updateEstadoPagoAndMetodoById(pedido.getId(), "PAGADO", metodo);
-
-        // Mantener el estado del entity manager consistente
         pedido.setEstadoPago("PAGADO");
-        pedido.setMetodoPago(metodo);
+        // Persistir explícitamente los cambios en la tabla pedidos
+        pedidoRepository.save(pedido);
 
         return pagoGuardado;
+    }
+
+    @Override
+    @Transactional
+    public List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias) {
+        if (dto == null || dto.idPedido == null || dto.pagos == null || dto.pagos.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos de pago inválidos");
+        }
+
+        Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        // Eliminar registros anteriores de pedido_pagos para evitar duplicados
+        List<PedidoPago> pagosAnteriores = pedidoPagoRepository.findByPedido(pedido);
+        if (!pagosAnteriores.isEmpty()) {
+            pedidoPagoRepository.deleteAll(pagosAnteriores);
+            pedidoPagoRepository.flush();
+        }
+
+        List<PedidoPago> pagosGuardados = new ArrayList<>();
+        int evidenciaIndex = 0;
+
+        for (PagoRegistroDTO pagoDto : dto.pagos) {
+            if (pagoDto.idMetodo == null) {
+                continue;
+            }
+
+            MetodoPago metodo = metodoPagoRepository.findById(pagoDto.idMetodo)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
+
+            PedidoPago pago = new PedidoPago();
+            pago.setPedido(pedido);
+            pago.setMetodoPago(metodo);
+            pago.setMonto(pagoDto.monto != null ? pagoDto.monto : BigDecimal.ZERO);
+            pago.setNumOperacion(pagoDto.numOperacion);
+            pago.setVuelto(pagoDto.vuelto != null ? pagoDto.vuelto : BigDecimal.ZERO);
+
+            PedidoPago pagoGuardado = pedidoPagoRepository.save(pago);
+
+            // Guardar evidencia si hay archivo disponible para este pago
+            if (evidencias != null && evidenciaIndex < evidencias.size()) {
+                MultipartFile evidencia = evidencias.get(evidenciaIndex);
+                if (evidencia != null && !evidencia.isEmpty()) {
+                    String url = almacenarImagen(evidencia);
+                    Evidencia ev = new Evidencia();
+                    ev.setPedidoPago(pagoGuardado);
+                    ev.setUrlImagen(url);
+                    ev.setTipoEvidencia("PAGO");
+                    evidenciaRepository.save(ev);
+                }
+            }
+            evidenciaIndex++;
+
+            pagosGuardados.add(pagoGuardado);
+        }
+
+        // Marcar pedido como ENTREGADO y PAGADO
+        pedido.setEstadoPedido("ENTREGADO");
+        if (pedido.getFechaEntrega() == null) {
+            pedido.setFechaEntrega(java.time.LocalDateTime.now());
+        }
+        pedido.setEstadoPago("PAGADO");
+        // Persistir explícitamente los cambios en la tabla pedidos (estado_pedido, fecha_entrega, estado_pago)
+        pedidoRepository.save(pedido);
+
+        return pagosGuardados;
+    }
+
+    @Override
+    public List<PedidoPago> findByPedidoId(Long idPedido) {
+        return pedidoPagoRepository.findByPedido_Id(idPedido);
     }
 
     private String almacenarImagen(MultipartFile archivoImagen) {

@@ -54,9 +54,6 @@ public class Pedido {
     @DecimalMin(value = "0.00", message = "El monto total no puede ser negativo")
     private BigDecimal montoTotal;
 
-    @Column(name = "num_operacion", length = 50)
-    private String numOperacion;
-
     @Column(length = 255)
     private String observaciones;
 
@@ -75,11 +72,6 @@ public class Pedido {
     @JoinColumn(name = "id_empleado")
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Empleado empleado;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_metodo")
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    private MetodoPago metodoPago;
 
     @Column(name = "tipo_venta", nullable = false, length = 20)
     private String tipoVenta = "DOMICILIO"; // LOCAL o DOMICILIO

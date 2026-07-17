@@ -99,7 +99,16 @@ public class PedidoServiceImplement implements PedidoService {
         String nombreCliente = pedido.getCliente() != null ? pedido.getCliente().getNombre() : null;
         String direccionCliente = pedido.getCliente() != null ? pedido.getCliente().getDireccion() : null;
         String nombreEmpleado = pedido.getEmpleado() != null ? pedido.getEmpleado().getNombre() : null;
-        String metodoPagoNombre = pedido.getMetodoPago() != null ? pedido.getMetodoPago().getNombre() : null;
+
+        // Obtener el método de pago desde pedido_pagos
+        String metodoPagoNombre = null;
+        java.util.List<PedidoPago> pagosPedido = pedidoPagoRepository.findByPedido_Id(pedido.getId());
+        if (pagosPedido != null && !pagosPedido.isEmpty()) {
+            PedidoPago primerPago = pagosPedido.get(0);
+            if (primerPago.getMetodoPago() != null) {
+                metodoPagoNombre = primerPago.getMetodoPago().getNombre();
+            }
+        }
         
         PedidoDTO.SimpleResponse response = pedidoMapper.toSimpleResponse(pedido);
         Long empleadoId = pedido.getEmpleado() != null ? pedido.getEmpleado().getId() : null;
@@ -401,11 +410,6 @@ public class PedidoServiceImplement implements PedidoService {
                             "El total de los pagos no puede superar el monto total de la venta");
                 }
             }
-
-            PedidoDTO.PagoCreate pagoPrincipal = pagosDto.get(0);
-            MetodoPago metodoPagoPrincipal = metodoPagoRepository.findById(pagoPrincipal.idMetodoPago()).orElse(null);
-            pedidoGuardado.setMetodoPago(metodoPagoPrincipal);
-            pedidoGuardado.setNumOperacion(pagoPrincipal.numOperacion());
 
             if (totalPagos.compareTo(montoAcumulado) == 0) {
                 pedidoGuardado.setEstadoPago("PAGADO");

@@ -358,12 +358,24 @@
                 const fechaFormateada = fecha ? fecha.toLocaleDateString('es-PE') : 'Sin fecha';
                 const horaFormateada = fecha ? fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '';
                 const montoTotal = Number(pedido.montoTotal || 0).toFixed(2);
-                const metodoPago = pedido.metodoPago ? pedido.metodoPago.toUpperCase() : 'EFECTIVO';
-                const metodoBadge = metodoPago === 'YAPE'
-                    ? 'badge-info'
-                    : metodoPago === 'PLIN'
-                        ? 'badge-warning'
-                        : 'badge-success';
+                // Soporte para múltiples métodos de pago (separados por coma)
+                const metodosPago = pedido.metodoPago 
+                    ? pedido.metodoPago.toUpperCase().split(',').map(m => m.trim()).filter(m => m)
+                    : ['EFECTIVO'];
+                function getBadgeClass(metodo) {
+                    const m = metodo.toUpperCase();
+                    if (m === 'EFECTIVO') return 'badge-success';
+                    if (m === 'YAPE') return 'badge-info';
+                    if (m === 'PLIN') return 'badge-warning';
+                    return 'badge-secondary';
+                }
+                function getBadgeStyle(metodo) {
+                    const m = metodo.toUpperCase();
+                    if (m === 'EFECTIVO') return '';
+                    if (m === 'YAPE') return 'background-color: #6f42c1 !important; color: white !important;';
+                    if (m === 'PLIN') return 'background-color: #17a2b8 !important; color: white !important;';
+                    return '';
+                }
                 const notaVenta = String(
                     pedido.codigo ||
                     pedido.notaVenta ||
@@ -394,7 +406,9 @@
                                 </div>
                             </div>
                             <div class="d-flex justify-content-between align-items-center mt-3">
-                                <span class="badge ${metodoBadge}">${metodoPago}</span>
+                                <div>
+                                    ${metodosPago.map(m => `<span class="badge me-1" style="${getBadgeStyle(m)}${getBadgeStyle(m) ? '' : 'background-color: #28a745; color: white;'}">${m}</span>`).join(' ')}
+                                </div>
                                 <strong class="text-success">S/ ${montoTotal}</strong>
                             </div>
                             <div class="d-flex justify-content-between align-items-center mt-2">

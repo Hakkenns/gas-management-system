@@ -14,7 +14,6 @@ public interface PedidoMapper {
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "empleado", ignore = true)
     @Mapping(target = "usuario", ignore = true)
-    @Mapping(target = "metodoPago", ignore = true)
     @Mapping(target = "fechaSolicitud", ignore = true)
     @Mapping(target = "montoTotal", ignore = true)
     @Mapping(target = "fechaEntrega", ignore = true)
@@ -31,7 +30,7 @@ public interface PedidoMapper {
     @Mapping(target = "nombreCliente", ignore = true)
     @Mapping(target = "direccionCliente", ignore = true)
     @Mapping(target = "nombreEmpleado", ignore = true)
-    @Mapping(source = "metodoPago.nombre", target = "metodoPago")
+    @Mapping(target = "metodoPago", ignore = true)
     PedidoDTO.SimpleResponse toSimpleResponse(Pedido pedido);
 
     // Actualizar campos modificables de pedido
@@ -40,7 +39,6 @@ public interface PedidoMapper {
     @Mapping(target = "cliente", ignore = true)
     @Mapping(target = "usuario", ignore = true)
     @Mapping(target = "empleado", ignore = true)
-    @Mapping(target = "metodoPago", ignore = true)
     @Mapping(target = "fechaSolicitud", ignore = true)
     @Mapping(target = "fechaEntrega", ignore = true)
     @Mapping(target = "subtotal", ignore = true)

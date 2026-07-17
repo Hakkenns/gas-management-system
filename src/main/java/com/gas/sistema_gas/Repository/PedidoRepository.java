@@ -1,6 +1,5 @@
 package com.gas.sistema_gas.Repository;
 
-import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,18 +30,17 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByClienteId(Long idCliente);
 
     // Listar pedidos por tipo de venta
-    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta")
+    @Query("SELECT p FROM Pedido p WHERE p.tipoVenta = :tipoVenta")
     List<Pedido> findByTipoVentaWithMetodoPago(@Param("tipoVenta") String tipoVenta);
 
     // Listar pedidos por tipo de venta y empleado (motorizado) - excluye completados y anulados
-    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta AND p.empleado.id = :empleadoId AND p.estadoPedido NOT IN ('ENTREGADO', 'ANULADO')")
+    @Query("SELECT p FROM Pedido p WHERE p.tipoVenta = :tipoVenta AND p.empleado.id = :empleadoId AND p.estadoPedido NOT IN ('ENTREGADO', 'ANULADO')")
     List<Pedido> findByTipoVentaAndEmpleadoIdWithMetodoPago(@Param("tipoVenta") String tipoVenta, @Param("empleadoId") Long empleadoId);
 
     @Modifying
-    @Query("UPDATE Pedido p SET p.estadoPago = :estadoPago, p.metodoPago = :metodoPago WHERE p.id = :id")
-    int updateEstadoPagoAndMetodoById(@Param("id") Long id,
-                                     @Param("estadoPago") String estadoPago,
-                                     @Param("metodoPago") MetodoPago metodoPago);
+    @Query("UPDATE Pedido p SET p.estadoPago = :estadoPago WHERE p.id = :id")
+    int updateEstadoPagoById(@Param("id") Long id,
+                                     @Param("estadoPago") String estadoPago);
 
     // Buscar un pedido por ID y motorizado asignado
     @Query("SELECT p FROM Pedido p WHERE p.id = :id AND p.empleado.id = :empleadoId")
@@ -76,16 +74,15 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     String findLastCodigo();
 
     // Listar pedidos entregados por un empleado/repartidor específico
-    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO'")
+    @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO'")
     List<Pedido> findEntregadosByEmpleadoId(@Param("empleadoId") Long empleadoId);
 
     @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :idEmpleado AND p.estadoPedido = 'ENTREGADO'")
     List<Pedido> findHistorialBase(@Param("idEmpleado") Long idEmpleado);
 
     // Buscar pedidos entregados con filtros dinámicos y paginación
-    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO' " +
+    @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO' " +
            "AND (:buscar IS NULL OR p.codigo LIKE %:buscar% OR p.cliente.nombre LIKE %:buscar%) " +
-           "AND (:metodoPago IS NULL OR LOWER(p.metodoPago.nombre) = LOWER(:metodoPago)) " +
            "AND (:fechaInicio IS NULL OR p.fechaSolicitud >= :fechaInicio) " +
            "AND (:fechaFin IS NULL OR p.fechaSolicitud <= :fechaFin)")
     Page<Pedido> findEntregadosByEmpleadoIdWithFilters(
