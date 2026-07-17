@@ -359,7 +359,11 @@
                 const horaFormateada = fecha ? fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '';
                 const montoTotal = Number(pedido.montoTotal || 0).toFixed(2);
                 const metodoPago = pedido.metodoPago ? pedido.metodoPago.toUpperCase() : 'EFECTIVO';
-                const metodoBadge = metodoPago === 'YAPE' || metodoPago === 'PLIN' ? 'badge-warning' : 'badge-success';
+                const metodoBadge = metodoPago === 'YAPE'
+                    ? 'badge-info'
+                    : metodoPago === 'PLIN'
+                        ? 'badge-warning'
+                        : 'badge-success';
                 const notaVenta = String(
                     pedido.codigo ||
                     pedido.notaVenta ||
