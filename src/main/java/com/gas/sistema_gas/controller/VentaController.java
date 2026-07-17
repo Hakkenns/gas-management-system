@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -80,6 +81,9 @@ public class VentaController {
 
     @Autowired
     private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @GetMapping
     public String ventas() {
@@ -176,8 +180,16 @@ public class VentaController {
         }
 
         try {
-            pedidoService.createOrder(pedidoDto, idUsuarioLogueado);
-            return Map.of("status", "OK");
+            PedidoDTO.SimpleResponse response = pedidoService.createOrder(pedidoDto, idUsuarioLogueado);
+
+            // Enviar notificación en tiempo real al motorizado si el pedido es a domicilio y tiene empleado asignado
+            if (response != null 
+                && "DOMICILIO".equalsIgnoreCase(response.tipoVenta()) 
+                && response.empleadoId() != null) {
+                messagingTemplate.convertAndSend("/topic/pedidos/" + response.empleadoId(), response);
+            }
+
+            return Map.of("status", "OK", "pedido", response);
         } catch (Exception e) {
             return Map.of("status", "ERROR", "message", e.getMessage());
         }

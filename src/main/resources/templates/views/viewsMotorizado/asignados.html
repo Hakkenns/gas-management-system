@@ -7,6 +7,8 @@
     <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
     <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
     <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.css}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <style>
         body { padding-bottom: 85px !important; background-color: #f8f9fc; }
         .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
@@ -202,6 +204,68 @@
     <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
     <script th:src="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.js}"></script>
     <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
+
+    <!-- WebSocket STOMP: Conexión para recibir pedidos en tiempo real -->
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        var empleadoId = /*[[${empleadoId}]]*/ null;
+        var socket = null;
+        var stompClient = null;
+
+        function conectarWebSocket() {
+            if (!empleadoId) {
+                console.warn("WebSocket: No hay empleadoId disponible, se omitirá la conexión.");
+                return;
+            }
+
+            try {
+                socket = new SockJS('/ws-repartidor');
+                stompClient = Stomp.over(socket);
+
+                // Desactivar logs de STOMP para no ensuciar la consola
+                stompClient.debug = null;
+
+                stompClient.connect({}, function(frame) {
+                    console.log("WebSocket conectado como empleado " + empleadoId);
+
+                    // Suscribirse al canal personal de este motorizado
+                    stompClient.subscribe('/topic/pedidos/' + empleadoId, function(message) {
+                        var pedido = JSON.parse(message.body);
+                        console.log("Nuevo pedido recibido en tiempo real:", pedido);
+
+                        // Recargar la lista de asignados silenciosamente vía AJAX
+                        if (typeof $ !== 'undefined') {
+                            $.get('/motorizado/asignados', function(html) {
+                                // Extraer solo el contenido de la tarjeta desde la respuesta
+                                var nuevoContenido = $(html).find('.content').html();
+                                if (nuevoContenido) {
+                                    $('.content').html(nuevoContenido);
+                                }
+                            });
+                        } else {
+                            // Fallback: recargar página si no hay jQuery
+                            location.reload();
+                        }
+                    });
+                }, function(error) {
+                    console.error("Error de conexión WebSocket:", error);
+                    // Reintentar después de 10 segundos
+                    setTimeout(conectarWebSocket, 10000);
+                });
+            } catch (e) {
+                console.error("Error al crear conexión WebSocket:", e);
+                setTimeout(conectarWebSocket, 10000);
+            }
+        }
+
+        // Iniciar conexión cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', conectarWebSocket);
+        } else {
+            conectarWebSocket();
+        }
+        /*]]>*/
+    </script>
 </div>
 </body>
 </html>

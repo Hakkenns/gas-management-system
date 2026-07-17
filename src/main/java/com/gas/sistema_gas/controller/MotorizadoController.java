@@ -102,7 +102,16 @@ public class MotorizadoController {
                 })
                 .orElseGet(java.util.List::of);
 
+        // Obtener el ID del empleado (motorizado) para WebSocket
+        Long empleadoId = usuarioOpt
+                .map(usuario -> {
+                    var empleado = usuario.getEmpleado();
+                    return empleado != null ? empleado.getId() : null;
+                })
+                .orElse(null);
+
         model.addAttribute("ordenesAsignadas", ordenesAsignadas);
+        model.addAttribute("empleadoId", empleadoId);
         return "views/viewsMotorizado/asignados";
     }
 
