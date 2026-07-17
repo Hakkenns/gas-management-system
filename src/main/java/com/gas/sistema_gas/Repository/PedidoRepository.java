@@ -34,8 +34,8 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta")
     List<Pedido> findByTipoVentaWithMetodoPago(@Param("tipoVenta") String tipoVenta);
 
-    // Listar pedidos por tipo de venta y empleado (motorizado)
-    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta AND p.empleado.id = :empleadoId")
+    // Listar pedidos por tipo de venta y empleado (motorizado) - excluye completados y anulados
+    @Query("SELECT p FROM Pedido p LEFT JOIN FETCH p.metodoPago WHERE p.tipoVenta = :tipoVenta AND p.empleado.id = :empleadoId AND p.estadoPedido NOT IN ('ENTREGADO', 'ANULADO')")
     List<Pedido> findByTipoVentaAndEmpleadoIdWithMetodoPago(@Param("tipoVenta") String tipoVenta, @Param("empleadoId") Long empleadoId);
 
     @Modifying
