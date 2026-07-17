@@ -318,9 +318,10 @@
                                     <div id="evidenceVueltoMixtoContainer" class="mt-3" style="display:none;">
                                         <label class="upload-evidence-box w-100 py-3" id="evidenceVueltoMixtoLabel">
                                             <div class="text-muted text-xs mb-2">EVIDENCIA DE VUELTO</div>
-                                            <i class="fas fa-camera fa-2x mb-2"></i>
+                                            <div id="evidenceVueltoMixtoIcon"><i class="fas fa-camera fa-2x mb-2"></i></div>
+                                            <img id="evidenceVueltoMixtoPreview" class="preview-image" src="" alt="preview" style="display:none;">
                                             <div class="small" id="evidenceVueltoMixtoText">Tocar para subir imagen</div>
-                                                <input id="evidenciaVueltoMixtoInput" type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaVueltoMixto(this)">
+                                            <input id="evidenciaVueltoMixtoInput" type="file" accept="image/*" capture="camera" onchange="actualizarEvidenciaVueltoMixto(this)">
                                         </label>
                                     </div>
                                 </div>
@@ -443,15 +444,32 @@
             const addButton = document.getElementById('btnAgregarMetodoMixto');
             if (!container) return;
 
-            container.innerHTML = '';
+            // Solo limpiar el contenedor si realmente está vacío o es la primera vez
+            // Esto evita perder las evidencias ya cargadas
+            const yaTieneFilas = container.children.length > 0;
+            if (!yaTieneFilas) {
+                container.innerHTML = '';
+            }
+
             mixedRows.forEach((row, index) => {
+                // Verificar si la fila ya existe en el DOM
+                const filaExistente = document.getElementById('mixtoRow_' + row.id);
+                if (filaExistente) {
+                    // Si existe, solo actualizar el número de método
+                    const metodoLabel = filaExistente.querySelector('.font-weight-bold.text-sm');
+                    if (metodoLabel) {
+                        metodoLabel.textContent = 'Método ' + (index + 1);
+                    }
+                    return;
+                }
+
                 const methods = getMetodosDisponiblesParaFila(row.id);
                 if (!methods.includes(row.metodo)) {
                     row.metodo = methods.length > 0 ? methods[0] : 'Efectivo';
                 }
                 const allowDelete = mixedRows.length === 3 && index === mixedRows.length - 1;
                 const rowMarkup = `
-                    <div class="mixto-row mb-3">
+                    <div class="mixto-row mb-3" id="mixtoRow_${row.id}">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="font-weight-bold text-sm">Método ${index + 1}</span>
                             ${allowDelete ? `<button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="eliminarFilaMixto(${row.id})"><i class="fas fa-times"></i></button>` : ''}
@@ -592,9 +610,31 @@
 
         function actualizarEvidenciaVueltoMixto(inputElement) {
             const evidenceText = document.getElementById('evidenceVueltoMixtoText');
+            const evidenceIcon = document.getElementById('evidenceVueltoMixtoIcon');
+            const evidencePreview = document.getElementById('evidenceVueltoMixtoPreview');
+            const evidenceLabel = document.getElementById('evidenceVueltoMixtoLabel');
+            
             if (evidenceText) {
                 evidenceText.textContent = inputElement && inputElement.files && inputElement.files.length > 0 ? 'Imagen adjunta: OK' : 'Tocar para subir imagen';
             }
+            
+            if (inputElement && inputElement.files && inputElement.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (evidencePreview) {
+                        evidencePreview.src = e.target.result;
+                        evidencePreview.style.display = 'block';
+                    }
+                    if (evidenceIcon) evidenceIcon.style.display = 'none';
+                    if (evidenceLabel) evidenceLabel.classList.add('is-valid');
+                };
+                reader.readAsDataURL(inputElement.files[0]);
+            } else {
+                if (evidencePreview) { evidencePreview.src = ''; evidencePreview.style.display = 'none'; }
+                if (evidenceIcon) evidenceIcon.style.display = '';
+                if (evidenceLabel) evidenceLabel.classList.remove('is-valid');
+            }
+            
             actualizarResumenMixto();
         }
 
