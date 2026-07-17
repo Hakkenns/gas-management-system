@@ -384,6 +384,7 @@ public class MotorizadoController {
                             @RequestParam("montoRecibido") java.math.BigDecimal montoRecibido,
                             @RequestParam("numOperacion") String numOperacion,
                             @RequestPart(value = "evidencia", required = false) MultipartFile evidencia,
+                            @RequestPart(value = "evidenciaVuelto", required = false) MultipartFile evidenciaVuelto,
                             HttpSession session,
                             @RequestHeader(value = "X-Requested-With", required = false) String requestedWith) {
 
@@ -396,7 +397,7 @@ public class MotorizadoController {
         }
 
         PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(idPedido, idMetodo, montoRecibido, numOperacion);
-        var pago = pedidoPagosService.registrarPagoYape(dto, evidencia);
+        var pago = pedidoPagosService.registrarPagoYape(dto, evidencia, evidenciaVuelto);
 
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             return ResponseEntity.ok(java.util.Map.of("success", true, "idPago", pago.getId()));

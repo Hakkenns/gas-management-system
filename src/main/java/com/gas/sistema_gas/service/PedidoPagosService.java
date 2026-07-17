@@ -10,6 +10,8 @@ import com.gas.sistema_gas.Model.PedidoPago;
 public interface PedidoPagosService {
     PedidoPago registrarPagoYape(PedidoPagoYapeDTO dto, MultipartFile evidencia);
     
+    PedidoPago registrarPagoYape(PedidoPagoYapeDTO dto, MultipartFile evidencia, MultipartFile evidenciaVuelto);
+    
     List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias);
     
     List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias, MultipartFile evidenciaVuelto);

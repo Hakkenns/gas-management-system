@@ -1041,6 +1041,13 @@
                         fd.append('evidencia', evidenciaMetodoInput.files[0]);
                     }
 
+                    // Adjuntar evidencia de vuelto si el checkbox está marcado y hay imagen
+                    const evidenciaVueltoInputSingle = document.getElementById('evidenciaVueltoSingleInput');
+                    const confirmarVueltoCheckboxSingle = document.getElementById('confirmarVueltoSingleCheckbox');
+                    if (confirmarVueltoCheckboxSingle && confirmarVueltoCheckboxSingle.checked && evidenciaVueltoInputSingle && evidenciaVueltoInputSingle.files && evidenciaVueltoInputSingle.files.length > 0) {
+                        fd.append('evidenciaVuelto', evidenciaVueltoInputSingle.files[0]);
+                    }
+
                     const res = await fetch('/motorizado/pedido/pagar-yape', {
                         method: 'POST',
                         body: fd,

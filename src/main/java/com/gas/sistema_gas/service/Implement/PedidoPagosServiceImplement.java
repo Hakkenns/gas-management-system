@@ -53,6 +53,12 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Override
     @Transactional
     public PedidoPago registrarPagoYape(PedidoPagoYapeDTO dto, MultipartFile evidencia) {
+        return registrarPagoYape(dto, evidencia, null);
+    }
+
+    @Override
+    @Transactional
+    public PedidoPago registrarPagoYape(PedidoPagoYapeDTO dto, MultipartFile evidencia, MultipartFile evidenciaVuelto) {
         if (dto == null || dto.idPedido == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido");
         }
@@ -99,7 +105,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
 
         PedidoPago pagoGuardado = pedidoPagoRepository.save(pago);
 
-        // 2) Guardar evidencia si viene archivo
+        // 2) Guardar evidencia del PAGO si viene archivo
         if (evidencia != null && !evidencia.isEmpty()) {
             String url = almacenarImagen(evidencia);
             Evidencia ev = new Evidencia();
@@ -109,7 +115,17 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             evidenciaRepository.save(ev);
         }
 
-        // 3) Marcar pedido como ENTREGADO y PAGADO
+        // 3) Guardar evidencia de VUELTO si se proporcionó
+        if (evidenciaVuelto != null && !evidenciaVuelto.isEmpty()) {
+            String url = almacenarImagen(evidenciaVuelto);
+            Evidencia ev = new Evidencia();
+            ev.setPedidoPago(pagoGuardado);
+            ev.setUrlImagen(url);
+            ev.setTipoEvidencia("VUELTO");
+            evidenciaRepository.save(ev);
+        }
+
+        // 4) Marcar pedido como ENTREGADO y PAGADO
         pedido.setEstadoPedido("ENTREGADO");
         if (pedido.getFechaEntrega() == null) {
             pedido.setFechaEntrega(java.time.LocalDateTime.now());
