@@ -419,77 +419,94 @@
 
                 // Actualizar lista del dropdown
                 const list = document.getElementById('admin-notif-list');
+                const dropdownToggle = document.getElementById('adminNotifDropdown');
+                const dropdownParent = document.getElementById('admin-notif-dropdown');
+                const dropdownMenu = dropdownParent ? dropdownParent.querySelector('.dropdown-menu') : null;
+                
                 if (list) {
                     list.innerHTML = '';
-                    incidencias.forEach(inc => {
-                        const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
-                        const itemClass = esCritica ? 'notif-item-emergency' : 'notif-item-warning';
-                        
-                        // Configurar icono y texto según tipo de incidencia
-                        let icono = 'fa-exclamation-circle';
-                        let tipoLabel = 'INCIDENCIA';
-                        let textoReporte = 'El administrador revisará la incidencia.';
-                        
-                        if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
-                            icono = 'fa-motorcycle';
-                            tipoLabel = 'MOTO AVERIADA';
-                            textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
-                        } else if (inc.tipoIncidencia === 'ACCIDENTE') {
-                            icono = 'fa-ambulance';
-                            tipoLabel = 'ACCIDENTE EN RUTA';
-                            textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+                    
+                    // Si no hay incidencias, cerrar el dropdown si está abierto
+                    if (incidencias.length === 0) {
+                        if (dropdownParent && dropdownMenu) {
+                            dropdownParent.classList.remove('show');
+                            dropdownMenu.classList.remove('show');
+                            if (dropdownToggle) {
+                                dropdownToggle.setAttribute('aria-expanded', 'false');
+                            }
                         }
-                        
-                        const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                        
-                        const item = document.createElement('div');
-                        item.className = 'notif-card-custom ' + itemClass;
-                        item.setAttribute('data-id', inc.id);
-                        item.innerHTML = `
-                            <div class="notif-card-inner">
-                                <!-- Encabezado con badge y hora -->
-                                <div class="notif-card-header">
-                                    <div class="notif-badge-container">
-                                        <span class="notif-badge badge-danger">
-                                            <i class="fas ${icono}"></i> ${tipoLabel}
-                                        </span>
+                    } else {
+                        // Poblar la lista con las incidencias
+                        incidencias.forEach(inc => {
+                            const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
+                            const itemClass = esCritica ? 'notif-item-emergency' : 'notif-item-warning';
+                            
+                            // Configurar icono y texto según tipo de incidencia
+                            let icono = 'fa-exclamation-circle';
+                            let tipoLabel = 'INCIDENCIA';
+                            let textoReporte = 'El administrador revisará la incidencia.';
+                            
+                            if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
+                                icono = 'fa-motorcycle';
+                                tipoLabel = 'MOTO AVERIADA';
+                                textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
+                            } else if (inc.tipoIncidencia === 'ACCIDENTE') {
+                                icono = 'fa-ambulance';
+                                tipoLabel = 'ACCIDENTE EN RUTA';
+                                textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+                            }
+                            
+                            const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                            
+                            const item = document.createElement('div');
+                            item.className = 'notif-card-custom ' + itemClass;
+                            item.setAttribute('data-id', inc.id);
+                            item.innerHTML = `
+                                <div class="notif-card-inner">
+                                    <!-- Encabezado con badge y hora -->
+                                    <div class="notif-card-header">
+                                        <div class="notif-badge-container">
+                                            <span class="notif-badge badge-danger">
+                                                <i class="fas ${icono}"></i> ${tipoLabel}
+                                            </span>
+                                        </div>
+                                        <span class="notif-time">${hora}</span>
                                     </div>
-                                    <span class="notif-time">${hora}</span>
-                                </div>
-                                
-                                <!-- Contenido de información -->
-                                <div class="notif-card-body">
-                                    <div class="notif-info-row">
-                                        <i class="fas fa-user notif-info-icon"></i>
-                                        <span class="notif-info-text">${inc.empleadoNombre || 'Desconocido'}</span>
+                                    
+                                    <!-- Contenido de información -->
+                                    <div class="notif-card-body">
+                                        <div class="notif-info-row">
+                                            <i class="fas fa-user notif-info-icon"></i>
+                                            <span class="notif-info-text">${inc.empleadoNombre || 'Desconocido'}</span>
+                                        </div>
+                                        <div class="notif-info-row">
+                                            <i class="fas fa-phone notif-info-icon"></i>
+                                            <span class="notif-info-text">${inc.empleadoTelefono || ''}</span>
+                                        </div>
+                                        ${inc.codigoPedido ? `
+                                        <div class="notif-info-row">
+                                            <i class="fas fa-box notif-info-icon"></i>
+                                            <span class="notif-info-text">Pedido: ${inc.codigoPedido}</span>
+                                        </div>
+                                        ` : ''}
                                     </div>
-                                    <div class="notif-info-row">
-                                        <i class="fas fa-phone notif-info-icon"></i>
-                                        <span class="notif-info-text">${inc.empleadoTelefono || ''}</span>
+                                    
+                                    <!-- Mensaje predeterminado -->
+                                    <div class="notif-card-message">
+                                        <em>"${textoReporte}"</em>
                                     </div>
-                                    ${inc.codigoPedido ? `
-                                    <div class="notif-info-row">
-                                        <i class="fas fa-box notif-info-icon"></i>
-                                        <span class="notif-info-text">Pedido: ${inc.codigoPedido}</span>
+                                    
+                                    <!-- Botón de acción -->
+                                    <div class="notif-card-action">
+                                        <button class="btn-notif-action" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
+                                            <i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar
+                                        </button>
                                     </div>
-                                    ` : ''}
                                 </div>
-                                
-                                <!-- Mensaje predeterminado -->
-                                <div class="notif-card-message">
-                                    <em>"${textoReporte}"</em>
-                                </div>
-                                
-                                <!-- Botón de acción -->
-                                <div class="notif-card-action">
-                                    <button class="btn-notif-action" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
-                                        <i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                        list.appendChild(item);
-                    });
+                            `;
+                            list.appendChild(item);
+                        });
+                    }
                 }
 
                 // Detectar nuevas incidencias y mostrar toasters
