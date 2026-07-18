@@ -59,7 +59,7 @@
                         <span class="font-weight-bold text-sm" th:text="${orden.codigo}"></span>
                     </div>
                     <div class="col-6 p-0 text-right">
-                        <span class="badge" th:text="${orden.estadoPedido}" th:classappend="${orden.estadoPedido == 'PENDIENTE'} ? ' badge-warning' : (${orden.estadoPedido == 'ENTREGADO'} ? ' badge-success' : ' badge-secondary')">ASIGNADO</span>
+                        <span class="badge" th:id="${'badge-' + orden.idPedido}" th:text="${orden.estadoPedido}" th:classappend="${orden.estadoPedido == 'PENDIENTE'} ? ' badge-warning' : (${orden.estadoPedido == 'ENTREGADO'} ? ' badge-success' : ' badge-secondary')">ASIGNADO</span>
                     </div>
                 </div>
             </div>
@@ -87,9 +87,9 @@
                 </div>
 
                 <!-- ACCIONES INFERIORES -->
-                <div class="row" th:if="${orden.estadoPedido == 'PENDIENTE'}">
+                <div class="row" th:id="${'botones-accion-' + orden.idPedido}" th:if="${orden.estadoPedido == 'PENDIENTE'}">
                     <div class="col-6 pr-2">
-<form th:action="@{/motorizado/pedido/estado}" method="post" class="w-100">
+ <form th:action="@{/motorizado/pedido/estado}" method="post" class="w-100">
                             <input type="hidden" name="id" th:value="${orden.idPedido}" />
                             <input type="hidden" name="estado" value="ACEPTADO" />
                             <button type="submit" class="btn btn-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
@@ -135,9 +135,8 @@
                     <input type="hidden" id="rechazo-id">
                     <select class="form-control mb-3" id="motivoRechazo">
                         <option value="">Seleccione un motivo...</option>
-                        <option value="distancia">Distancia excesiva</option>
-                        <option value="moto">Moto averiada</option>
-                        <option value="fuera_horario">Fuera de horario</option>
+                        <option value="RECHAZO_DISTANCIA">Distancia excesiva del punto</option>
+                        <option value="RECHAZO_DIRECCION">Dirección errónea o inaccesible</option>
                     </select>
                     <div class="row">
                         <div class="col-6 pr-1"><button class="btn btn-secondary btn-block" data-dismiss="modal">Cancelar</button></div>
@@ -234,19 +233,58 @@
                 return;
             }
 
-            const badge = document.getElementById('badge-' + id);
-            badge.className = 'badge badge-danger';
-            badge.textContent = 'RECHAZADO';
+            const motivoTexto = document.getElementById('motivoRechazo').selectedOptions[0].text;
+            
+            // Enviar reporte de rechazo al servidor
+            fetch('/api/incidencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipoIncidencia: 'RECHAZO_PEDIDO',
+                    motivo: motivo,
+                    motivoTexto: motivoTexto,
+                    idPedido: id
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    // Desasignar el pedido del motorizado (persistencia en BD)
+                    return fetch('/motorizado/pedido/desasignar?id=' + id, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.json()).then(desasignarData => {
+                        if (desasignarData.success) {
+                            // Actualizar UI con icono de CHECK (éxito)
+                            const badge = document.getElementById('badge-' + id);
+                            if (badge) {
+                                badge.className = 'badge badge-success';
+                                badge.innerHTML = '<i class="fas fa-check"></i> RECHAZADO';
+                            }
 
-            document.getElementById('botones-accion-' + id).style.display = 'none';
-            $('#modal-rechazo').modal('hide');
+                            const botonesAccion = document.getElementById('botones-accion-' + id);
+                            if (botonesAccion) {
+                                botonesAccion.style.display = 'none';
+                            }
 
-            Swal.fire({
-                title: 'Pedido rechazado',
-                text: 'La entrega quedó cancelada.',
-                icon: 'error',
-                timer: 900,
-                showConfirmButton: false
+                            $('#modal-rechazo').modal('hide');
+                            Swal.fire({ 
+                                title: 'Pedido rechazado', 
+                                text: 'El pedido ha sido devuelto a la bolsa de asignaciones.', 
+                                icon: 'success', 
+                                timer: 2000, 
+                                showConfirmButton: false 
+                            }).then(() => {
+                                // Recargar la página para reflejar los cambios
+                                window.location.href = '/motorizado/asignados';
+                            });
+                        } else {
+                            throw new Error(desasignarData.message || 'Error al desasignar');
+                        }
+                    });
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'No se pudo enviar el reporte', icon: 'error' });
+                }
+            }).catch(err => {
+                Swal.fire({ title: 'Error', text: err.message || 'Error de conexión', icon: 'error' });
             });
         }
 

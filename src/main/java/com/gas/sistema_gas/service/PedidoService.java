@@ -15,6 +15,7 @@ public interface PedidoService {
     PedidoDTO.SimpleResponse updateOrder(Long id, PedidoDTO.Update updateDto); 
     PedidoDTO.SimpleResponse updateEstadoPedido(Long id, String nuevoEstado);
     void deleteOrder(Long id);
+    void desasignarPedido(Long idPedido);
     PedidoDTO.SimpleResponse findById(Long id);
     PedidoDTO.SimpleResponse findByIdAndEmpleadoId(Long id, Long empleadoId);
     boolean existsByIdAndEmpleadoId(Long id, Long empleadoId);

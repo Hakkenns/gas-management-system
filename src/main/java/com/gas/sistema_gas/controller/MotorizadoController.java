@@ -320,6 +320,48 @@ public class MotorizadoController {
         return "redirect:/motorizado/detalle?id=" + id;
     }
 
+    @PostMapping("/pedido/desasignar")
+    @ResponseBody
+    public ResponseEntity<?> desasignarPedido(@RequestParam("id") Long id,
+                                              HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of("success", false, "message", "No autenticado"));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of("success", false, "message", "No autenticado"));
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null || usuarioOpt.get().getEmpleado().getId() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(java.util.Map.of("success", false, "message", "Empleado no válido"));
+        }
+
+        Long empleadoId = usuarioOpt.get().getEmpleado().getId();
+        if (!pedidoService.existsByIdAndEmpleadoId(id, empleadoId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(java.util.Map.of("success", false, "message", "Pedido no asignado a este motorizado"));
+        }
+
+        try {
+            pedidoService.desasignarPedido(id);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", true,
+                    "message", "Pedido desasignado correctamente"
+            ));
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(java.util.Map.of("success", false, "message", e.getReason()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("success", false, "message", "Error al desasignar pedido: " + e.getMessage()));
+        }
+    }
+
     @GetMapping({"/detalle", "/detalle/{id}"})
     public String detalle(@PathVariable(value = "id", required = false) Long id,
                           @RequestParam(value = "id", required = false) Long queryId,

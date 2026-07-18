@@ -72,7 +72,21 @@ public class IncidenciaController {
 
         Empleado empleado = usuarioOpt.get().getEmpleado();
         String tipoIncidencia = (String) body.get("tipoIncidencia");
-        Long idPedido = body.get("idPedido") != null ? ((Number) body.get("idPedido")).longValue() : null;
+        
+        // Manejar idPedido que puede venir como String o Number desde el JSON
+        Long idPedido = null;
+        if (body.get("idPedido") != null) {
+            Object idPedidoObj = body.get("idPedido");
+            if (idPedidoObj instanceof Number) {
+                idPedido = ((Number) idPedidoObj).longValue();
+            } else if (idPedidoObj instanceof String) {
+                try {
+                    idPedido = Long.parseLong((String) idPedidoObj);
+                } catch (NumberFormatException e) {
+                    idPedido = null;
+                }
+            }
+        }
 
         if (tipoIncidencia == null || tipoIncidencia.isBlank()) {
             return ResponseEntity.badRequest()
@@ -82,15 +96,34 @@ public class IncidenciaController {
         Incidencia incidencia = new Incidencia();
         incidencia.setEmpleado(empleado);
         
-        // Determinar el tipo general (CRITICA o INCIDENCIA)
+        // Determinar el tipo general y label según el tipo de incidencia
         String tipoGeneral = "INCIDENCIA";
         String tipoLabel = "Incidencia";
+        String tipoIncidenciaUpper = tipoIncidencia.toUpperCase();
+        
         if ("AVERIA_VEHICULO".equalsIgnoreCase(tipoIncidencia) || "ACCIDENTE".equalsIgnoreCase(tipoIncidencia)) {
             tipoGeneral = "CRITICA";
             tipoLabel = "Alerta Crítica";
+        } else if ("RECHAZO_PEDIDO".equalsIgnoreCase(tipoIncidencia)) {
+            tipoGeneral = "WARNING";
+            tipoLabel = "Advertencia de Entrega";
+            // Mapear el motivo al tipo_incidencia específico
+            String motivo = (String) body.get("motivo");
+            if (motivo != null) {
+                tipoIncidenciaUpper = motivo.toUpperCase();
+            }
+        } else if ("INCONVENIENTE_PUERTA".equalsIgnoreCase(tipoIncidencia)) {
+            tipoGeneral = "INFO";
+            tipoLabel = "Inconveniente en Punto";
+            // Mapear el motivo al tipo_incidencia específico
+            String motivo = (String) body.get("motivo");
+            if (motivo != null) {
+                tipoIncidenciaUpper = motivo.toUpperCase();
+            }
         }
+        
         incidencia.setTipo(tipoGeneral);
-        incidencia.setTipoIncidencia(tipoIncidencia.toUpperCase());
+        incidencia.setTipoIncidencia(tipoIncidenciaUpper);
         incidencia.setTipoLabel(tipoLabel);
         incidencia.setEstado("PENDIENTE");
 
@@ -322,5 +355,113 @@ public class IncidenciaController {
         ).collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of("success", true, "motos", resultado));
+    }
+
+    // GET /api/incidencias/repartidores-disponibles - Listar repartidores con moto activa para reasignación
+    @GetMapping("/repartidores-disponibles")
+    public ResponseEntity<?> obtenerRepartidoresDisponibles(HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        try {
+            // Obtener empleados que tienen una asignación de moto ACTIVA
+            var asignacionesActivas = asignacionMotoRepository.findAllByOrderByCreatedAtDesc().stream()
+                    .filter(a -> a.getEstado() == com.gas.sistema_gas.Model.AsignacionMoto.EstadoAsignacion.ACTIVA)
+                    .collect(Collectors.toList());
+
+            List<Map<String, Object>> resultado = asignacionesActivas.stream().map(a -> {
+                Empleado emp = a.getEmpleado();
+                return Map.<String, Object>of(
+                    "id", emp.getId(),
+                    "nombre", emp.getNombre(),
+                    "telefono", emp.getTelefono() != null ? emp.getTelefono() : ""
+                );
+            }).collect(Collectors.toList());
+
+            return ResponseEntity.ok(Map.of("success", true, "repartidores", resultado));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("success", false, "message", "Error al obtener repartidores: " + e.getMessage()));
+        }
+    }
+
+    // POST /api/incidencias/{id}/reasignar-pedido - Reasignar pedido a otro repartidor
+    @PostMapping("/{id}/reasignar-pedido")
+    @Transactional
+    public ResponseEntity<?> reasignarPedido(@PathVariable Long id,
+                                              @RequestBody Map<String, Object> body,
+                                              HttpSession session) {
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        var incidenciaOpt = incidenciaRepository.findById(id);
+        if (incidenciaOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Incidencia no encontrada"));
+        }
+
+        Incidencia incidencia = incidenciaOpt.get();
+        Long idNuevoRepartidor = body.get("idNuevoRepartidor") != null 
+                ? ((Number) body.get("idNuevoRepartidor")).longValue() 
+                : null;
+
+        if (idNuevoRepartidor == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Debe seleccionar un repartidor"));
+        }
+
+        var nuevoRepartidorOpt = empleadoRepository.findById(idNuevoRepartidor);
+        if (nuevoRepartidorOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Repartidor no encontrado"));
+        }
+
+        Empleado nuevoRepartidor = nuevoRepartidorOpt.get();
+        Pedido pedido = incidencia.getPedido();
+
+        if (pedido == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
+        }
+
+        // Reasignar el pedido al nuevo repartidor
+        pedido.setEmpleado(nuevoRepartidor);
+        pedido.setEstadoPedido("PENDIENTE");
+        pedidoRepository.save(pedido);
+
+        // Marcar incidencia como atendida
+        incidencia.setEstado("ATENDIDO");
+        incidencia.setUpdatedAt(LocalDateTime.now());
+        incidenciaRepository.save(incidencia);
+
+        // Guardar respuesta de la incidencia
+        RespuestaIncidencia respuesta = new RespuestaIncidencia();
+        respuesta.setIncidencia(incidencia);
+        respuesta.setMotoReemplazo("Reasignado a: " + nuevoRepartidor.getNombre());
+        respuesta.setCreatedAt(LocalDateTime.now());
+        respuesta.setUpdatedAt(LocalDateTime.now());
+        respuestaIncidenciaRepository.save(respuesta);
+
+        // Notificar al nuevo repartidor por WebSocket
+        messagingTemplate.convertAndSend("/topic/pedidos/" + nuevoRepartidor.getId(), 
+            Map.of(
+                "mensaje", "Se te ha asignado un nuevo pedido",
+                "idPedido", pedido.getId(),
+                "codigo", pedido.getCodigo()
+            )
+        );
+
+        // Actualizar contador de incidencias pendientes
+        long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
+        messagingTemplate.convertAndSend("/topic/admin/incidencias", contadorPendientes);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Pedido " + pedido.getCodigo() + " reasignado a " + nuevoRepartidor.getNombre() + " correctamente."
+        ));
     }
 }

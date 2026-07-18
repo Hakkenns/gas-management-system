@@ -198,14 +198,27 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background-color: #dc3545;
-            color: #ffffff;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 0.75rem;
             font-weight: 700;
             letter-spacing: 0.5px;
             text-transform: uppercase;
+        }
+        
+        .notif-badge.badge-danger {
+            background-color: #dc3545;
+            color: #ffffff;
+        }
+        
+        .notif-badge.badge-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .notif-badge.badge-info {
+            background-color: #17a2b8;
+            color: #ffffff;
         }
         .notif-badge i {
             font-size: 0.9rem;
@@ -254,7 +267,6 @@
             width: 100%;
             padding: 10px 16px;
             background-color: #ffffff;
-            color: #dc3545;
             border: 2px solid #dc3545;
             border-radius: 6px;
             font-weight: 600;
@@ -264,12 +276,56 @@
             transition: all 0.3s ease;
             font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
-        .btn-notif-action:hover {
+        
+        /* Botón rojo para incidencias críticas (accidentes/averías) */
+        .btn-notif-action.btn-danger {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-notif-action.btn-danger:hover {
             background-color: #dc3545;
             color: #ffffff;
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
         }
+        
+        /* Botón amarillo para rechazos */
+        .btn-notif-action.btn-warning {
+            color: #212529;
+            border-color: #ffc107;
+        }
+        .btn-notif-action.btn-warning:hover {
+            background-color: #ffc107;
+            color: #212529;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+        }
+        
+        /* Botón celeste para inconvenientes en puerta */
+        .btn-notif-action.btn-info {
+            color: #17a2b8;
+            border-color: #17a2b8;
+        }
+        .btn-notif-action.btn-info:hover {
+            background-color: #17a2b8;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(23, 162, 184, 0.2);
+        }
+        
+        /* Botón amarillo personalizado para RECHAZO_DISTANCIA y RECHAZO_DIRECCION */
+        .btn-rechazo-amarillo {
+            border: 2px solid #ffc107 !important;
+            color: #ffc107 !important;
+            background: transparent !important;
+            transition: all 0.3s ease !important;
+        }
+        .btn-rechazo-amarillo:hover {
+            background-color: #ffc107 !important;
+            color: #ffffff !important;
+            border-color: #ffc107 !important;
+        }
+        
         .btn-notif-action i {
             margin-right: 6px;
         }
@@ -339,6 +395,35 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-dark" onclick="confirmarRedirigirMotoasignacion()">
                         <i class="fas fa-check"></i> Confirmar y Redirigir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Reasignación Rápida de Pedido (Admin) - Para RECHAZO_DISTANCIA y RECHAZO_DIRECCION -->
+    <div class="modal fade" id="modal-reasignar-pedido" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h6 class="modal-title"><i class="fas fa-motorcycle"></i> Reasignar Pedido - <span id="reasignar-codigo-pedido">N/A</span></h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="reasignar-incidencia-id">
+                    <input type="hidden" id="reasignar-pedido-id">
+                    <p class="text-sm mb-3">Seleccione el nuevo repartidor para el pedido:</p>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Repartidor disponible</label>
+                        <select class="form-control" id="repartidor-reasignar-select">
+                            <option value="">Cargando repartidores disponibles...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-dark" onclick="confirmarReasignarPedido()">
+                        <i class="fas fa-check"></i> Confirmar y Reasignar
                     </button>
                 </div>
             </div>
@@ -445,15 +530,42 @@
                             let icono = 'fa-exclamation-circle';
                             let tipoLabel = 'INCIDENCIA';
                             let textoReporte = 'El administrador revisará la incidencia.';
+                            let badgeClass = 'badge-danger';
+                            let btnClass = 'btn-danger';
+                            let btnInlineStyle = '';
                             
                             if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
                                 icono = 'fa-motorcycle';
                                 tipoLabel = 'MOTO AVERIADA';
                                 textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
+                                badgeClass = 'badge-danger';
+                                btnClass = 'btn-danger';
                             } else if (inc.tipoIncidencia === 'ACCIDENTE') {
                                 icono = 'fa-ambulance';
                                 tipoLabel = 'ACCIDENTE EN RUTA';
                                 textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+                                badgeClass = 'badge-danger';
+                                btnClass = 'btn-danger';
+                            } else if (inc.tipoIncidencia === 'RECHAZO_DISTANCIA') {
+                                icono = 'fa-times-circle';
+                                tipoLabel = 'DISTANCIA EXCESIVA';
+                                textoReporte = 'El repartidor reporta inconvenientes con la entrega: Distancia excesiva del punto';
+                                badgeClass = 'badge-warning';
+                                btnClass = 'btn-rechazo-amarillo';
+                                btnInlineStyle = 'border: 2px solid #ffc107; color: #ffc107; background: transparent; transition: all 0.3s ease;';
+                            } else if (inc.tipoIncidencia === 'RECHAZO_DIRECCION') {
+                                icono = 'fa-times-circle';
+                                tipoLabel = 'DIRECCIÓN ERRÓNEA O INACCESIBLE';
+                                textoReporte = 'El repartidor reporta inconvenientes con la entrega: Dirección errónea o inaccesible';
+                                badgeClass = 'badge-warning';
+                                btnClass = 'btn-rechazo-amarillo';
+                                btnInlineStyle = 'border: 2px solid #ffc107; color: #ffc107; background: transparent; transition: all 0.3s ease;';
+                            } else if (inc.tipoIncidencia === 'INCONVENIENTE_PUERTA') {
+                                icono = 'fa-door-closed';
+                                tipoLabel = 'INCONVENIENTE EN PUERTA';
+                                textoReporte = inc.motivoTexto || 'El repartidor informa de un inconveniente en el punto de entrega.';
+                                badgeClass = 'badge-info';
+                                btnClass = 'btn-info';
                             }
                             
                             const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
@@ -466,7 +578,7 @@
                                     <!-- Encabezado con badge y hora -->
                                     <div class="notif-card-header">
                                         <div class="notif-badge-container">
-                                            <span class="notif-badge badge-danger">
+                                            <span class="notif-badge ${badgeClass}">
                                                 <i class="fas ${icono}"></i> ${tipoLabel}
                                             </span>
                                         </div>
@@ -498,8 +610,8 @@
                                     
                                     <!-- Botón de acción -->
                                     <div class="notif-card-action">
-                                        <button class="btn-notif-action" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
-                                            <i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar
+                                        <button class="btn-notif-action ${btnClass}" style="${btnInlineStyle}" onclick="event.stopPropagation(); abrirModalSegunTipoIncidencia(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}', ${inc.idPedido}, '${inc.codigoPedido || ''}')">
+                                            <i class="fas fa-motorcycle"></i> ${inc.tipoIncidencia === 'RECHAZO_DISTANCIA' || inc.tipoIncidencia === 'RECHAZO_DIRECCION' ? 'Asignar Repartidor' : 'Redirigir Motoasignación y Auxiliar'}
                                         </button>
                                     </div>
                                 </div>
@@ -546,11 +658,45 @@
             const container = document.getElementById('toast-container-bottom');
             if (!container) return;
 
-            const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
-            const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? 'MOTO AVERIADA' :
-                             inc.tipoIncidencia === 'ACCIDENTE' ? 'ACCIDENTE EN RUTA' : 'INCIDENCIA';
-            const icono = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? 'fa-motorcycle' :
-                         inc.tipoIncidencia === 'ACCIDENTE' ? 'fa-ambulance' : 'fa-exclamation-circle';
+            // Configuración de color según tipo de incidencia
+            let headerBgColor = '#dc3545'; // Rojo por defecto (ACCIDENTE/AVERIA)
+            let headerTextColor = '#ffffff'; // Texto blanco por defecto
+            let tipoLabel = 'INCIDENCIA';
+            let icono = 'fa-exclamation-circle';
+            let textoReporte = 'El administrador revisará la incidencia.';
+
+            if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
+                headerBgColor = '#dc3545'; // Rojo
+                headerTextColor = '#ffffff';
+                icono = 'fa-motorcycle';
+                tipoLabel = 'MOTO AVERIADA';
+                textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
+            } else if (inc.tipoIncidencia === 'ACCIDENTE') {
+                headerBgColor = '#dc3545'; // Rojo
+                headerTextColor = '#ffffff';
+                icono = 'fa-ambulance';
+                tipoLabel = 'ACCIDENTE EN RUTA';
+                textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+            } else if (inc.tipoIncidencia === 'RECHAZO_DISTANCIA') {
+                headerBgColor = '#ffc107'; // Amarillo
+                headerTextColor = '#212529'; // Texto oscuro
+                icono = 'fa-times-circle';
+                tipoLabel = 'DISTANCIA EXCESIVA';
+                textoReporte = 'El repartidor reporta inconvenientes con la entrega: Distancia excesiva del punto';
+            } else if (inc.tipoIncidencia === 'RECHAZO_DIRECCION') {
+                headerBgColor = '#ffc107'; // Amarillo
+                headerTextColor = '#212529'; // Texto oscuro
+                icono = 'fa-times-circle';
+                tipoLabel = 'DIRECCIÓN ERRÓNEA O INACCESIBLE';
+                textoReporte = 'El repartidor reporta inconvenientes con la entrega: Dirección errónea o inaccesible';
+            } else if (inc.tipoIncidencia === 'INCONVENIENTE_PUERTA') {
+                headerBgColor = '#17a2b8'; // Celeste
+                headerTextColor = '#ffffff';
+                icono = 'fa-door-closed';
+                tipoLabel = 'INCONVENIENTE EN PUERTA';
+                textoReporte = inc.motivoTexto || 'El repartidor informa de un inconveniente en el punto de entrega.';
+            }
+
             const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 
             // Datos del empleado: "Luis Torres - Unidad #03"
@@ -558,28 +704,18 @@
             const unidadEmpleado = inc.empleadoTelefono ? 'Unidad #' + inc.empleadoTelefono : '';
             const empleadoTexto = unidadEmpleado ? nombreEmpleado + ' - ' + unidadEmpleado : nombreEmpleado;
 
-            // Texto predeterminado exacto según tipo
-            let textoReporte = '';
-            if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
-                textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
-            } else if (inc.tipoIncidencia === 'ACCIDENTE') {
-                textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
-            } else {
-                textoReporte = 'El administrador revisará la incidencia.';
-            }
-
             const toast = document.createElement('div');
             toast.className = 'custom-toast show-slide';
             toast.setAttribute('data-id', inc.id);
             toast.innerHTML = `
-                <div class="toast-header">
+                <div class="toast-header" style="background-color: ${headerBgColor}; color: ${headerTextColor};">
                     <div class="toast-header-left">
                         <span class="toast-header-icon"><i class="fas ${icono}"></i></span>
                         <span class="toast-header-title">${tipoLabel}</span>
                     </div>
                     <div class="toast-header-right">
                         <span class="toast-header-time">${hora}</span>
-                        <button class="toast-close" onclick="event.stopPropagation(); this.closest('.custom-toast').remove();">&times;</button>
+                        <button class="toast-close" style="color: ${headerTextColor};" onclick="event.stopPropagation(); this.closest('.custom-toast').remove();">&times;</button>
                     </div>
                 </div>
                 <div class="toast-body">
@@ -759,6 +895,117 @@
                 Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
             }
         }
+
+        // ========== FUNCIONES PARA REASIGNACIÓN RÁPIDA DE PEDIDO (RECHAZOS) ==========
+
+        function abrirModalSegunTipoIncidencia(id, empleadoNombre, tipoIncidencia, idPedido, codigoPedido) {
+            // Para RECHAZO_DISTANCIA y RECHAZO_DIRECCION abrir el modal de reasignación de pedido
+            if (tipoIncidencia === 'RECHAZO_DISTANCIA' || tipoIncidencia === 'RECHAZO_DIRECCION') {
+                document.getElementById('reasignar-incidencia-id').value = id;
+                document.getElementById('reasignar-pedido-id').value = idPedido || '';
+                document.getElementById('reasignar-codigo-pedido').textContent = codigoPedido || 'N/A';
+                document.querySelector('#modal-reasignar-pedido .modal-title').innerHTML =
+                    '<i class="fas fa-motorcycle"></i> Reasignar Pedido - ' + (codigoPedido || 'N/A');
+                
+                // Cargar repartidores disponibles
+                cargarRepartidoresDisponibles();
+                
+                $('#modal-reasignar-pedido').modal('show');
+            } else {
+                // Para AVERIA_VEHICULO, ACCIDENTE, INCONVENIENTE_PUERTA usar el modal de motoasignación existente
+                abrirModalRedirigirMotoasignacion(id, empleadoNombre, tipoIncidencia);
+            }
+        }
+
+        async function cargarRepartidoresDisponibles() {
+            try {
+                const res = await fetch('/api/incidencias/repartidores-disponibles');
+                const data = await res.json();
+                if (!data.success) return;
+                const select = document.getElementById('repartidor-reasignar-select');
+                if (!select) return;
+                select.innerHTML = '<option value="">Seleccione un repartidor...</option>';
+                (data.repartidores || []).forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.nombre + (r.telefono ? ' - ' + r.telefono : '');
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Error al cargar repartidores:', e);
+            }
+        }
+
+        async function confirmarReasignarPedido() {
+            const id = document.getElementById('reasignar-incidencia-id').value;
+            const repartidorSelect = document.getElementById('repartidor-reasignar-select');
+            const idNuevoRepartidor = repartidorSelect.value;
+
+            if (!idNuevoRepartidor) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione un repartidor.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/incidencias/' + id + '/reasignar-pedido', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        idNuevoRepartidor: parseInt(idNuevoRepartidor)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ 
+                        title: 'Operación Exitosa', 
+                        text: data.message, 
+                        icon: 'success', 
+                        timer: 3000, 
+                        showConfirmButton: false 
+                    });
+                    $('#modal-reasignar-pedido').modal('hide');
+                    repartidorSelect.value = '';
+                    cargarListaIncidencias();
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al reasignar', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+
+        // Limpiar estado del modal de reasignación cuando se cierra (incluso con backdrop estático)
+        document.addEventListener('DOMContentLoaded', function() {
+            var modalReasignar = document.getElementById('modal-reasignar-pedido');
+            if (modalReasignar) {
+                modalReasignar.addEventListener('hidden.bs.modal', function() {
+                    // Limpiar campos del modal
+                    document.getElementById('reasignar-incidencia-id').value = '';
+                    document.getElementById('reasignar-pedido-id').value = '';
+                    document.getElementById('reasignar-codigo-pedido').textContent = 'N/A';
+                    
+                    // Resetear el select a su estado inicial
+                    var select = document.getElementById('repartidor-reasignar-select');
+                    if (select) {
+                        select.innerHTML = '<option value="">Cargando repartidores disponibles...</option>';
+                    }
+                    
+                    // Remover cualquier backdrop huérfano que haya quedado en el DOM
+                    var backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(function(bd) {
+                        bd.remove();
+                    });
+                    
+                    // Restaurar la clase modal-open en el body solo si no hay otros modales abiertos
+                    var modalesAbiertos = document.querySelectorAll('.modal.show');
+                    if (modalesAbiertos.length === 0) {
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    }
+                });
+            }
+        });
 
         // Iniciar notificaciones cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', function() {

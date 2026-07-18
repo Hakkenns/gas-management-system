@@ -508,6 +508,23 @@ public class PedidoServiceImplement implements PedidoService {
 
     @Override
     @Transactional
+    public void desasignarPedido(Long idPedido) {
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        // Solo se puede desasignar si está en estado PENDIENTE
+        if (!"PENDIENTE".equalsIgnoreCase(pedido.getEstadoPedido())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Solo se puede desasignar un pedido en estado PENDIENTE");
+        }
+
+        // Quitar la asignación del empleado (motorizado)
+        pedido.setEmpleado(null);
+        pedidoRepository.save(pedido);
+    }
+
+    @Override
+    @Transactional
     public void deleteOrder(Long id) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));

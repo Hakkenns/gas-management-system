@@ -107,6 +107,9 @@
                 <button type="button" id="btnPago" class="btn btn-success btn-block font-weight-bold mt-3" style="display:none;" data-toggle="modal" data-target="#modal-pago">
                     <i class="fas fa-money-bill-wave"></i> Ir a pago
                 </button>
+                <button type="button" id="btnInconvenientePuerta" class="btn btn-info btn-block font-weight-bold mt-2" style="display:none;" onclick="abrirModalInconvenientePuerta(document.getElementById('pedidoIdInput').value)">
+                    <i class="fas fa-exclamation-circle"></i> Reportar Problema en Punto
+                </button>
                 <div id="estadoInfoTexto" class="small text-muted mt-2"></div>
             </div>
         </div>
@@ -372,21 +375,43 @@
     <div class="modal fade" id="modal-rechazo" tabindex="-1" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-sm">
             <div class="modal-content">
-                <div class="modal-header bg-dark">
-                    <h6 class="modal-title text-white">Motivo de rechazo</h6>
-                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                <div class="modal-header bg-warning">
+                    <h6 class="modal-title text-dark">Motivo de rechazo</h6>
+                    <button class="close text-dark" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="rechazo-id">
                     <select class="form-control mb-3" id="motivoRechazo">
                         <option value="">Seleccione un motivo...</option>
-                        <option value="distancia">Distancia excesiva</option>
-                        <option value="moto">Moto averiada</option>
-                        <option value="fuera_horario">Fuera de horario</option>
+                        <option value="RECHAZO_DISTANCIA">Distancia excesiva del punto</option>
+                        <option value="RECHAZO_DIRECCION">Dirección errónea o inaccesible</option>
                     </select>
                     <div class="row">
                         <div class="col-6 pr-1"><button class="btn btn-secondary btn-block" data-dismiss="modal">Cancelar</button></div>
-                        <div class="col-6 pl-1"><button class="btn btn-danger btn-block" onclick="confirmarRechazo()">Rechazar</button></div>
+                        <div class="col-6 pl-1"><button class="btn btn-warning btn-block" onclick="confirmarRechazo()">Reportar</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-inconveniente-puerta" tabindex="-1" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-info">
+                    <h6 class="modal-title text-white">Reportar Problema en Punto</h6>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="inconveniente-pedido-id">
+                    <select class="form-control mb-3" id="motivoInconvenientePuerta">
+                        <option value="">Seleccione un motivo...</option>
+                        <option value="CLIENTE_NO_ENCUENTRA">Cliente no se encuentra / Domicilio cerrado</option>
+                        <option value="CLIENTE_RECHAZO">Cliente rechazó el pedido en puerta</option>
+                    </select>
+                    <div class="row">
+                        <div class="col-6 pr-1"><button class="btn btn-secondary btn-block" data-dismiss="modal">Cancelar</button></div>
+                        <div class="col-6 pl-1"><button class="btn btn-info btn-block" onclick="confirmarInconvenientePuerta()">Reportar</button></div>
                     </div>
                 </div>
             </div>
@@ -1084,18 +1109,97 @@
                 return;
             }
 
-            const badge = document.getElementById('badge-' + id);
-            if (badge) {
-                badge.className = 'badge badge-danger';
-                badge.textContent = 'RECHAZADO';
+            const motivoTexto = document.getElementById('motivoRechazo').selectedOptions[0].text;
+            
+            // Enviar reporte de rechazo al servidor
+            fetch('/api/incidencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipoIncidencia: 'RECHAZO_PEDIDO',
+                    motivo: motivo,
+                    motivoTexto: motivoTexto,
+                    idPedido: id
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    // Desasignar el pedido del motorizado (persistencia en BD)
+                    return fetch('/motorizado/pedido/desasignar?id=' + id, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.json()).then(desasignarData => {
+                        if (desasignarData.success) {
+                            // Actualizar UI con icono de CHECK (éxito)
+                            const badge = document.getElementById('badge-' + id);
+                            if (badge) {
+                                badge.className = 'badge badge-success';
+                                badge.innerHTML = '<i class="fas fa-check"></i> RECHAZADO';
+                            }
+
+                            const actionContainer = document.getElementById('botones-accion-' + id);
+                            if (actionContainer) {
+                                actionContainer.style.display = 'none';
+                            }
+
+                            $('#modal-rechazo').modal('hide');
+                            Swal.fire({ 
+                                title: 'Pedido rechazado', 
+                                text: 'El pedido ha sido devuelto a la bolsa de asignaciones.', 
+                                icon: 'success', 
+                                timer: 2000, 
+                                showConfirmButton: false 
+                            }).then(() => {
+                                // Recargar la página para reflejar los cambios
+                                window.location.href = '/motorizado/asignados';
+                            });
+                        } else {
+                            throw new Error(desasignarData.message || 'Error al desasignar');
+                        }
+                    });
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'No se pudo enviar el reporte', icon: 'error' });
+                }
+            }).catch(err => {
+                Swal.fire({ title: 'Error', text: err.message || 'Error de conexión', icon: 'error' });
+            });
+        }
+
+        function confirmarInconvenientePuerta() {
+            const motivo = document.getElementById('motivoInconvenientePuerta').value;
+            const id = document.getElementById('inconveniente-pedido-id').value;
+            if (!motivo) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione un motivo.', icon: 'warning' });
+                return;
             }
 
-            const actionContainer = document.getElementById('botones-accion-' + id);
-            if (actionContainer) {
-                actionContainer.style.display = 'none';
-            }
+            const motivoTexto = document.getElementById('motivoInconvenientePuerta').selectedOptions[0].text;
+            
+            // Enviar reporte de inconveniente en puerta al servidor
+            fetch('/api/incidencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipoIncidencia: 'INCONVENIENTE_PUERTA',
+                    motivo: motivo,
+                    motivoTexto: motivoTexto,
+                    idPedido: id
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    $('#modal-inconveniente-puerta').modal('hide');
+                    Swal.fire({ title: 'Reporte enviado', text: 'El administrador ha sido notificado.', icon: 'success', timer: 1500, showConfirmButton: false });
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'No se pudo enviar el reporte', icon: 'error' });
+                }
+            }).catch(err => {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            });
+        }
 
-            $('#modal-rechazo').modal('hide');
+        function abrirModalInconvenientePuerta(id) {
+            document.getElementById('inconveniente-pedido-id').value = id;
+            document.getElementById('motivoInconvenientePuerta').value = '';
+            $('#modal-inconveniente-puerta').modal('show');
         }
 
         let currentOrderStatus = null;
