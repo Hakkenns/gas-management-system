@@ -40,12 +40,6 @@ public class Incidencia {
     @Column(name = "tipo_label", nullable = false, length = 100)
     private String tipoLabel;
 
-    @Column(name = "mensaje", nullable = false, columnDefinition = "TEXT")
-    private String mensaje;
-
-    @Column(name = "descripcion", columnDefinition = "TEXT")
-    private String descripcion;
-
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "PENDIENTE"; // 'PENDIENTE', 'ATENDIDO'
 

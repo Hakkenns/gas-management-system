@@ -44,51 +44,100 @@
         #toast-container-bottom {
             position: fixed;
             bottom: 20px;
-            right: 20px;
+            right: 30px;
             z-index: 9999;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            max-width: 380px;
+            gap: 12px;
+            max-width: 520px;
         }
         .custom-toast {
             background: #ffffff;
             border-radius: 12px;
-            padding: 14px 16px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-            border-left: 5px solid #dc3545;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
             cursor: pointer;
             transition: all 0.3s ease;
             animation: showSlide 0.4s ease forwards;
+            width: 460px;
+            min-width: 460px;
+            max-width: 460px;
+            font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
-        .custom-toast .toast-icon {
-            font-size: 1.5rem;
-            color: #dc3545;
-            flex-shrink: 0;
-            margin-top: 2px;
+        .custom-toast .toast-header {
+            background-color: #dc3545;
+            color: #ffffff;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
-        .custom-toast .toast-content {
-            flex: 1;
-            min-width: 0;
+        .custom-toast .toast-header .toast-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .custom-toast .toast-title {
+        .custom-toast .toast-header .toast-header-icon {
+            font-size: 1.4rem;
+        }
+        .custom-toast .toast-header .toast-header-title {
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .custom-toast .toast-header .toast-header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .custom-toast .toast-header .toast-header-time {
+            font-size: 0.85rem;
+            opacity: 0.95;
+            font-weight: 600;
+        }
+        .custom-toast .toast-header .toast-close {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 1.4rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+        .custom-toast .toast-header .toast-close:hover {
+            background: rgba(255,255,255,0.25);
+        }
+        .custom-toast .toast-body {
+            padding: 18px 20px;
+            background: #f8f9fa;
             color: #212529;
-            margin-bottom: 2px;
         }
-        .custom-toast .toast-text {
-            font-size: 0.8rem;
-            color: #6c757d;
+        .custom-toast .toast-body .toast-empleado {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #000000;
+            margin-bottom: 4px;
+        }
+        .custom-toast .toast-body .toast-unidad {
+            font-size: 0.9rem;
+            color: #343a40;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .custom-toast .toast-body .toast-accion {
+            font-size: 1.1rem;
+            color: #212529;
             margin: 0;
-        }
-        .custom-toast .toast-time {
-            font-size: 0.7rem;
-            color: #adb5bd;
-            margin-top: 4px;
+            line-height: 1.5;
+            font-weight: 400;
         }
         .custom-toast.hide-slide {
             animation: hideSlide 0.4s ease forwards;
@@ -144,10 +193,6 @@
                 <div class="modal-body">
                     <input type="hidden" id="atender-incidencia-id">
                     <div class="form-group">
-                        <label class="font-weight-bold text-sm">Mensaje de auxilio</label>
-                        <textarea class="form-control" id="mensaje-auxilio-input" rows="3" placeholder="Ej: Se envió una moto de reemplazo..."></textarea>
-                    </div>
-                    <div class="form-group">
                         <label class="font-weight-bold text-sm">Moto de reemplazo</label>
                         <select class="form-control" id="moto-reemplazo-select">
                             <option value="">Cargando motos disponibles...</option>
@@ -180,10 +225,6 @@
                         <select class="form-control" id="moto-redirigir-select">
                             <option value="">Cargando motos disponibles...</option>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="font-weight-bold text-sm">Mensaje de auxilio</label>
-                        <textarea class="form-control" id="mensaje-redirigir-input" rows="3" placeholder="Ej: Unidad de auxilio enviada..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -350,20 +391,45 @@
             if (!container) return;
 
             const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
-            const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? '🚨 Avería de vehículo' :
-                             inc.tipoIncidencia === 'ACCIDENTE' ? '🚨 Accidente en ruta' : '⚠️ Rechazo';
-            const borderColor = esCritica ? '#dc3545' : '#ffc107';
+            const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? 'MOTO AVERIADA' :
+                             inc.tipoIncidencia === 'ACCIDENTE' ? 'ACCIDENTE EN RUTA' : 'INCIDENCIA';
+            const icono = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? 'fa-motorcycle' :
+                         inc.tipoIncidencia === 'ACCIDENTE' ? 'fa-ambulance' : 'fa-exclamation-circle';
+            const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+
+            // Datos del empleado: "Luis Torres - Unidad #03"
+            const nombreEmpleado = inc.empleadoNombre || 'Desconocido';
+            const unidadEmpleado = inc.empleadoTelefono ? 'Unidad #' + inc.empleadoTelefono : '';
+            const empleadoTexto = unidadEmpleado ? nombreEmpleado + ' - ' + unidadEmpleado : nombreEmpleado;
+
+            // Texto predeterminado exacto según tipo
+            let textoReporte = '';
+            if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
+                textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
+            } else if (inc.tipoIncidencia === 'ACCIDENTE') {
+                textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+            } else {
+                textoReporte = 'El administrador revisará la incidencia.';
+            }
 
             const toast = document.createElement('div');
             toast.className = 'custom-toast show-slide';
-            toast.style.borderLeftColor = borderColor;
             toast.setAttribute('data-id', inc.id);
             toast.innerHTML = `
-                <div class="toast-icon"><i class="fas ${esCritica ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'}"></i></div>
-                <div class="toast-content">
-                    <div class="toast-title">${tipoLabel}</div>
-                    <p class="toast-text"><strong>${inc.empleadoNombre || 'Desconocido'}</strong> - ${inc.descripcion || 'Sin descripción'}</p>
-                    <div class="toast-time">${inc.createdAt ? new Date(inc.createdAt).toLocaleString('es-PE') : ''}</div>
+                <div class="toast-header">
+                    <div class="toast-header-left">
+                        <span class="toast-header-icon"><i class="fas ${icono}"></i></span>
+                        <span class="toast-header-title">${tipoLabel}</span>
+                    </div>
+                    <div class="toast-header-right">
+                        <span class="toast-header-time">${hora}</span>
+                        <button class="toast-close" onclick="event.stopPropagation(); this.closest('.custom-toast').remove();">&times;</button>
+                    </div>
+                </div>
+                <div class="toast-body">
+                    <div class="toast-empleado">${empleadoTexto}</div>
+                    <div class="toast-unidad">${inc.codigoPedido ? 'Pedido: ' + inc.codigoPedido : ''}</div>
+                    <p class="toast-accion">${textoReporte}</p>
                 </div>
             `;
 
@@ -461,15 +527,10 @@
 
         async function confirmarRedirigirMotoasignacion() {
             const id = document.getElementById('redirigir-incidencia-id').value;
-            const mensaje = document.getElementById('mensaje-redirigir-input').value;
             const motoSelect = document.getElementById('moto-redirigir-select');
             const moto = motoSelect.value;
             const motoTexto = motoSelect.options[motoSelect.selectedIndex]?.text || '';
 
-            if (!mensaje.trim()) {
-                Swal.fire({ title: 'Atención', text: 'Escribe un mensaje de auxilio.', icon: 'warning' });
-                return;
-            }
             if (!moto) {
                 Swal.fire({ title: 'Atención', text: 'Seleccione una moto de reemplazo.', icon: 'warning' });
                 return;
@@ -480,7 +541,6 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        mensajeAuxilio: mensaje, 
                         motoReemplazo: motoTexto,
                         idMotoNueva: parseInt(moto)
                     })
@@ -495,7 +555,6 @@
                         showConfirmButton: false 
                     });
                     $('#modal-redirigir-motoasignacion').modal('hide');
-                    document.getElementById('mensaje-redirigir-input').value = '';
                     motoSelect.value = '';
                     cargarListaIncidencias();
                 } else {
@@ -508,13 +567,8 @@
 
         async function confirmarAtenderIncidencia() {
             const id = document.getElementById('atender-incidencia-id').value;
-            const mensaje = document.getElementById('mensaje-auxilio-input').value;
             const moto = document.getElementById('moto-reemplazo-select').value;
 
-            if (!mensaje.trim()) {
-                Swal.fire({ title: 'Atención', text: 'Escribe un mensaje de auxilio.', icon: 'warning' });
-                return;
-            }
             if (!moto) {
                 Swal.fire({ title: 'Atención', text: 'Selecciona una moto de reemplazo.', icon: 'warning' });
                 return;
@@ -524,15 +578,14 @@
                 const res = await fetch('/api/incidencias/' + id + '/atender', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mensajeAuxilio: mensaje, motoReemplazo: moto })
+                    body: JSON.stringify({ motoReemplazo: moto })
                 });
                 const data = await res.json();
                 if (data.success) {
                     Swal.fire({ title: 'Auxilio enviado', text: 'La incidencia fue atendida correctamente.', icon: 'success', timer: 1500, showConfirmButton: false });
                     $('#modal-atender-incidencia').modal('hide');
-                    document.getElementById('mensaje-auxilio-input').value = '';
                     document.getElementById('moto-reemplazo-select').value = '';
-                    cargarIncidenciasPendientes();
+                    cargarListaIncidencias();
                 } else {
                     Swal.fire({ title: 'Error', text: data.message || 'Error al atender', icon: 'error' });
                 }

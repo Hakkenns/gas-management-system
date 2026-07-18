@@ -27,9 +27,6 @@ public class RespuestaIncidencia {
     @JoinColumn(name = "id_incidencia", nullable = false)
     private Incidencia incidencia;
 
-    @Column(name = "mensaje_auxilio", columnDefinition = "TEXT")
-    private String mensajeAuxilio;
-
     @Column(name = "moto_reemplazo", length = 100)
     private String motoReemplazo;
 

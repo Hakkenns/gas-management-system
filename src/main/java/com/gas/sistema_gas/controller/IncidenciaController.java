@@ -72,7 +72,6 @@ public class IncidenciaController {
 
         Empleado empleado = usuarioOpt.get().getEmpleado();
         String tipoIncidencia = (String) body.get("tipoIncidencia");
-        String descripcion = (String) body.get("descripcion");
         Long idPedido = body.get("idPedido") != null ? ((Number) body.get("idPedido")).longValue() : null;
 
         if (tipoIncidencia == null || tipoIncidencia.isBlank()) {
@@ -93,8 +92,6 @@ public class IncidenciaController {
         incidencia.setTipo(tipoGeneral);
         incidencia.setTipoIncidencia(tipoIncidencia.toUpperCase());
         incidencia.setTipoLabel(tipoLabel);
-        incidencia.setMensaje(descripcion != null && !descripcion.isBlank() ? descripcion : "Se ha reportado una alerta desde la aplicación móvil.");
-        incidencia.setDescripcion(descripcion);
         incidencia.setEstado("PENDIENTE");
 
         if (idPedido != null) {
@@ -137,8 +134,6 @@ public class IncidenciaController {
                 map.put("id", inc.getId());
                 map.put("tipoIncidencia", inc.getTipoIncidencia());
                 map.put("tipoLabel", inc.getTipoLabel() != null ? inc.getTipoLabel() : "");
-                map.put("descripcion", inc.getDescripcion() != null ? inc.getDescripcion() : "");
-                map.put("mensaje", inc.getMensaje() != null ? inc.getMensaje() : "");
                 map.put("estado", inc.getEstado());
                 map.put("empleadoNombre", nombreEmpleado);
                 map.put("empleadoTelefono", telefonoEmpleado);
@@ -177,7 +172,6 @@ public class IncidenciaController {
         }
 
         Incidencia incidencia = incidenciaOpt.get();
-        String mensajeAuxilio = body.get("mensajeAuxilio");
         String motoReemplazo = body.get("motoReemplazo");
         Long idMotoNueva = body.get("idMotoNueva") != null ? Long.parseLong(body.get("idMotoNueva")) : null;
 
@@ -215,7 +209,6 @@ public class IncidenciaController {
         // 3. Guardar respuesta de la incidencia
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
         respuesta.setIncidencia(incidencia);
-        respuesta.setMensajeAuxilio(mensajeAuxilio);
         respuesta.setMotoReemplazo(motoReemplazo);
         respuesta.setCreatedAt(LocalDateTime.now());
         respuesta.setUpdatedAt(LocalDateTime.now());
@@ -226,8 +219,8 @@ public class IncidenciaController {
         incidencia.setUpdatedAt(LocalDateTime.now());
         incidenciaRepository.save(incidencia);
 
-        // 5. Enviar notificación por WebSocket al repartidor
-        String mensajeRepartidor = "Administrador: " + mensajeAuxilio + " Unidad de auxilio " + motoReemplazo + " y asistencia enviadas de inmediato.";
+        // 5. Enviar notificación por WebSocket al repartidor con mensaje generado dinámicamente
+        String mensajeRepartidor = generarMensajeRespuesta(incidencia.getTipoIncidencia(), motoReemplazo);
         messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + empleadoAfectado.getId(), 
             Map.of(
                 "mensaje", mensajeRepartidor,
@@ -247,6 +240,19 @@ public class IncidenciaController {
         ));
     }
 
+    // Genera el mensaje de respuesta según el tipo de incidencia y la moto de reemplazo
+    private String generarMensajeRespuesta(String tipoIncidencia, String motoReemplazo) {
+        if (motoReemplazo == null || motoReemplazo.isBlank()) {
+            motoReemplazo = "No especificada";
+        }
+        if ("AVERIA_VEHICULO".equalsIgnoreCase(tipoIncidencia)) {
+            return "Se ha registrado un cambio de vehículo. Tu nueva unidad asignada es: " + motoReemplazo + ".";
+        } else if ("ACCIDENTE".equalsIgnoreCase(tipoIncidencia)) {
+            return "Se ha registrado un reporte de accidente. Unidad de auxilio " + motoReemplazo + " y asistencia médica enviadas de inmediato.";
+        }
+        return "Notificación de soporte recibida.";
+    }
+
     // GET /api/incidencias/repartidor/{idEmpleado}/respuestas - Repartidor consulta respuestas NO leídas
     @GetMapping("/repartidor/{idEmpleado}/respuestas")
     public ResponseEntity<?> obtenerRespuestasRepartidor(@PathVariable Long idEmpleado, HttpSession session) {
@@ -261,13 +267,15 @@ public class IncidenciaController {
 
         List<Map<String, Object>> resultado = respuestas.stream().map(r -> {
             String tipoIncidencia = r.getIncidencia() != null ? r.getIncidencia().getTipoIncidencia() : "";
-            return Map.<String, Object>of(
-                    "id", r.getId(),
-                    "tipoIncidencia", tipoIncidencia,
-                    "mensajeAuxilio", r.getMensajeAuxilio() != null ? r.getMensajeAuxilio() : "",
-                    "motoReemplazo", r.getMotoReemplazo() != null ? r.getMotoReemplazo() : "",
-                    "createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : ""
-            );
+            String motoReemplazo = r.getMotoReemplazo() != null ? r.getMotoReemplazo() : "";
+            String mensaje = generarMensajeRespuesta(tipoIncidencia, motoReemplazo);
+            Map<String, Object> map = new java.util.HashMap<>();
+            map.put("id", r.getId());
+            map.put("tipoIncidencia", tipoIncidencia);
+            map.put("mensaje", mensaje);
+            map.put("motoReemplazo", motoReemplazo);
+            map.put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : "");
+            return map;
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(

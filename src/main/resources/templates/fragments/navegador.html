@@ -30,10 +30,6 @@
                             <option value="ACCIDENTE">🚨 Accidente en ruta</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="font-weight-bold text-sm">Descripción (opcional)</label>
-                        <textarea class="form-control" id="descripcion-emergencia" rows="3" placeholder="Describe brevemente lo sucedido..."></textarea>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
@@ -55,7 +51,6 @@
 
         async function reportarEmergencia() {
             const tipo = document.getElementById('tipo-emergencia-select').value;
-            const descripcion = document.getElementById('descripcion-emergencia').value;
 
             if (!tipo) {
                 Swal.fire({ title: 'Atención', text: 'Selecciona un tipo de emergencia.', icon: 'warning' });
@@ -67,8 +62,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        tipoIncidencia: tipo,
-                        descripcion: descripcion || 'Sin descripción'
+                        tipoIncidencia: tipo
                     })
                 });
                 const data = await res.json();
@@ -82,7 +76,6 @@
                     });
                     $('#modal-alerta-general').modal('hide');
                     document.getElementById('tipo-emergencia-select').value = '';
-                    document.getElementById('descripcion-emergencia').value = '';
                 } else {
                     Swal.fire({ title: 'Error', text: data.message || 'Error al reportar', icon: 'error' });
                 }

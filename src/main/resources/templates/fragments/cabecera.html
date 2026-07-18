@@ -78,7 +78,55 @@
             }
         }
 
-        // Agregar respuesta al modal en tiempo real
+        // ========== FUNCIONES AYUDANTES PARA EL NUEVO DISEÑO ==========
+
+        // Formatea una fecha/hora ISO a formato HH:mm (ej. "19:09")
+        function formatearHora(fechaISO) {
+            if (!fechaISO) return '';
+            var d = new Date(fechaISO);
+            return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+
+        // Separa el string "motoReemplazo" en modelo y placa.
+        // El backend envía: "PLACA - MODELO" (ej: "NGA2415 - Honda GL125")
+        function separarModeloPlaca(motoReemplazo) {
+            if (!motoReemplazo) return { modelo: 'No especificada', placa: '' };
+            var partes = motoReemplazo.split(' - ');
+            if (partes.length === 2) {
+                return { placa: partes[0].trim(), modelo: partes[1].trim() };
+            }
+            // Fallback: si no hay separador, el string completo se usa como modelo
+            return { modelo: motoReemplazo.trim(), placa: '' };
+        }
+
+        // Genera el texto predeterminado según el tipo de incidencia y datos recibidos
+        function generarTextoRespuesta(tipoIncidencia, motoReemplazo) {
+            var datos = separarModeloPlaca(motoReemplazo);
+            if (tipoIncidencia === 'AVERIA_VEHICULO') {
+                var texto = 'Se ha registrado un cambio de vehículo. Tu nueva unidad asignada es: ' + datos.modelo;
+                texto += datos.placa ? ' de placa ' + datos.placa + '.' : '.';
+                return texto;
+            } else if (tipoIncidencia === 'ACCIDENTE') {
+                var texto = 'Se ha registrado un reporte de accidente. Unidad de auxilio ' + datos.modelo;
+                texto += datos.placa ? ' de placa ' + datos.placa : '';
+                texto += ' y asistencia médica enviadas de inmediato.';
+                return texto;
+            }
+            return 'Notificación de soporte recibida.';
+        }
+
+        // Renderiza una tarjeta de respuesta con el nuevo diseño tipo burbuja de chat
+        function renderizarTarjetaRespuesta(r) {
+            var hora = formatearHora(r.createdAt);
+            var texto = generarTextoRespuesta(r.tipoIncidencia, r.motoReemplazo);
+            return '<div class="respuesta-card">' +
+                        '<div class="admin-label">👤 Administrador:</div>' +
+                        '<div class="respuesta-texto">' + texto + '</div>' +
+                        '<p class="respuesta-hora">' + hora + '</p>' +
+                    '</div>';
+        }
+
+        // Agregar respuesta al modal en tiempo real (nuevo diseño)
         function agregarRespuestaAlModal(data) {
             const container = document.getElementById('respuestas-container');
             if (!container) return;
@@ -88,27 +136,12 @@
                 container.innerHTML = '';
             }
             
-            const esCritica = data.tipoIncidencia === 'AVERIA_VEHICULO' || data.tipoIncidencia === 'ACCIDENTE';
-            const icono = esCritica ? 'fa-exclamation-triangle text-danger' : 'fa-check-circle text-success';
-            const tipoLabel = data.tipoIncidencia === 'AVERIA_VEHICULO' ? 'Avería de vehículo' :
-                             data.tipoIncidencia === 'ACCIDENTE' ? 'Accidente en ruta' : 'Incidencia';
-            
-            const nuevaTarjeta = document.createElement('div');
-            nuevaTarjeta.className = 'card shadow-sm mb-2 border-0';
-            nuevaTarjeta.style.borderLeft = '4px solid ' + (esCritica ? '#dc3545' : '#28a745');
-            nuevaTarjeta.innerHTML = 
-                '<div class="card-body p-3">' +
-                    '<div class="d-flex justify-content-between align-items-start">' +
-                        '<div>' +
-                            '<span class="font-weight-bold text-sm"><i class="fas ' + icono + ' mr-1"></i>' + tipoLabel + '</span>' +
-                            '<p class="mb-1 mt-1"><strong>Mensaje:</strong> ' + (data.mensaje || 'Sin mensaje') + '</p>' +
-                            (data.motoReemplazo ? '<p class="mb-1"><strong>Moto de reemplazo:</strong> ' + data.motoReemplazo + '</p>' : '') +
-                            '<small class="text-muted">' + (data.fecha ? new Date(data.fecha).toLocaleString('es-PE') : '') + '</small>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>';
-            
-            container.prepend(nuevaTarjeta);
+            // Insertar la nueva tarjeta al inicio (más reciente primero)
+            var div = document.createElement('div');
+            div.innerHTML = renderizarTarjetaRespuesta(data);
+            while (div.firstChild) {
+                container.prepend(div.firstChild);
+            }
         }
 
         // Inicializar WebSocket de repartidor si hay empleadoId
@@ -149,25 +182,11 @@
                     if (respuestas.length === 0) {
                         container.innerHTML = '<p class="text-muted text-center">No hay respuestas de soporte aún.</p>';
                     } else {
-                        let html = '';
+                        let html = '<div class="respuestas-scroll">';
                         respuestas.forEach(r => {
-                            const esCritica = r.tipoIncidencia === 'AVERIA_VEHICULO' || r.tipoIncidencia === 'ACCIDENTE';
-                            const icono = esCritica ? 'fa-exclamation-triangle text-danger' : 'fa-check-circle text-success';
-                            const tipoLabel = r.tipoIncidencia === 'AVERIA_VEHICULO' ? 'Avería de vehículo' :
-                                             r.tipoIncidencia === 'ACCIDENTE' ? 'Accidente en ruta' : 'Incidencia';
-                            html += '<div class="card shadow-sm mb-2 border-0" style="border-left: 4px solid ' + (esCritica ? '#dc3545' : '#28a745') + ' !important;">' +
-                                '<div class="card-body p-3">' +
-                                    '<div class="d-flex justify-content-between align-items-start">' +
-                                        '<div>' +
-                                            '<span class="font-weight-bold text-sm"><i class="fas ' + icono + ' mr-1"></i>' + tipoLabel + '</span>' +
-                                            '<p class="mb-1 mt-1"><strong>Mensaje:</strong> ' + (r.mensajeAuxilio || 'Sin mensaje') + '</p>' +
-                                            (r.motoReemplazo ? '<p class="mb-1"><strong>Moto de reemplazo:</strong> ' + r.motoReemplazo + '</p>' : '') +
-                                            '<small class="text-muted">' + (r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '') + '</small>' +
-                                        '</div>' +
-                                    '</div>' +
-                                '</div>' +
-                            '</div>';
+                            html += renderizarTarjetaRespuesta(r);
                         });
+                        html += '</div>';
                         container.innerHTML = html;
                     }
 
@@ -400,14 +419,65 @@
             from { opacity: 1; transform: translateX(0); }
             to { opacity: 0; transform: translateX(100px); }
         }
+
+        /* ===== NUEVO DISEÑO: Tarjetas tipo burbuja de chat (fondo blanco) ===== */
+        .respuesta-card {
+            background-color: #ffffff;
+            color: #212529;
+            border-radius: 12px;
+            padding: 14px 16px 10px 16px;
+            margin-bottom: 12px;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #28a745;
+        }
+        .respuesta-card .admin-label {
+            font-weight: 700;
+            font-size: 0.82rem;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #212529;
+        }
+        .respuesta-card .admin-label i {
+            font-size: 0.9rem;
+        }
+        .respuesta-card .respuesta-texto {
+            font-size: 0.88rem;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            color: #343a40;
+        }
+        .respuesta-card .respuesta-hora {
+            font-size: 0.68rem;
+            text-align: right;
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+        .respuestas-scroll {
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar-thumb {
+            background: #28a745;
+            border-radius: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
     </style>
 
     <!-- Modal de Respuestas de Soporte (Repartidor) -->
     <div class="modal fade" id="modal-respuestas-admin" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
             <div class="modal-content">
-                <div class="modal-header bg-success text-white">
-                    <h6 class="modal-title"><i class="fas fa-headset"></i> Respuestas de Soporte</h6>
+                <div class="modal-header bg-dark text-white">
+                    <h6 class="modal-title"><i class="fas fa-comments"></i> Respuestas de Soporte</h6>
                     <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
