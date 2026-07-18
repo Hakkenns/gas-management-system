@@ -151,19 +151,127 @@
             to { opacity: 0; transform: translateX(100px); }
         }
         .flash-highlight {
-            animation: flashHighlight 1.5s ease;
+            animation: flashHighlight 2s ease-out;
         }
         @keyframes flashHighlight {
-            0%, 100% { background-color: transparent; }
-            25% { background-color: #fff3cd; }
-            50% { background-color: #ffeeba; }
-            75% { background-color: #fff3cd; }
+            0% { 
+                background-color: rgba(0, 123, 255, 0.1);
+                border-left-width: 5px;
+            }
+            100% { 
+                background-color: transparent;
+                border-left-width: 4px;
+            }
         }
         .notif-item-emergency {
             border-left: 4px solid #dc3545 !important;
         }
         .notif-item-warning {
             border-left: 4px solid #ffc107 !important;
+        }
+        
+        /* Estilos para el dropdown de notificaciones rediseñado */
+        .notif-card-custom {
+            padding: 0 !important;
+            border-bottom: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #ffffff;
+        }
+        .notif-card-custom:hover {
+            background-color: #f8f9fa;
+        }
+        .notif-card-inner {
+            padding: 16px 20px;
+        }
+        .notif-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .notif-badge-container {
+            display: inline-flex;
+            align-items: center;
+        }
+        .notif-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: #dc3545;
+            color: #ffffff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .notif-badge i {
+            font-size: 0.9rem;
+        }
+        .notif-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-weight: 600;
+        }
+        .notif-card-body {
+            margin-bottom: 10px;
+        }
+        .notif-info-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .notif-info-icon {
+            font-size: 0.85rem;
+            color: #6c757d;
+            width: 16px;
+        }
+        .notif-info-text {
+            font-size: 0.9rem;
+            color: #212529;
+            font-weight: 500;
+        }
+        .notif-card-message {
+            font-size: 0.9rem;
+            color: #495057;
+            font-style: italic;
+            padding: 10px 14px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+            font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .notif-card-action {
+            display: block;
+        }
+        .btn-notif-action {
+            display: block;
+            width: 100%;
+            padding: 10px 16px;
+            background-color: #ffffff;
+            color: #dc3545;
+            border: 2px solid #dc3545;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .btn-notif-action:hover {
+            background-color: #dc3545;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
+        }
+        .btn-notif-action i {
+            margin-right: 6px;
         }
     </style>
 </head>
@@ -307,11 +415,7 @@
                     }
                 }
 
-                // Actualizar header del dropdown
-                const header = document.getElementById('admin-notif-header');
-                if (header) {
-                    header.textContent = total > 0 ? total + ' incidencia(s) pendiente(s)' : 'Sin notificaciones';
-                }
+                // El encabezado ahora es estático, no se actualiza con el conteo
 
                 // Actualizar lista del dropdown
                 const list = document.getElementById('admin-notif-list');
@@ -320,35 +424,70 @@
                     incidencias.forEach(inc => {
                         const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
                         const itemClass = esCritica ? 'notif-item-emergency' : 'notif-item-warning';
-                        const icono = esCritica ? 'fa-exclamation-triangle text-danger' : 'fa-exclamation-circle text-warning';
-                        const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? '🚨 Avería de vehículo' :
-                                         inc.tipoIncidencia === 'ACCIDENTE' ? '🚨 Accidente en ruta' : '⚠️ Rechazo';
-                        const item = document.createElement('a');
-                        item.href = '#';
-                        item.className = 'dropdown-item ' + itemClass;
+                        
+                        // Configurar icono y texto según tipo de incidencia
+                        let icono = 'fa-exclamation-circle';
+                        let tipoLabel = 'INCIDENCIA';
+                        let textoReporte = 'El administrador revisará la incidencia.';
+                        
+                        if (inc.tipoIncidencia === 'AVERIA_VEHICULO') {
+                            icono = 'fa-motorcycle';
+                            tipoLabel = 'MOTO AVERIADA';
+                            textoReporte = 'Mi motocicleta sufrió una falla mecánica severa. Solicito nueva unidad.';
+                        } else if (inc.tipoIncidencia === 'ACCIDENTE') {
+                            icono = 'fa-ambulance';
+                            tipoLabel = 'ACCIDENTE EN RUTA';
+                            textoReporte = 'He tenido un accidente en ruta. Requiero apoyo de inmediato.';
+                        }
+                        
+                        const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                        
+                        const item = document.createElement('div');
+                        item.className = 'notif-card-custom ' + itemClass;
                         item.setAttribute('data-id', inc.id);
-                        item.setAttribute('data-empleado', inc.empleadoNombre || '');
-                        item.setAttribute('data-telefono', inc.empleadoTelefono || '');
-                        item.setAttribute('data-tipo', inc.tipoIncidencia);
-                        item.setAttribute('data-descripcion', inc.descripcion || '');
-                        item.setAttribute('data-pedido', inc.codigoPedido || '');
                         item.innerHTML = `
-                            <div class="media">
-                                <div class="media-body">
-                                    <p class="mb-1 font-weight-bold text-sm">${tipoLabel}</p>
-                                    <p class="mb-0 small text-muted"><i class="fas fa-user mr-1"></i>${inc.empleadoNombre || 'Desconocido'}</p>
-                                    <p class="mb-0 small text-muted"><i class="fas fa-phone mr-1"></i>${inc.empleadoTelefono || ''}</p>
-                                    ${inc.codigoPedido ? `<p class="mb-0 small text-muted"><i class="fas fa-box mr-1"></i>Pedido: ${inc.codigoPedido}</p>` : ''}
-                                    <p class="mb-0 small text-muted"><i class="fas fa-clock mr-1"></i>${inc.createdAt ? new Date(inc.createdAt).toLocaleString('es-PE') : ''}</p>
-                                    <button class="btn btn-sm mt-2" style="background-color: #ffffff; color: #dc3545; border: 2px solid #dc3545; font-weight: 600; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#dc3545'; this.style.color='#ffffff';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.color='#dc3545';" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
+                            <div class="notif-card-inner">
+                                <!-- Encabezado con badge y hora -->
+                                <div class="notif-card-header">
+                                    <div class="notif-badge-container">
+                                        <span class="notif-badge badge-danger">
+                                            <i class="fas ${icono}"></i> ${tipoLabel}
+                                        </span>
+                                    </div>
+                                    <span class="notif-time">${hora}</span>
+                                </div>
+                                
+                                <!-- Contenido de información -->
+                                <div class="notif-card-body">
+                                    <div class="notif-info-row">
+                                        <i class="fas fa-user notif-info-icon"></i>
+                                        <span class="notif-info-text">${inc.empleadoNombre || 'Desconocido'}</span>
+                                    </div>
+                                    <div class="notif-info-row">
+                                        <i class="fas fa-phone notif-info-icon"></i>
+                                        <span class="notif-info-text">${inc.empleadoTelefono || ''}</span>
+                                    </div>
+                                    ${inc.codigoPedido ? `
+                                    <div class="notif-info-row">
+                                        <i class="fas fa-box notif-info-icon"></i>
+                                        <span class="notif-info-text">Pedido: ${inc.codigoPedido}</span>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                
+                                <!-- Mensaje predeterminado -->
+                                <div class="notif-card-message">
+                                    <em>"${textoReporte}"</em>
+                                </div>
+                                
+                                <!-- Botón de acción -->
+                                <div class="notif-card-action">
+                                    <button class="btn-notif-action" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
                                         <i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar
                                     </button>
                                 </div>
                             </div>
                         `;
-                        item.onclick = function(e) {
-                            e.preventDefault();
-                        };
                         list.appendChild(item);
                     });
                 }
@@ -437,20 +576,30 @@
                 toast.classList.remove('show-slide');
                 toast.classList.add('hide-slide');
                 setTimeout(() => { if (toast.parentNode) toast.remove(); }, 400);
-                // Abrir dropdown y hacer scroll al item
+                
+                // Forzar apertura del dropdown manipulando clases de Bootstrap
                 const dropdownToggle = document.getElementById('adminNotifDropdown');
-                if (dropdownToggle) {
-                    $(dropdownToggle).dropdown('toggle');
+                const dropdownParent = document.getElementById('admin-notif-dropdown');
+                const dropdownMenu = dropdownToggle ? dropdownToggle.nextElementSibling : null;
+                
+                if (dropdownParent && dropdownMenu) {
+                    // Añadir clase 'show' al contenedor padre y al menú
+                    dropdownParent.classList.add('show');
+                    dropdownMenu.classList.add('show');
+                    
+                    // Actualizar atributo aria-expanded
+                    dropdownToggle.setAttribute('aria-expanded', 'true');
                 }
-                // Resaltar el item en la lista
+                
+                // Esperar a que el dropdown se despliegue y luego resaltar el item
                 setTimeout(() => {
-                    const item = document.querySelector('#admin-notif-list a[data-id="' + inc.id + '"]');
+                    const item = document.querySelector('#admin-notif-list div[data-id="' + inc.id + '"]');
                     if (item) {
                         item.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         item.classList.add('flash-highlight');
                         setTimeout(() => item.classList.remove('flash-highlight'), 2000);
                     }
-                }, 300);
+                }, 100);
             };
 
             container.appendChild(toast);
