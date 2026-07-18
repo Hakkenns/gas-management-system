@@ -80,6 +80,10 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :idEmpleado AND p.estadoPedido = 'ENTREGADO'")
     List<Pedido> findHistorialBase(@Param("idEmpleado") Long idEmpleado);
 
+    // Historial paginado (ordenado por fecha descendente)
+    @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO' ORDER BY p.fechaSolicitud DESC")
+    Page<Pedido> findHistorialPaginado(@Param("empleadoId") Long empleadoId, Pageable pageable);
+
     // Buscar pedidos entregados con filtros dinámicos y paginación
     @Query("SELECT p FROM Pedido p WHERE p.empleado.id = :empleadoId AND p.estadoPedido = 'ENTREGADO' " +
            "AND (:buscar IS NULL OR p.codigo LIKE %:buscar% OR p.cliente.nombre LIKE %:buscar%) " +

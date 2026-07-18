@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://thymeleaf.org">
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asignados - FastFuel</title>
+    <title>Detalle de entrega - FastFuel</title>
     <link rel="stylesheet" th:href="@{/assets/adminlte/dist/css/adminlte.min.css}">
     <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/fontawesome-free/css/all.min.css}">
-    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.css}"> 
+    <link rel="stylesheet" th:href="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.css}">
     <style>
         body { padding-bottom: 85px !important; background-color: #f8f9fc; }
         .bottom-nav-custom { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; display: flex; justify-content: space-around; padding: 12px 0 8px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 1050; }
@@ -14,7 +14,6 @@
         .bottom-nav-custom a i { font-size: 1.4rem; padding: 6px 20px; border-radius: 14px; }
         .bottom-nav-custom a.active { color: #05a660; font-weight: 700; }
         .bottom-nav-custom a.active i { background-color: #e8f7f0; color: #05a660; }
-
         .flow-stepper { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 1rem 0 1.25rem; margin: 0.25rem 0 0.5rem; }
         .flow-stepper::before { content: ''; position: absolute; top: 50%; left: 6%; right: 6%; height: 4px; background: linear-gradient(90deg, #e9ecef, #edf2f7); transform: translateY(-50%); z-index: 1; border-radius: 999px; }
         .flow-stepper .progress-fill { position: absolute; top: 50%; left: 6%; height: 4px; width: 0%; transform: translateY(-50%); z-index: 2; border-radius: 999px; background: linear-gradient(90deg, #34c759 0%, #05a660 100%); box-shadow: 0 0 10px rgba(5, 166, 96, 0.35); transition: width 0.7s ease; overflow: hidden; }
@@ -52,14 +51,11 @@
 <body>
 <div th:fragment="content">
 
-    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
-        <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
-        <div class="text-white-50 small">Sist. Web</div>
-    </div>
+    <div th:replace="~{fragments/cabecera :: barra_superior(empleadoId=${empleadoId})}"></div>
 
     <div class="content p-2 pb-5">
         <div class="d-flex align-items-center mb-3">
-            <a th:href="@{/motorizado/asignados}" class="text-dark mr-3"><i class="fas fa-arrow-left fa-lg"></i></a>
+<a th:href="@{/motorizado/asignados}" class="text-dark mr-3"><i class="fas fa-arrow-left fa-lg"></i></a>
             <h5 class="m-0 font-weight-bold">Detalle de entrega</h5>
         </div>
 
@@ -88,32 +84,32 @@
             </div>
         </div>
 
-        <div class="card shadow-sm border-0 rounded-lg mb-3">
-    <div class="card-body p-3">
-        <!-- Contenedor del Stepper -->
-        <div class="flow-stepper" id="stepperContainer">
-            <div class="progress-fill" id="progressFill"></div>
-            <div class="flow-step" id="step-created"><div class="dot">1</div><div class="label">Creado</div></div>
-            <div class="flow-step" id="step-accepted"><div class="dot">2</div><div class="label">Aceptado</div></div>
-            <div class="flow-step" id="step-pickup"><div class="dot">3</div><div class="label">Cargado</div></div>
-            <div class="flow-step" id="step-onway"><div class="dot">4</div><div class="label">En camino</div></div>
-            <div class="flow-step" id="step-indomicilio"><div class="dot">5</div><div class="label">En domicilio</div></div>
-            <div class="flow-step" id="step-delivered"><div class="dot">6</div><div class="label">Entregado</div></div>
-        </div>
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <!-- Contenedor del Stepper -->
+                <div class="flow-stepper" id="stepperContainer">
+                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="flow-step" id="step-created"><div class="dot">1</div><div class="label">Creado</div></div>
+                    <div class="flow-step" id="step-accepted"><div class="dot">2</div><div class="label">Aceptado</div></div>
+                    <div class="flow-step" id="step-pickup"><div class="dot">3</div><div class="label">Cargado</div></div>
+                    <div class="flow-step" id="step-onway"><div class="dot">4</div><div class="label">En camino</div></div>
+                    <div class="flow-step" id="step-indomicilio"><div class="dot">5</div><div class="label">En domicilio</div></div>
+                    <div class="flow-step" id="step-delivered"><div class="dot">6</div><div class="label">Entregado</div></div>
+                </div>
 
-        <!-- Botones de acción -->
-        <form id="estadoForm" th:action="@{/motorizado/pedido/estado}" method="post" class="mt-3">
-            <input type="hidden" name="id" id="pedidoIdInput" th:value="${pedido != null ? pedido.idPedido : ''}" />
-            <input type="hidden" id="estadoPedidoInput" name="estado" value="" />
-            <input type="hidden" id="pedidoEstadoActual" th:value="${pedido != null ? pedido.estadoPedido : ''}" />
-            <button id="orderActionBtn" type="button" class="btn btn-success btn-block font-weight-bold">Cargar estado</button>
-        </form>
-        <button type="button" id="btnPago" class="btn btn-success btn-block font-weight-bold mt-3" style="display:none;" data-toggle="modal" data-target="#modal-pago">
-            <i class="fas fa-money-bill-wave"></i> Ir a pago
-        </button>
-        <div id="estadoInfoTexto" class="small text-muted mt-2"></div>
-    </div>
-</div>
+                <!-- Botones de acción -->
+<form id="estadoForm" th:action="@{/motorizado/pedido/estado}" method="post" class="mt-3">
+                    <input type="hidden" name="id" id="pedidoIdInput" th:value="${pedido != null ? pedido.idPedido : ''}" />
+                    <input type="hidden" id="estadoPedidoInput" name="estado" value="" />
+                    <input type="hidden" id="pedidoEstadoActual" th:value="${pedido != null ? pedido.estadoPedido : ''}" />
+                    <button id="orderActionBtn" type="button" class="btn btn-success btn-block font-weight-bold">Cargar estado</button>
+                </form>
+                <button type="button" id="btnPago" class="btn btn-success btn-block font-weight-bold mt-3" style="display:none;" data-toggle="modal" data-target="#modal-pago">
+                    <i class="fas fa-money-bill-wave"></i> Ir a pago
+                </button>
+                <div id="estadoInfoTexto" class="small text-muted mt-2"></div>
+            </div>
+        </div>
 
         <div class="card shadow-sm mb-3">
             <div class="card-header p-3">
@@ -136,11 +132,7 @@
         </div>
     </div>
 
-    <nav class="bottom-nav-custom">
-        <a th:href="@{/motorizado/asignados}" class="active"><i class="fas fa-truck-fast"></i><span>Asignados</span></a>
-        <a th:href="@{/motorizado/historial}"><i class="fas fa-clock-rotate-left"></i><span>Historial</span></a>
-        <a th:href="@{/motorizado/perfil}"><i class="far fa-user"></i><span>Perfil</span></a>
-    </nav>
+    <div th:replace="~{fragments/navegador :: barra_inferior(empleadoId=${empleadoId})}"></div>
 
     <div class="modal fade payment-modal" id="modal-pago" tabindex="-1" role="dialog" aria-labelledby="modalPagoLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
@@ -401,6 +393,10 @@
         </div>
     </div>
 
+    <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
+    <script th:src="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.js}"></script>
+    <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
     <script>
         const ORDER_STATUS_KEY = 'fastfuel-order-status';
         let selectedMetodo = '';
@@ -444,18 +440,14 @@
             const addButton = document.getElementById('btnAgregarMetodoMixto');
             if (!container) return;
 
-            // Solo limpiar el contenedor si realmente está vacío o es la primera vez
-            // Esto evita perder las evidencias ya cargadas
             const yaTieneFilas = container.children.length > 0;
             if (!yaTieneFilas) {
                 container.innerHTML = '';
             }
 
             mixedRows.forEach((row, index) => {
-                // Verificar si la fila ya existe en el DOM
                 const filaExistente = document.getElementById('mixtoRow_' + row.id);
                 if (filaExistente) {
-                    // Si existe, solo actualizar el número de método
                     const metodoLabel = filaExistente.querySelector('.font-weight-bold.text-sm');
                     if (metodoLabel) {
                         metodoLabel.textContent = 'Método ' + (index + 1);
@@ -928,7 +920,6 @@
         }
 
         async function confirmarPago() {
-            // Evitar envíos duplicados
             if (window.__pagoEnProgreso) return;
             window.__pagoEnProgreso = true;
             const confirmarBtnElem = document.getElementById('confirmarPagoBtn');
@@ -950,7 +941,6 @@
                 localStorage.setItem('fastfuel-mixed-change', JSON.stringify({ vuelto: vuelto.toFixed(2) }));
                 window.__ultimoVueltoMixto = vuelto.toFixed(2);
 
-                // Construir lista de pagos para enviar al backend
                 const pagosList = mixedRows
                     .filter(row => parseFloat(row.monto) > 0)
                     .map(row => {
@@ -968,7 +958,6 @@
                     fd.append('idPedido', document.getElementById('pedidoIdInput').value);
                     fd.append('pagosJson', JSON.stringify(pagosList));
 
-                    // Recolectar evidencias de cada fila mixta en el mismo orden de los pagos
                     const evidenciaInputs = document.querySelectorAll('#mixtoRowsContainer .mixto-row .upload-evidence-box input[type="file"]');
                     evidenciaInputs.forEach((input) => {
                         if (input && input.files && input.files.length > 0) {
@@ -976,7 +965,6 @@
                         }
                     });
 
-                    // Adjuntar evidencia de vuelto si el checkbox está marcado y hay imagen
                     const confirmarVueltoCheckbox = document.getElementById('confirmarVueltoCheckboxMixto');
                     const evidenciaVueltoInput = document.getElementById('evidenciaVueltoMixtoInput');
                     if (confirmarVueltoCheckbox && confirmarVueltoCheckbox.checked && evidenciaVueltoInput && evidenciaVueltoInput.files && evidenciaVueltoInput.files.length > 0) {
@@ -1041,7 +1029,6 @@
                         fd.append('evidencia', evidenciaMetodoInput.files[0]);
                     }
 
-                    // Adjuntar evidencia de vuelto si el checkbox está marcado y hay imagen
                     const evidenciaVueltoInputSingle = document.getElementById('evidenciaVueltoSingleInput');
                     const confirmarVueltoCheckboxSingle = document.getElementById('confirmarVueltoSingleCheckbox');
                     if (confirmarVueltoCheckboxSingle && confirmarVueltoCheckboxSingle.checked && evidenciaVueltoInputSingle && evidenciaVueltoInputSingle.files && evidenciaVueltoInputSingle.files.length > 0) {
@@ -1069,7 +1056,6 @@
             }
             try {
                 localStorage.setItem(ORDER_STATUS_KEY, 'delivered');
-                // Actualizamos el estado en la UI inmediatamente
                 try { setOrderStatus('delivered'); } catch (e) { console.warn('setOrderStatus no disponible', e); }
                 $('#modal-pago').modal('hide');
                 await Swal.fire({
@@ -1078,7 +1064,6 @@
                     text: 'El pago se realizó correctamente. El pedido se marcó como entregado.',
                     confirmButtonText: 'Aceptar'
                 });
-                // Redirigir automáticamente a la vista de pedidos asignados
                 window.location.href = '/motorizado/asignados';
             } finally {
                 window.__pagoEnProgreso = false;
@@ -1267,78 +1252,78 @@
         }
 
         function renderOrderState() {
-    const status = getOrderStatus();
-    const orderActionBtn = document.getElementById('orderActionBtn');
-    const btnPago = document.getElementById('btnPago');
-    const badgeStatus = document.getElementById('badge-status');
-    const progressFill = document.getElementById('progressFill');
-    const stepperContainer = document.getElementById('stepperContainer');
-    const estadoInfoTexto = document.getElementById('estadoInfoTexto');
-    
-    const steps = ['created', 'accepted', 'pickup', 'onway', 'indomicilio', 'delivered'];
-    const currentIndex = steps.indexOf(status);
+            const status = getOrderStatus();
+            const orderActionBtn = document.getElementById('orderActionBtn');
+            const btnPago = document.getElementById('btnPago');
+            const badgeStatus = document.getElementById('badge-status');
+            const progressFill = document.getElementById('progressFill');
+            const stepperContainer = document.getElementById('stepperContainer');
+            const estadoInfoTexto = document.getElementById('estadoInfoTexto');
+            
+            const steps = ['created', 'accepted', 'pickup', 'onway', 'indomicilio', 'delivered'];
+            const currentIndex = steps.indexOf(status);
 
-    if (progressFill && stepperContainer) {
-        const startPercent = 6;
-        const endPercent = 94;
-        const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-        const targetPercent = safeIndex === 0 ? 0 : safeIndex === steps.length - 1 ? 100 : (safeIndex / (steps.length - 1)) * 100;
-        const alignedPercent = Math.min(100, Math.max(0, targetPercent));
-        const progressPercent = Math.round(((alignedPercent / 100) * (endPercent - startPercent)) + startPercent);
-        progressFill.style.width = `${progressPercent}%`;
-    }
-
-    steps.forEach((s, index) => {
-        const stepEl = document.getElementById('step-' + s);
-        if (stepEl) {
-            if (index <= currentIndex) {
-                stepEl.classList.add('completed');
-            } else {
-                stepEl.classList.remove('completed');
+            if (progressFill && stepperContainer) {
+                const startPercent = 6;
+                const endPercent = 94;
+                const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+                const targetPercent = safeIndex === 0 ? 0 : safeIndex === steps.length - 1 ? 100 : (safeIndex / (steps.length - 1)) * 100;
+                const alignedPercent = Math.min(100, Math.max(0, targetPercent));
+                const progressPercent = Math.round(((alignedPercent / 100) * (endPercent - startPercent)) + startPercent);
+                progressFill.style.width = `${progressPercent}%`;
             }
+
+            steps.forEach((s, index) => {
+                const stepEl = document.getElementById('step-' + s);
+                if (stepEl) {
+                    if (index <= currentIndex) {
+                        stepEl.classList.add('completed');
+                    } else {
+                        stepEl.classList.remove('completed');
+                    }
+                }
+            });
+
+            if (status === 'created') {
+                orderActionBtn.textContent = 'Aceptar pedido';
+                orderActionBtn.disabled = false;
+                orderActionBtn.onclick = advanceOrderStep;
+                orderActionBtn.style.display = 'block';
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está pendiente de aceptación.';
+            } else if (status === 'accepted') {
+                orderActionBtn.textContent = 'Cargar pedido';
+                orderActionBtn.disabled = false;
+                orderActionBtn.onclick = advanceOrderStep;
+                orderActionBtn.style.display = 'block';
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido ya fue aceptado. Continúa con la carga.';
+            } else if (status === 'pickup') {
+                orderActionBtn.textContent = 'Iniciar ruta';
+                orderActionBtn.disabled = false;
+                orderActionBtn.onclick = advanceOrderStep;
+                orderActionBtn.style.display = 'block';
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está listo para salir hacia el cliente.';
+            } else if (status === 'onway') {
+                orderActionBtn.textContent = 'En domicilio';
+                orderActionBtn.disabled = false;
+                orderActionBtn.onclick = advanceOrderStep;
+                orderActionBtn.style.display = 'block';
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'La ruta ya está en curso.';
+            } else if (status === 'indomicilio') {
+                orderActionBtn.style.display = 'none';
+                orderActionBtn.disabled = true;
+                orderActionBtn.onclick = null;
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está en domicilio y listo para cobrar.';
+            } else {
+                orderActionBtn.textContent = 'Entregado';
+                orderActionBtn.disabled = true;
+                orderActionBtn.onclick = null;
+                orderActionBtn.style.display = 'block';
+                if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido ya fue entregado.';
+            }
+
+            btnPago.style.display = (status === 'indomicilio') ? 'block' : 'none';
+            if(badgeStatus) badgeStatus.textContent = orderLabels[status];
         }
-    });
-
-    if (status === 'created') {
-        orderActionBtn.textContent = 'Aceptar pedido';
-        orderActionBtn.disabled = false;
-        orderActionBtn.onclick = advanceOrderStep;
-        orderActionBtn.style.display = 'block';
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está pendiente de aceptación.';
-    } else if (status === 'accepted') {
-        orderActionBtn.textContent = 'Cargar pedido';
-        orderActionBtn.disabled = false;
-        orderActionBtn.onclick = advanceOrderStep;
-        orderActionBtn.style.display = 'block';
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido ya fue aceptado. Continúa con la carga.';
-    } else if (status === 'pickup') {
-        orderActionBtn.textContent = 'Iniciar ruta';
-        orderActionBtn.disabled = false;
-        orderActionBtn.onclick = advanceOrderStep;
-        orderActionBtn.style.display = 'block';
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está listo para salir hacia el cliente.';
-    } else if (status === 'onway') {
-        orderActionBtn.textContent = 'En domicilio';
-        orderActionBtn.disabled = false;
-        orderActionBtn.onclick = advanceOrderStep;
-        orderActionBtn.style.display = 'block';
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'La ruta ya está en curso.';
-    } else if (status === 'indomicilio') {
-        orderActionBtn.style.display = 'none';
-        orderActionBtn.disabled = true;
-        orderActionBtn.onclick = null;
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido está en domicilio y listo para cobrar.';
-    } else {
-        orderActionBtn.textContent = 'Entregado';
-        orderActionBtn.disabled = true;
-        orderActionBtn.onclick = null;
-        orderActionBtn.style.display = 'block';
-        if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido ya fue entregado.';
-    }
-
-    btnPago.style.display = (status === 'indomicilio') ? 'block' : 'none';
-    if(badgeStatus) badgeStatus.textContent = orderLabels[status];
-}
 
         window.addEventListener('load', function() {
             currentOrderStatus = normalizeOrderStatus(document.getElementById('pedidoEstadoActual')?.value);
@@ -1347,18 +1332,10 @@
             inicializarFilasMixto();
         });
     </script>
-    <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
-    <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
-    <script th:src="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.js}"></script>
-    <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
     <script th:inline="javascript">
         /*<![CDATA[*/
         var empleadoId = /*[[${empleadoId}]]*/ null;
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof iniciarNotificacionesRepartidor === 'function') {
-                iniciarNotificacionesRepartidor(empleadoId);
-            }
-        });
+        // El WebSocket de respuestas se inicializa automáticamente en cabecera.html
         /*]]>*/
     </script>
 </div>

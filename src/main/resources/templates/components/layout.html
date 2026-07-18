@@ -34,6 +34,89 @@
 
     <!-- URL REAL Y COMPLETA DE SWEETALERT2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- WebSocket Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+    <style>
+        /* Toasters flotantes para incidencias */
+        #toast-container-bottom {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+        }
+        .custom-toast {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            border-left: 5px solid #dc3545;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: showSlide 0.4s ease forwards;
+        }
+        .custom-toast .toast-icon {
+            font-size: 1.5rem;
+            color: #dc3545;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .custom-toast .toast-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .custom-toast .toast-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #212529;
+            margin-bottom: 2px;
+        }
+        .custom-toast .toast-text {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin: 0;
+        }
+        .custom-toast .toast-time {
+            font-size: 0.7rem;
+            color: #adb5bd;
+            margin-top: 4px;
+        }
+        .custom-toast.hide-slide {
+            animation: hideSlide 0.4s ease forwards;
+        }
+        @keyframes showSlide {
+            from { opacity: 0; transform: translateX(100px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes hideSlide {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100px); }
+        }
+        .flash-highlight {
+            animation: flashHighlight 1.5s ease;
+        }
+        @keyframes flashHighlight {
+            0%, 100% { background-color: transparent; }
+            25% { background-color: #fff3cd; }
+            50% { background-color: #ffeeba; }
+            75% { background-color: #fff3cd; }
+        }
+        .notif-item-emergency {
+            border-left: 4px solid #dc3545 !important;
+        }
+        .notif-item-warning {
+            border-left: 4px solid #ffc107 !important;
+        }
+    </style>
 </head>
 <body class="hold-transition sidebar-mini sidebar-collapse">
 <div class="wrapper">
@@ -47,6 +130,425 @@
 
     <div th:replace="components/footer :: footer"></div>
 
+    <!-- Toast container para notificaciones de incidencias -->
+    <div id="toast-container-bottom"></div>
+
+    <!-- Modal de Atención de Incidencia (Admin) -->
+    <div class="modal fade" id="modal-atender-incidencia" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h6 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Atender Incidencia</h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="atender-incidencia-id">
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Mensaje de auxilio</label>
+                        <textarea class="form-control" id="mensaje-auxilio-input" rows="3" placeholder="Ej: Se envió una moto de reemplazo..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Moto de reemplazo</label>
+                        <select class="form-control" id="moto-reemplazo-select">
+                            <option value="">Cargando motos disponibles...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmarAtenderIncidencia()">
+                        <i class="fas fa-check"></i> Confirmar y Auxiliar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Redirección a Motoasignación (Admin) -->
+    <div class="modal fade" id="modal-redirigir-motoasignacion" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h6 class="modal-title"><i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar</h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="redirigir-incidencia-id">
+                    <p class="text-sm mb-3">Seleccione la moto de reemplazo para el repartidor:</p>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Moto disponible</label>
+                        <select class="form-control" id="moto-redirigir-select">
+                            <option value="">Cargando motos disponibles...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Mensaje de auxilio</label>
+                        <textarea class="form-control" id="mensaje-redirigir-input" rows="3" placeholder="Ej: Unidad de auxilio enviada..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-dark" onclick="confirmarRedirigirMotoasignacion()">
+                        <i class="fas fa-check"></i> Confirmar y Redirigir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== SISTEMA DE NOTIFICACIONES DE INCIDENCIAS (ADMIN) - WEBSOCKET ==========
+        let ultimasIncidenciasIds = new Set();
+        let adminNotifActivo = false;
+
+        function iniciarNotificacionesAdmin() {
+            if (adminNotifActivo) return;
+            adminNotifActivo = true;
+            
+            // Cargar motos disponibles para el modal
+            cargarMotosDisponibles();
+            
+            // Iniciar WebSocket para recibir notificaciones en tiempo real
+            iniciarWebSocketIncidencia();
+            
+            // Cargar lista inicial de incidencias
+            cargarListaIncidencias();
+        }
+
+        function iniciarWebSocketIncidencia() {
+            try {
+                const socket = new SockJS('/ws-admin');
+                const stompClient = Stomp.over(socket);
+                stompClient.debug = null;
+
+                stompClient.connect({}, function(frame) {
+                    console.log('WebSocket Admin conectado - Escuchando incidencias');
+
+                    // Suscribirse al canal de contador de incidencias
+                    stompClient.subscribe('/topic/admin/incidencias', function(message) {
+                        const contador = parseInt(message.body);
+                        if (!isNaN(contador)) {
+                            actualizarBadgeAdmin(contador);
+                            
+                            // Si hay nuevas incidencias, recargar la lista completa
+                            if (contador > 0) {
+                                cargarListaIncidencias();
+                            }
+                        }
+                    });
+                }, function(error) {
+                    console.error('Error WebSocket Admin:', error);
+                    setTimeout(iniciarWebSocketIncidencia, 10000);
+                });
+            } catch (e) {
+                console.error('Error al crear WebSocket Admin:', e);
+                setTimeout(iniciarWebSocketIncidencia, 10000);
+            }
+        }
+
+        async function cargarListaIncidencias() {
+            try {
+                const res = await fetch('/api/incidencias/pendientes');
+                const data = await res.json();
+                if (!data.success) return;
+
+                const incidencias = data.incidencias || [];
+                const total = data.total || 0;
+
+                // Actualizar badge
+                const badge = document.getElementById('admin-badge-count');
+                if (badge) {
+                    if (total > 0) {
+                        badge.textContent = total;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+
+                // Actualizar header del dropdown
+                const header = document.getElementById('admin-notif-header');
+                if (header) {
+                    header.textContent = total > 0 ? total + ' incidencia(s) pendiente(s)' : 'Sin notificaciones';
+                }
+
+                // Actualizar lista del dropdown
+                const list = document.getElementById('admin-notif-list');
+                if (list) {
+                    list.innerHTML = '';
+                    incidencias.forEach(inc => {
+                        const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
+                        const itemClass = esCritica ? 'notif-item-emergency' : 'notif-item-warning';
+                        const icono = esCritica ? 'fa-exclamation-triangle text-danger' : 'fa-exclamation-circle text-warning';
+                        const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? '🚨 Avería de vehículo' :
+                                         inc.tipoIncidencia === 'ACCIDENTE' ? '🚨 Accidente en ruta' : '⚠️ Rechazo';
+                        const item = document.createElement('a');
+                        item.href = '#';
+                        item.className = 'dropdown-item ' + itemClass;
+                        item.setAttribute('data-id', inc.id);
+                        item.setAttribute('data-empleado', inc.empleadoNombre || '');
+                        item.setAttribute('data-telefono', inc.empleadoTelefono || '');
+                        item.setAttribute('data-tipo', inc.tipoIncidencia);
+                        item.setAttribute('data-descripcion', inc.descripcion || '');
+                        item.setAttribute('data-pedido', inc.codigoPedido || '');
+                        item.innerHTML = `
+                            <div class="media">
+                                <div class="media-body">
+                                    <p class="mb-1 font-weight-bold text-sm">${tipoLabel}</p>
+                                    <p class="mb-0 small text-muted"><i class="fas fa-user mr-1"></i>${inc.empleadoNombre || 'Desconocido'}</p>
+                                    <p class="mb-0 small text-muted"><i class="fas fa-phone mr-1"></i>${inc.empleadoTelefono || ''}</p>
+                                    ${inc.codigoPedido ? `<p class="mb-0 small text-muted"><i class="fas fa-box mr-1"></i>Pedido: ${inc.codigoPedido}</p>` : ''}
+                                    <p class="mb-0 small text-muted"><i class="fas fa-clock mr-1"></i>${inc.createdAt ? new Date(inc.createdAt).toLocaleString('es-PE') : ''}</p>
+                                    <button class="btn btn-sm mt-2" style="background-color: #ffffff; color: #dc3545; border: 2px solid #dc3545; font-weight: 600; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#dc3545'; this.style.color='#ffffff';" onmouseout="this.style.backgroundColor='#ffffff'; this.style.color='#dc3545';" onclick="event.stopPropagation(); abrirModalRedirigirMotoasignacion(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}')">
+                                        <i class="fas fa-motorcycle"></i> Redirigir Motoasignación y Auxiliar
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        item.onclick = function(e) {
+                            e.preventDefault();
+                        };
+                        list.appendChild(item);
+                    });
+                }
+
+                // Detectar nuevas incidencias y mostrar toasters
+                incidencias.forEach(inc => {
+                    if (!ultimasIncidenciasIds.has(inc.id)) {
+                        ultimasIncidenciasIds.add(inc.id);
+                        mostrarToastIncidencia(inc);
+                    }
+                });
+
+                // Limpiar IDs que ya no están pendientes
+                const idsActuales = new Set(incidencias.map(i => i.id));
+                for (let id of ultimasIncidenciasIds) {
+                    if (!idsActuales.has(id)) {
+                        ultimasIncidenciasIds.delete(id);
+                    }
+                }
+
+            } catch (e) {
+                console.error('Error al cargar incidencias:', e);
+            }
+        }
+
+        function actualizarBadgeAdmin(contador) {
+            const badge = document.getElementById('admin-badge-count');
+            if (badge) {
+                if (contador > 0) {
+                    badge.textContent = contador;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        function mostrarToastIncidencia(inc) {
+            const container = document.getElementById('toast-container-bottom');
+            if (!container) return;
+
+            const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
+            const tipoLabel = inc.tipoIncidencia === 'AVERIA_VEHICULO' ? '🚨 Avería de vehículo' :
+                             inc.tipoIncidencia === 'ACCIDENTE' ? '🚨 Accidente en ruta' : '⚠️ Rechazo';
+            const borderColor = esCritica ? '#dc3545' : '#ffc107';
+
+            const toast = document.createElement('div');
+            toast.className = 'custom-toast show-slide';
+            toast.style.borderLeftColor = borderColor;
+            toast.setAttribute('data-id', inc.id);
+            toast.innerHTML = `
+                <div class="toast-icon"><i class="fas ${esCritica ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'}"></i></div>
+                <div class="toast-content">
+                    <div class="toast-title">${tipoLabel}</div>
+                    <p class="toast-text"><strong>${inc.empleadoNombre || 'Desconocido'}</strong> - ${inc.descripcion || 'Sin descripción'}</p>
+                    <div class="toast-time">${inc.createdAt ? new Date(inc.createdAt).toLocaleString('es-PE') : ''}</div>
+                </div>
+            `;
+
+            toast.onclick = function() {
+                toast.classList.remove('show-slide');
+                toast.classList.add('hide-slide');
+                setTimeout(() => { if (toast.parentNode) toast.remove(); }, 400);
+                // Abrir dropdown y hacer scroll al item
+                const dropdownToggle = document.getElementById('adminNotifDropdown');
+                if (dropdownToggle) {
+                    $(dropdownToggle).dropdown('toggle');
+                }
+                // Resaltar el item en la lista
+                setTimeout(() => {
+                    const item = document.querySelector('#admin-notif-list a[data-id="' + inc.id + '"]');
+                    if (item) {
+                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        item.classList.add('flash-highlight');
+                        setTimeout(() => item.classList.remove('flash-highlight'), 2000);
+                    }
+                }, 300);
+            };
+
+            container.appendChild(toast);
+
+            // Auto-eliminar después de 8 segundos
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.classList.remove('show-slide');
+                    toast.classList.add('hide-slide');
+                    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 400);
+                }
+            }, 8000);
+        }
+
+        async function cargarMotosDisponibles() {
+            try {
+                const res = await fetch('/api/incidencias/motos-disponibles');
+                const data = await res.json();
+                if (!data.success) return;
+                const select = document.getElementById('moto-reemplazo-select');
+                if (!select) return;
+                select.innerHTML = '<option value="">Seleccione una moto...</option>';
+                (data.motos || []).forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.placa + ' - ' + m.marca + ' ' + m.modelo;
+                    opt.textContent = m.placa + ' - ' + m.marca + ' ' + m.modelo;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Error al cargar motos:', e);
+            }
+        }
+
+        function abrirModalAtender(id, empleadoNombre, tipoIncidencia) {
+            document.getElementById('atender-incidencia-id').value = id;
+            const tipoLabel = tipoIncidencia === 'AVERIA_VEHICULO' ? 'Avería de vehículo' :
+                             tipoIncidencia === 'ACCIDENTE' ? 'Accidente en ruta' : 'Rechazo';
+            document.querySelector('#modal-atender-incidencia .modal-title').innerHTML =
+                '<i class="fas fa-exclamation-triangle"></i> Atender: ' + tipoLabel + ' - ' + empleadoNombre;
+            $('#modal-atender-incidencia').modal('show');
+        }
+
+        function abrirModalRedirigirMotoasignacion(id, empleadoNombre, tipoIncidencia) {
+            document.getElementById('redirigir-incidencia-id').value = id;
+            const tipoLabel = tipoIncidencia === 'AVERIA_VEHICULO' ? 'Avería de vehículo' :
+                             tipoIncidencia === 'ACCIDENTE' ? 'Accidente en ruta' : 'Rechazo';
+            document.querySelector('#modal-redirigir-motoasignacion .modal-title').innerHTML =
+                '<i class="fas fa-motorcycle"></i> Redirigir: ' + tipoLabel + ' - ' + empleadoNombre;
+            
+            // Cargar motos disponibles
+            cargarMotosDisponiblesRedirigir();
+            
+            $('#modal-redirigir-motoasignacion').modal('show');
+        }
+
+        async function cargarMotosDisponiblesRedirigir() {
+            try {
+                const res = await fetch('/api/incidencias/motos-disponibles');
+                const data = await res.json();
+                if (!data.success) return;
+                const select = document.getElementById('moto-redirigir-select');
+                if (!select) return;
+                select.innerHTML = '<option value="">Seleccione una moto...</option>';
+                (data.motos || []).forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.placa + ' - ' + m.marca + ' ' + m.modelo;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Error al cargar motos:', e);
+            }
+        }
+
+        async function confirmarRedirigirMotoasignacion() {
+            const id = document.getElementById('redirigir-incidencia-id').value;
+            const mensaje = document.getElementById('mensaje-redirigir-input').value;
+            const motoSelect = document.getElementById('moto-redirigir-select');
+            const moto = motoSelect.value;
+            const motoTexto = motoSelect.options[motoSelect.selectedIndex]?.text || '';
+
+            if (!mensaje.trim()) {
+                Swal.fire({ title: 'Atención', text: 'Escribe un mensaje de auxilio.', icon: 'warning' });
+                return;
+            }
+            if (!moto) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione una moto de reemplazo.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/incidencias/' + id + '/atender', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        mensajeAuxilio: mensaje, 
+                        motoReemplazo: motoTexto,
+                        idMotoNueva: parseInt(moto)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ 
+                        title: 'Operación Exitosa', 
+                        text: data.message, 
+                        icon: 'success', 
+                        timer: 3000, 
+                        showConfirmButton: false 
+                    });
+                    $('#modal-redirigir-motoasignacion').modal('hide');
+                    document.getElementById('mensaje-redirigir-input').value = '';
+                    motoSelect.value = '';
+                    cargarListaIncidencias();
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al atender', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+
+        async function confirmarAtenderIncidencia() {
+            const id = document.getElementById('atender-incidencia-id').value;
+            const mensaje = document.getElementById('mensaje-auxilio-input').value;
+            const moto = document.getElementById('moto-reemplazo-select').value;
+
+            if (!mensaje.trim()) {
+                Swal.fire({ title: 'Atención', text: 'Escribe un mensaje de auxilio.', icon: 'warning' });
+                return;
+            }
+            if (!moto) {
+                Swal.fire({ title: 'Atención', text: 'Selecciona una moto de reemplazo.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/incidencias/' + id + '/atender', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mensajeAuxilio: mensaje, motoReemplazo: moto })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ title: 'Auxilio enviado', text: 'La incidencia fue atendida correctamente.', icon: 'success', timer: 1500, showConfirmButton: false });
+                    $('#modal-atender-incidencia').modal('hide');
+                    document.getElementById('mensaje-auxilio-input').value = '';
+                    document.getElementById('moto-reemplazo-select').value = '';
+                    cargarIncidenciasPendientes();
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al atender', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+
+        // Iniciar notificaciones cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar si estamos en una página de administración (tiene sidebar)
+            if (document.querySelector('.main-sidebar')) {
+                iniciarNotificacionesAdmin();
+            }
+        });
+    </script>
 </div>
 </body>
 </html>

@@ -1,0 +1,95 @@
+<div th:fragment="barra_inferior(empleadoId)">
+    <!-- Barra de navegación inferior SOLO con botones de navegación -->
+    <nav class="bottom-nav-custom" role="navigation" aria-label="Navegación inferior">
+        <a th:href="@{/motorizado/asignados}" class="active">
+            <i class="fas fa-truck-fast"></i><span>Asignados</span>
+        </a>
+        <a th:href="@{/motorizado/historial}">
+            <i class="fas fa-clock-rotate-left"></i><span>Historial</span>
+        </a>
+        <a th:href="@{/motorizado/perfil}">
+            <i class="far fa-user"></i><span>Perfil</span>
+        </a>
+    </nav>
+
+    <!-- Modal de Emergencia -->
+    <div class="modal fade" id="modal-alerta-general" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h6 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Reportar Emergencia</h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">Selecciona el tipo de emergencia para reportar al administrador.</p>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Tipo de incidencia</label>
+                        <select class="form-control" id="tipo-emergencia-select">
+                            <option value="">Seleccione...</option>
+                            <option value="AVERIA_VEHICULO">🚨 Moto averiada</option>
+                            <option value="ACCIDENTE">🚨 Accidente en ruta</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Descripción (opcional)</label>
+                        <textarea class="form-control" id="descripcion-emergencia" rows="3" placeholder="Describe brevemente lo sucedido..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="reportarEmergencia()">
+                        <i class="fas fa-exclamation-triangle"></i> Reportar Crítico
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        var repartidorEmpleadoId = /*[[${empleadoId}]]*/ null;
+
+        function abrirModalEmergencia() {
+            $('#modal-alerta-general').modal('show');
+        }
+
+        async function reportarEmergencia() {
+            const tipo = document.getElementById('tipo-emergencia-select').value;
+            const descripcion = document.getElementById('descripcion-emergencia').value;
+
+            if (!tipo) {
+                Swal.fire({ title: 'Atención', text: 'Selecciona un tipo de emergencia.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/incidencias', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tipoIncidencia: tipo,
+                        descripcion: descripcion || 'Sin descripción'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Emergencia reportada',
+                        text: 'El administrador recibirá tu alerta y te enviará auxilio.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    $('#modal-alerta-general').modal('hide');
+                    document.getElementById('tipo-emergencia-select').value = '';
+                    document.getElementById('descripcion-emergencia').value = '';
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al reportar', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+        /*]]>*/
+    </script>
+</div>

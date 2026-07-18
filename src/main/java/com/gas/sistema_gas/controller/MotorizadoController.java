@@ -114,7 +114,7 @@ public class MotorizadoController {
 
         model.addAttribute("ordenesAsignadas", ordenesAsignadas);
         model.addAttribute("empleadoId", empleadoId);
-        return "views/viewsMotorizado/asignados";
+        return "repartidor/asignados";
     }
 
     @GetMapping("/historial")
@@ -139,8 +139,16 @@ public class MotorizadoController {
                 })
                 .orElseGet(java.util.List::of);
 
+        Long empleadoId = usuarioOpt
+                .map(usuario -> {
+                    var empleado = usuario.getEmpleado();
+                    return empleado != null ? empleado.getId() : null;
+                })
+                .orElse(null);
+
         model.addAttribute("pedidosEntregados", pedidosEntregados);
-        return "views/viewsMotorizado/historial";
+        model.addAttribute("empleadoId", empleadoId);
+        return "repartidor/historial";
     }
 
     @GetMapping("/perfil")
@@ -190,7 +198,7 @@ public class MotorizadoController {
             model.addAttribute("entregasTotales", 0L);
         }
 
-        return "views/viewsMotorizado/perfil";
+        return "repartidor/perfil";
     }
 
     @GetMapping("/perfil/editar")
@@ -335,14 +343,16 @@ public class MotorizadoController {
             return "redirect:/motorizado/asignados";
         }
 
+        Long empleadoId = usuarioOpt.get().getEmpleado().getId();
         try {
-            var pedido = pedidoService.findByIdAndEmpleadoId(pedidoId, usuarioOpt.get().getEmpleado().getId());
+            var pedido = pedidoService.findByIdAndEmpleadoId(pedidoId, empleadoId);
             model.addAttribute("pedido", pedido);
         } catch (Exception ex) {
             return "redirect:/motorizado/asignados";
         }
 
-        return "views/viewsMotorizado/detalle";
+        model.addAttribute("empleadoId", empleadoId);
+        return "repartidor/detalle";
     }
 
     @GetMapping({"/venta-detalle", "/venta-detalle/{id}"})
@@ -375,7 +385,7 @@ public class MotorizadoController {
             return "redirect:/motorizado/historial";
         }
 
-        return "views/viewsMotorizado/venta-detalle";
+        return "repartidor/venta-detalle";
     }
 
     @PostMapping("/pedido/pagar-yape")

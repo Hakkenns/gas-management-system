@@ -10,7 +10,10 @@ import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpSession;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,8 +48,11 @@ public class MotorizadoApiController {
     }
 
     @GetMapping("/api/motorizado/historial/data")
-    public ResponseEntity<?> obtenerDatosHistorial(HttpSession session,
-                                                    @RequestParam(value = "metodoPago", required = false) String metodoPago) {
+    public ResponseEntity<?> obtenerDatosHistorial(
+            HttpSession session,
+            @RequestParam(value = "metodoPago", required = false) String metodoPago,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("success", false, "message", "No autenticado"));
@@ -66,10 +72,11 @@ public class MotorizadoApiController {
 
         Long empleadoId = usuarioOpt.get().getEmpleado().getId();
         List<String> metodosPago = normalizarMetodosPago(metodoPago);
-        List<Pedido> pedidos = pedidoRepository.findHistorialBase(empleadoId);
 
+        // Obtener total de registros para las estadísticas (sin paginación)
+        List<Pedido> todosLosPedidos = pedidoRepository.findHistorialBase(empleadoId);
         if (metodosPago != null && !metodosPago.isEmpty()) {
-            pedidos = pedidos.stream()
+            todosLosPedidos = todosLosPedidos.stream()
                     .filter(pedido -> {
                         List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(pedido.getId());
                         if (pagos.isEmpty()) {
@@ -83,20 +90,44 @@ public class MotorizadoApiController {
                     .toList();
         }
 
-        List<PedidoDTO.SimpleResponse> pedidosDto = pedidos.stream()
-                .map(this::mapPedidoToSimpleResponse)
-                .collect(Collectors.toList());
-
-        BigDecimal totalRecaudado = pedidosDto.stream()
-                .map(PedidoDTO.SimpleResponse::montoTotal)
+        BigDecimal totalRecaudado = todosLosPedidos.stream()
+                .map(Pedido::getMontoTotal)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Obtener página de resultados
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fechaSolicitud"));
+        Page<Pedido> pedidosPage = pedidoRepository.findHistorialPaginado(empleadoId, pageable);
+
+        List<Pedido> pedidosPagina = pedidosPage.getContent();
+        if (metodosPago != null && !metodosPago.isEmpty()) {
+            pedidosPagina = pedidosPagina.stream()
+                    .filter(pedido -> {
+                        List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(pedido.getId());
+                        if (pagos.isEmpty()) {
+                            return metodosPago.contains("EFECTIVO");
+                        }
+                        return pagos.stream().anyMatch(p -> {
+                            String nombreMetodo = p.getMetodoPago() != null ? p.getMetodoPago().getNombre().toUpperCase() : "";
+                            return metodosPago.contains(nombreMetodo);
+                        });
+                    })
+                    .toList();
+        }
+
+        List<PedidoDTO.SimpleResponse> pedidosDto = pedidosPagina.stream()
+                .map(this::mapPedidoToSimpleResponse)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "pedidos", pedidosDto,
-                "totalPedidos", pedidosDto.size(),
-                "totalRecaudado", totalRecaudado
+                "totalPedidos", todosLosPedidos.size(),
+                "totalRecaudado", totalRecaudado,
+                "currentPage", page,
+                "totalPages", pedidosPage.getTotalPages(),
+                "totalElements", pedidosPage.getTotalElements(),
+                "hasMore", page < pedidosPage.getTotalPages() - 1
         ));
     }
 

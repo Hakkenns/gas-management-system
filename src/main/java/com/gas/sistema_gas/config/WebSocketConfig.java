@@ -24,5 +24,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-repartidor")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+        
+        // Endpoint adicional para administradores (notificaciones de incidencias)
+        registry.addEndpoint("/ws-admin")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://thymeleaf.org">
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -36,12 +36,7 @@
 <body>
 <div th:fragment="content">
 
-    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
-        <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
-        <a href="/logout" class="text-white " style="font-size: 0.9rem;">
-            <i class="fas fa-sign-out-alt"></i> Salir
-        </a>
-    </div>
+    <div th:replace="~{fragments/cabecera :: barra_superior(empleadoId=${empleadoId})}"></div>
 
     <div class="content p-2 pb-5">
         <h5 class="mb-3 mt-2 font-weight-bold">
@@ -85,7 +80,7 @@
                     </div>
                     <!-- Botón Detalles alineado a la derecha en la misma fila -->
                     <div class="col-5 text-right">
-                        <a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-detalles-custom font-weight-bold">
+<a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-detalles-custom font-weight-bold">
                             <i class="fas fa-list"></i> Detalles
                         </a>
                     </div>
@@ -94,7 +89,7 @@
                 <!-- ACCIONES INFERIORES -->
                 <div class="row" th:if="${orden.estadoPedido == 'PENDIENTE'}">
                     <div class="col-6 pr-2">
-                        <form th:action="@{/motorizado/pedido/estado}" method="post" class="w-100">
+<form th:action="@{/motorizado/pedido/estado}" method="post" class="w-100">
                             <input type="hidden" name="id" th:value="${orden.idPedido}" />
                             <input type="hidden" name="estado" value="ACEPTADO" />
                             <button type="submit" class="btn btn-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
@@ -110,7 +105,7 @@
                 </div>
                 <div class="row" th:unless="${orden.estadoPedido == 'PENDIENTE'}">
                     <div class="col-12">
-                        <a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-outline-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
+<a th:href="@{/motorizado/detalle(id=${orden.idPedido})}" class="btn btn-outline-success btn-block btn-sm font-weight-bold py-2 shadow-sm">
                             <i class="fas fa-route"></i> Ver proceso
                         </a>
                     </div>
@@ -127,7 +122,7 @@
 
     </div>
 
-    <div th:replace="~{fragments/bottom-nav :: bottom-nav('asignados')}"></div>
+    <div th:replace="~{fragments/navegador :: barra_inferior(empleadoId=${empleadoId})}"></div>
 
     <div class="modal fade" id="modal-rechazo" tabindex="-1" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -153,53 +148,6 @@
         </div>
     </div>
 
-    <script>
-        function aceptarPedido(id) {
-            window.location.href = '/motorizado/pedido/estado?id=' + id + '&estado=ACEPTADO';
-        }
-
-        function prepararRechazo(id) {
-            document.getElementById('rechazo-id').value = id;
-            document.getElementById('motivoRechazo').value = '';
-        }
-
-        function confirmarRechazo() {
-            const motivo = document.getElementById('motivoRechazo').value;
-            const id = document.getElementById('rechazo-id').value;
-
-            if (!motivo) {
-                Swal.fire({ title: 'Atención', text: 'Seleccione un motivo.', icon: 'warning' });
-                return;
-            }
-
-            const badge = document.getElementById('badge-' + id);
-            badge.className = 'badge badge-danger';
-            badge.textContent = 'RECHAZADO';
-
-            document.getElementById('botones-accion-' + id).style.display = 'none';
-            $('#modal-rechazo').modal('hide');
-
-            Swal.fire({
-                title: 'Pedido rechazado',
-                text: 'La entrega quedó cancelada.',
-                icon: 'error',
-                timer: 900,
-                showConfirmButton: false
-            });
-        }
-
-        function iniciarRuta(id) {
-            Swal.fire({
-                title: 'Ruta iniciada',
-                text: 'Se abrirá el detalle de la entrega.',
-                icon: 'success',
-                timer: 700,
-                showConfirmButton: false
-            }).then(() => {
-                window.location.href = 'detalle.html?id=' + id;
-            });
-        }
-    </script>
     <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
     <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
     <script th:src="@{/assets/adminlte/plugins/sweetalert2/sweetalert2.min.js}"></script>
@@ -267,16 +215,52 @@
         /*]]>*/
     </script>
 
-    <script th:inline="javascript">
-        /*<![CDATA[*/
-        // Iniciar notificaciones de incidencias para el repartidor
-        document.addEventListener('DOMContentLoaded', function() {
-            var empId = /*[[${empleadoId}]]*/ null;
-            if (typeof iniciarNotificacionesRepartidor === 'function') {
-                iniciarNotificacionesRepartidor(empId);
+    <script>
+        function aceptarPedido(id) {
+            window.location.href = '/repartidor/pedido/estado?id=' + id + '&estado=ACEPTADO';
+        }
+
+        function prepararRechazo(id) {
+            document.getElementById('rechazo-id').value = id;
+            document.getElementById('motivoRechazo').value = '';
+        }
+
+        function confirmarRechazo() {
+            const motivo = document.getElementById('motivoRechazo').value;
+            const id = document.getElementById('rechazo-id').value;
+
+            if (!motivo) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione un motivo.', icon: 'warning' });
+                return;
             }
-        });
-        /*]]>*/
+
+            const badge = document.getElementById('badge-' + id);
+            badge.className = 'badge badge-danger';
+            badge.textContent = 'RECHAZADO';
+
+            document.getElementById('botones-accion-' + id).style.display = 'none';
+            $('#modal-rechazo').modal('hide');
+
+            Swal.fire({
+                title: 'Pedido rechazado',
+                text: 'La entrega quedó cancelada.',
+                icon: 'error',
+                timer: 900,
+                showConfirmButton: false
+            });
+        }
+
+        function iniciarRuta(id) {
+            Swal.fire({
+                title: 'Ruta iniciada',
+                text: 'Se abrirá el detalle de la entrega.',
+                icon: 'success',
+                timer: 700,
+                showConfirmButton: false
+            }).then(() => {
+                window.location.href = 'detalle.html?id=' + id;
+            });
+        }
     </script>
 </div>
 </body>

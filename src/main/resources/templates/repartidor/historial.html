@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://thymeleaf.org">
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -128,12 +128,7 @@
 <body>
 <div th:fragment="content">
 
-    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center shadow-sm">
-        <div class="font-weight-bold"><i class="fas fa-gas-pump text-success"></i> FastFuel Delivery</div>
-        <a th:href="@{/logout}" class="text-white" style="font-size: 0.9rem;">
-            <i class="fas fa-sign-out-alt"></i> Salir
-        </a>
-    </div>
+    <div th:replace="~{fragments/cabecera :: barra_superior(empleadoId=${empleadoId})}"></div>
 
     <div class="content p-2 pb-5">
         <h5 class="mb-3 mt-2 font-weight-bold">
@@ -248,7 +243,7 @@
         </div>
     </div>
 
-    <div th:replace="~{fragments/bottom-nav :: bottom-nav('historial')}"></div>
+    <div th:replace="~{fragments/navegador :: barra_inferior(empleadoId=${empleadoId})}"></div>
 
     <script th:src="@{/assets/adminlte/plugins/jquery/jquery.min.js}"></script>
     <script th:src="@{/assets/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js}"></script>
@@ -726,11 +721,7 @@
     <script th:inline="javascript">
         /*<![CDATA[*/
         var empleadoId = /*[[${empleadoId}]]*/ null;
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof iniciarNotificacionesRepartidor === 'function') {
-                iniciarNotificacionesRepartidor(empleadoId);
-            }
-        });
+        // El WebSocket de respuestas se inicializa automáticamente en cabecera.html
         /*]]>*/
     </script>
 </div>
