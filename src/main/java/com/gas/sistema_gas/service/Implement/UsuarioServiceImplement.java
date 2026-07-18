@@ -2,6 +2,7 @@ package com.gas.sistema_gas.service.Implement;
 
 import com.gas.sistema_gas.Repository.PerfilRepository;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
+import com.gas.sistema_gas.Repository.AsignacionMotoRepository;
 import com.gas.sistema_gas.Model.Empleado;
 
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.UsuarioMapper;
+import com.gas.sistema_gas.Model.AsignacionMoto;
 import com.gas.sistema_gas.Model.Perfil;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -35,6 +37,9 @@ public class UsuarioServiceImplement implements UsuarioService {
 
     @Autowired
     private EmpleadoRepository empleadoRepository;
+
+    @Autowired
+    private AsignacionMotoRepository asignacionMotoRepository;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -151,6 +156,37 @@ public class UsuarioServiceImplement implements UsuarioService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Empleado no encontrado");
         }
 
-        return usuarioMapper.toPerfilResponse(usuario);
+        Empleado empleado = usuario.getEmpleado();
+        
+        // Obtener el DTO base del mapper
+        UsuarioDTO.PerfilResponse perfilBase = usuarioMapper.toPerfilResponse(usuario);
+        
+        // Buscar la asignación de moto activa para este empleado
+        var asignacionActiva = asignacionMotoRepository
+                .findByEmpleadoIdAndEstado(empleado.getId(), AsignacionMoto.EstadoAsignacion.ACTIVA)
+                .orElse(null);
+        
+        // Construir la lista de asignaciones de moto manualmente
+        java.util.List<UsuarioDTO.AsignacionMotoInfo> asignacionesMoto = new java.util.ArrayList<>();
+        if (asignacionActiva != null && asignacionActiva.getMoto() != null) {
+            asignacionesMoto.add(new UsuarioDTO.AsignacionMotoInfo(
+                asignacionActiva.getMoto().getMarca(),
+                asignacionActiva.getMoto().getModelo(),
+                asignacionActiva.getMoto().getPlaca()
+            ));
+        }
+        
+        // Retornar el PerfilResponse con la lista de motos asignadas
+        return new UsuarioDTO.PerfilResponse(
+            perfilBase.id(),
+            perfilBase.nombre(),
+            perfilBase.userName(),
+            perfilBase.correo(),
+            perfilBase.dni(),
+            perfilBase.telefono(),
+            perfilBase.perfil(),
+            perfilBase.estado(),
+            asignacionesMoto
+        );
     }
 }

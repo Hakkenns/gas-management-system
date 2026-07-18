@@ -88,7 +88,7 @@ public class Producto {
     @Column(name = "capacidad", precision = 5, scale = 2)
     private BigDecimal capacidad;
 
-    @Column(name = "unidad_medida", length = 5)
+    @Column(name = "unidad_medida", length = 20)
     private String unidadMedida;
 
     // Auditoría

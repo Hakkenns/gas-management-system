@@ -42,7 +42,14 @@ public class UsuarioDTO {
             String dni,
             String telefono,
             String perfil,
-            Integer estado
+            Integer estado,
+            java.util.List<AsignacionMotoInfo> asignacionesMoto
+    ) {}
+
+    public record AsignacionMotoInfo(
+            String marca,
+            String modelo,
+            String placa
     ) {}
 
     public record Update(

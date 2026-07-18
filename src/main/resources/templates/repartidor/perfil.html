@@ -60,6 +60,10 @@
                         <p class="info-label mb-1">Teléfono</p>
                         <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.telefono, 'No registrado')}">987 654 321</p>
                     </div>
+                    <div class="col-12 mb-3" th:if="${usuario.asignacionesMoto != null and !usuario.asignacionesMoto.isEmpty()}">
+                        <p class="info-label mb-1">Moto Asignada</p>
+                        <p class="font-weight-bold mb-0" th:each="asignacion : ${usuario.asignacionesMoto}" th:text="${asignacion.marca + ' ' + asignacion.modelo + ' - Placa: ' + asignacion.placa}">Honda Wave - Placa: 452SFA</p>
+                    </div>
                     <div class="col-12">
                         <p class="info-label mb-1">Perfil</p>
                         <p class="font-weight-bold mb-0" th:text="${#strings.defaultString(usuario.perfil, 'No registrado')}">Repartidor</p>

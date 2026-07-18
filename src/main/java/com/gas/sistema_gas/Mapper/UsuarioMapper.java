@@ -5,6 +5,7 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import com.gas.sistema_gas.Model.Usuario;
+import com.gas.sistema_gas.Model.AsignacionMoto;
 import com.gas.sistema_gas.dto.LoginDTO;
 import com.gas.sistema_gas.dto.UsuarioDTO;
 
