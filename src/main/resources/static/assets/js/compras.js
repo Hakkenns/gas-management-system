@@ -472,10 +472,13 @@ function initTablaCompras() {
             lengthChange: true,
             searching: true,
             ordering: true,
-            info: true,
+            info: false,
             autoWidth: false,
             responsive: true,
             pagingType: 'simple',
+            dom: 't',
+            scrollY: "400px",
+            scrollCollapse: true,
             language: {
                 search: 'Buscar:',
                 lengthMenu: 'Mostrar _MENU_ registros',
@@ -488,6 +491,85 @@ function initTablaCompras() {
                     next: 'Siguiente'
                 }
             }
+        });
+
+        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
+        $(window).on('resize', function () {
+            dataTable.columns.adjust().draw();
+        });
+
+        // Índice de la columna "Fecha Registro" (columna 4, índice base 0)
+        var idxFecha = 4;
+
+        // Función de parseo seguro para formato "DD/MM/YYYY HH:mm"
+        function limpiarYParsearFecha(textoCelda) {
+            if (!textoCelda) return null;
+            
+            var limpio = textoCelda.replace(/\s+/g, ' ').trim();
+            var fechaParte = limpio.split(' ')[0];
+            
+            var componentes = fechaParte.split('/');
+            if (componentes.length !== 3) return null;
+            
+            return new Date(parseInt(componentes[2], 10), parseInt(componentes[1], 10) - 1, parseInt(componentes[0], 10));
+        }
+
+        // Filtro personalizado de fecha para DataTables
+        $.fn.dataTable.ext.search.push(
+            function(settings, data, dataIndex) {
+                var minInput = $('#minDate').val();
+                var maxInput = $('#maxDate').val();
+                
+                var textoCelda = data[idxFecha] || "";
+                var fechaCelda = limpiarYParsearFecha(textoCelda);
+
+                if (!fechaCelda) return true;
+
+                var fechaMin = minInput ? new Date(minInput + "T00:00:00") : null;
+                var fechaMax = maxInput ? new Date(maxInput + "T23:59:59") : null;
+
+                if ((fechaMin === null && fechaMax === null) ||
+                    (fechaMin === null && fechaCelda <= fechaMax) ||
+                    (fechaMin <= fechaCelda && fechaMax === null) ||
+                    (fechaMin <= fechaCelda && fechaCelda <= fechaMax)) {
+                    return true;
+                }
+                return false;
+            }
+        );
+
+        // Conectar controles personalizados
+        const $lengthSelect = $('#compras-length');
+        const $searchInput = $('#compras-search');
+        const $minDate = $('#minDate');
+        const $maxDate = $('#maxDate');
+
+        // Cambiar número de registros por página
+        if ($lengthSelect.length) {
+            $lengthSelect.on('change', function () {
+                const pageLength = parseInt($(this).val(), 10);
+                dataTable.page.len(pageLength).draw();
+            });
+        }
+
+        // Búsqueda personalizada
+        if ($searchInput.length) {
+            $searchInput.on('keyup', function () {
+                dataTable.search(this.value).draw();
+            });
+        }
+
+        // Filtrado por fecha en tiempo real
+        $('#minDate, #maxDate').on('change', function () {
+            dataTable.draw();
+        });
+
+        // Botón Limpiar filtros de fecha
+        $('#btnLimpiarFechas').on('click', function(e) {
+            e.preventDefault();
+            $('#minDate').val('');
+            $('#maxDate').val('');
+            dataTable.draw();
         });
 
         const $wrapper = table.closest('.dataTables_wrapper');
