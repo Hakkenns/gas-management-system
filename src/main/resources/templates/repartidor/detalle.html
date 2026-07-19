@@ -110,6 +110,9 @@
                 <button type="button" id="btnInconvenientePuerta" class="btn btn-info btn-block font-weight-bold mt-2" style="display:none;" onclick="abrirModalInconvenientePuerta(document.getElementById('pedidoIdInput').value)">
                     <i class="fas fa-exclamation-circle"></i> Reportar Problema en Punto
                 </button>
+                <button type="button" id="btnReportarIncidencia" class="btn btn-info btn-block font-weight-bold mt-2" style="display:none;">
+                    <i class="fas fa-flag"></i> Reportar Incidencia
+                </button>
                 <div id="estadoInfoTexto" class="small text-muted mt-2"></div>
             </div>
         </div>
@@ -413,6 +416,43 @@
                         <div class="col-6 pr-1"><button class="btn btn-secondary btn-block" data-dismiss="modal">Cancelar</button></div>
                         <div class="col-6 pl-1"><button class="btn btn-info btn-block" onclick="confirmarInconvenientePuerta()">Reportar</button></div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Reportar Incidencia (CLIENTE_AUSENTE / RECHAZO_POST_LLEGADA) -->
+    <div class="modal fade" id="modal-incidencia" tabindex="-1" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-info">
+                    <h6 class="modal-title text-white"><i class="fas fa-flag"></i> Reportar Incidencia</h6>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="incidencia-pedido-id">
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Motivo</label>
+                        <select class="form-control" id="motivoIncidencia">
+                            <option value="">Seleccione un motivo...</option>
+                            <option value="CLIENTE_AUSENTE">Cliente Ausente</option>
+                            <option value="RECHAZO_POST_LLEGADA">Rechazo Post Llegada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Foto de Evidencia <span class="text-danger">*</span></label>
+                        <div class="custom-file">
+                            <input type="file" class="custom-file-input" id="evidenciaIncidenciaInput" accept="image/*" capture="camera">
+                            <label class="custom-file-label" for="evidenciaIncidenciaInput">Tocar para subir imagen</label>
+                        </div>
+                        <small class="form-text text-muted">La foto es obligatoria para reportar la incidencia.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-info" onclick="enviarIncidencia()">
+                        <i class="fas fa-paper-plane"></i> Reportar
+                    </button>
                 </div>
             </div>
         </div>
@@ -1229,6 +1269,7 @@
             if (normalized === 'EN_CAMINO') return 'onway';
             if (normalized === 'EN_DOMICILIO') return 'indomicilio';
             if (normalized === 'ENTREGADO') return 'delivered';
+            if (normalized === 'CLIENTE_AUSENTE') return 'created'; // Reiniciar flujo desde CLIENTE_AUSENTE
             return 'created';
         }
 
@@ -1426,7 +1467,102 @@
             }
 
             btnPago.style.display = (status === 'indomicilio') ? 'block' : 'none';
+            const btnIncidencia = document.getElementById('btnReportarIncidencia');
+            if (btnIncidencia) {
+                btnIncidencia.style.display = (status === 'indomicilio') ? 'block' : 'none';
+                btnIncidencia.onclick = function() {
+                    document.getElementById('incidencia-pedido-id').value = document.getElementById('pedidoIdInput').value;
+                    document.getElementById('motivoIncidencia').value = '';
+                    document.getElementById('evidenciaIncidenciaInput').value = '';
+                    const label = document.querySelector('#modal-incidencia .custom-file-label');
+                    if (label) label.textContent = 'Tocar para subir imagen';
+                    $('#modal-incidencia').modal('show');
+                };
+            }
             if(badgeStatus) badgeStatus.textContent = orderLabels[status];
+        }
+
+        // ========== FUNCIONES PARA REPORTAR INCIDENCIA (CLIENTE_AUSENTE / RECHAZO_POST_LLEGADA) ==========
+
+        // Actualizar label del custom-file cuando se selecciona un archivo
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.id === 'evidenciaIncidenciaInput') {
+                const label = document.querySelector('#modal-incidencia .custom-file-label');
+                if (label) {
+                    const fileName = e.target.files && e.target.files.length > 0 ? e.target.files[0].name : 'Tocar para subir imagen';
+                    label.textContent = fileName;
+                }
+            }
+        });
+
+        async function enviarIncidencia() {
+            const idPedido = document.getElementById('incidencia-pedido-id').value;
+            const motivo = document.getElementById('motivoIncidencia').value;
+            const evidenciaInput = document.getElementById('evidenciaIncidenciaInput');
+
+            // Validaciones
+            if (!motivo) {
+                Swal.fire({ title: 'Atención', text: 'Seleccione un motivo.', icon: 'warning' });
+                return;
+            }
+
+            if (!evidenciaInput || !evidenciaInput.files || evidenciaInput.files.length === 0) {
+                Swal.fire({ title: 'Atención', text: 'Debe adjuntar una foto de evidencia.', icon: 'warning' });
+                return;
+            }
+
+            if (!idPedido) {
+                Swal.fire({ title: 'Error', text: 'No se pudo identificar el pedido.', icon: 'error' });
+                return;
+            }
+
+            // Mostrar loading
+            Swal.fire({
+                title: 'Enviando incidencia...',
+                text: 'Por favor espere',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const fd = new FormData();
+                fd.append('idPedido', idPedido);
+                fd.append('tipoIncidencia', motivo);
+                fd.append('evidencia', evidenciaInput.files[0]);
+
+                const res = await fetch('/api/incidencias/reportar', {
+                    method: 'POST',
+                    body: fd
+                });
+
+                const json = await res.json();
+
+                if (json.success) {
+                    $('#modal-incidencia').modal('hide');
+                    Swal.fire({
+                        icon: 'success',
+                        title: motivo === 'RECHAZO_POST_LLEGADA' ? 'Rechazo reportado' : 'Incidencia reportada',
+                        text: motivo === 'RECHAZO_POST_LLEGADA'
+                            ? 'El pedido ha sido rechazado. El stock será retornado automáticamente.'
+                            : 'El administrador ha sido notificado. El pedido queda en estado CLIENTE_AUSENTE.',
+                        timer: 2500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        // Para RECHAZO_POST_LLEGADA redirigir a asignados
+                        if (motivo === 'RECHAZO_POST_LLEGADA') {
+                            window.location.href = '/motorizado/asignados';
+                        } else {
+                            // CLIENTE_AUSENTE: recargar la página para mostrar el nuevo estado
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    Swal.fire({ title: 'Error', text: json.message || 'No se pudo enviar la incidencia', icon: 'error' });
+                }
+            } catch (err) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión al enviar la incidencia', icon: 'error' });
+                console.error('Error al enviar incidencia:', err);
+            }
         }
 
         window.addEventListener('load', function() {

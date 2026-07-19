@@ -111,6 +111,8 @@
                 texto += datos.placa ? ' de placa ' + datos.placa : '';
                 texto += ' y asistencia médica enviadas de inmediato.';
                 return texto;
+            } else if (tipoIncidencia === 'CLIENTE_AUSENTE') {
+                return 'Notificación recibida y aceptada por el administrador';
             }
             return 'Notificación de soporte recibida.';
         }

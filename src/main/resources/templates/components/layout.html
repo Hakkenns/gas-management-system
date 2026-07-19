@@ -172,6 +172,9 @@
         .notif-item-warning {
             border-left: 4px solid #ffc107 !important;
         }
+        .notif-item-cliente-ausente {
+            border-left: 4px solid #17a2b8 !important;
+        }
         
         /* Estilos para el dropdown de notificaciones rediseñado */
         .notif-card-custom {
@@ -263,7 +266,29 @@
             font-family: 'Inter', 'Poppins', 'Source Sans Pro', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         .notif-card-action {
-            display: block;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .notif-card-action .btn-outline-secondary {
+            opacity: 1 !important;
+            visibility: visible !important;
+            transition: none !important;
+        }
+        .notif-card-action .btn-outline-secondary:hover {
+            opacity: 1 !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        .btn-outline-info {
+            color: #17a2b8;
+            border-color: #17a2b8;
+            background: transparent;
+        }
+        .btn-outline-info:hover {
+            background-color: #17a2b8;
+            color: #ffffff;
+            border-color: #17a2b8;
         }
         .btn-notif-action {
             display: block;
@@ -473,6 +498,18 @@
                             }
                         }
                     });
+
+                    // Suscribirse al canal de detalle de incidencias (RECHAZO_POST_LLEGADA y CLIENTE_AUSENTE)
+                    stompClient.subscribe('/topic/admin/incidencias/detalle', function(message) {
+                        try {
+                            const data = JSON.parse(message.body);
+                            console.log('Nueva incidencia detallada recibida:', data);
+                            // Recargar la lista de incidencias para mostrar la nueva
+                            cargarListaIncidencias();
+                        } catch (e) {
+                            console.error('Error al procesar notificación detallada:', e);
+                        }
+                    });
                 }, function(error) {
                     console.error('Error WebSocket Admin:', error);
                     setTimeout(iniciarWebSocketIncidencia, 10000);
@@ -527,7 +564,8 @@
                         // Poblar la lista con las incidencias
                         incidencias.forEach(inc => {
                             const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
-                            const itemClass = esCritica ? 'notif-item-emergency' : 'notif-item-warning';
+                            const esClienteAusente = inc.tipoIncidencia === 'CLIENTE_AUSENTE';
+                            const itemClass = esCritica ? 'notif-item-emergency' : (esClienteAusente ? 'notif-item-cliente-ausente' : 'notif-item-warning');
                             
                             // Configurar icono y texto según tipo de incidencia
                             let icono = 'fa-exclamation-circle';
@@ -569,6 +607,18 @@
                                 textoReporte = inc.motivoTexto || 'El repartidor informa de un inconveniente en el punto de entrega.';
                                 badgeClass = 'badge-info';
                                 btnClass = 'btn-info';
+                            } else if (inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA') {
+                                icono = 'fa-times-circle';
+                                tipoLabel = 'RECHAZO POST LLEGADA';
+                                textoReporte = 'El motorizado reportó un rechazo de pedido del cliente en ' + (inc.codigoPedido || 'N/A');
+                                badgeClass = 'badge-danger';
+                                btnClass = 'btn-danger';
+                            } else if (inc.tipoIncidencia === 'CLIENTE_AUSENTE') {
+                                icono = 'fa-user-times';
+                                tipoLabel = 'CLIENTE AUSENTE';
+                                textoReporte = 'El pedido ' + (inc.codigoPedido || 'N/A') + ' no ha sido recibido por el cliente. El motorizado está en ruta o en espera.';
+                                badgeClass = 'badge-info';
+                                btnClass = 'btn-info';
                             }
                             
                             const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
@@ -596,8 +646,20 @@
                                         </div>
                                         <div class="notif-info-row">
                                             <i class="fas fa-phone notif-info-icon"></i>
-                                            <span class="notif-info-text">${inc.empleadoTelefono || ''}</span>
+                                            <span class="notif-info-text">Número repartidor: <a href="tel:${inc.empleadoTelefono || ''}" class="text-dark font-weight-bold">${inc.empleadoTelefono || ''}</a></span>
                                         </div>
+                                        ${inc.nombreCliente ? `
+                                        <div class="notif-info-row">
+                                            <i class="fas fa-user-tag notif-info-icon"></i>
+                                            <span class="notif-info-text">Cliente: ${inc.nombreCliente}</span>
+                                        </div>
+                                        ` : ''}
+                                        ${inc.celularCliente ? `
+                                        <div class="notif-info-row">
+                                            <i class="fas fa-phone notif-info-icon"></i>
+                                            <span class="notif-info-text">Número cliente: <a href="tel:${inc.celularCliente}" class="text-dark font-weight-bold">${inc.celularCliente}</a></span>
+                                        </div>
+                                        ` : ''}
                                         ${inc.codigoPedido ? `
                                         <div class="notif-info-row">
                                             <i class="fas fa-box notif-info-icon"></i>
@@ -611,11 +673,20 @@
                                         <em>"${textoReporte}"</em>
                                     </div>
                                     
-                                    <!-- Botón de acción -->
-                                    <div class="notif-card-action">
-                                        <button class="btn-notif-action ${btnClass}" style="${btnInlineStyle}" onclick="event.stopPropagation(); abrirModalSegunTipoIncidencia(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}', ${inc.idPedido}, '${inc.codigoPedido || ''}')">
-                                            <i class="fas fa-motorcycle"></i> ${inc.tipoIncidencia === 'RECHAZO_DISTANCIA' || inc.tipoIncidencia === 'RECHAZO_DIRECCION' ? 'Asignar Repartidor' : 'Redirigir Motoasignación y Auxiliar'}
+                                    <!-- Botones de acción -->
+                                    <div class="notif-card-action d-flex gap-2 align-items-center">
+                                        <button class="btn btn-outline-secondary btn-sm" style="padding: 6px 10px; min-width: 38px; height: 38px; display: inline-flex !important; align-items: center; justify-content: center; opacity: 1 !important; visibility: visible !important;" onclick="event.stopPropagation(); verEvidenciaIncidencia(${inc.id}, '${inc.urlEvidencia || ''}')" title="Ver Evidencia">
+                                            <i class="fas fa-eye"></i>
                                         </button>
+                                        ${inc.tipoIncidencia === 'CLIENTE_AUSENTE' ? `
+                                        <button class="btn btn-outline-info btn-sm flex-fill" style="margin: 0; font-weight: 600; color: #17a2b8; border: 2px solid #17a2b8; background: transparent;" onclick="event.stopPropagation(); marcarComoRevisado(${inc.id})" onmouseover="this.style.backgroundColor='#17a2b8'; this.style.color='#ffffff';" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#17a2b8';">
+                                            <i class="fas fa-check"></i> Marcar como Revisado
+                                        </button>
+                                        ` : `
+                                        <button class="btn-notif-action ${btnClass} flex-fill" style="${btnInlineStyle}; margin: 0;" onclick="event.stopPropagation(); abrirModalSegunTipoIncidencia(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}', ${inc.idPedido}, '${inc.codigoPedido || ''}')">
+                                            <i class="fas fa-motorcycle"></i> ${inc.tipoIncidencia === 'RECHAZO_DISTANCIA' || inc.tipoIncidencia === 'RECHAZO_DIRECCION' ? 'Asignar Repartidor' : (inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA' ? 'Confirmar Rechazo' : 'Redirigir Motoasignación y Auxiliar')}
+                                        </button>
+                                        `}
                                     </div>
                                 </div>
                             `;
@@ -654,6 +725,93 @@
                 } else {
                     badge.style.display = 'none';
                 }
+            }
+        }
+
+        async function verEvidenciaIncidencia(idIncidencia, urlEvidencia) {
+            if (!urlEvidencia) {
+                Swal.fire({ title: 'Atención', text: 'No hay evidencia disponible para esta incidencia.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                // Verificar que la URL sea accesible
+                const res = await fetch(urlEvidencia, { method: 'HEAD' });
+                if (!res.ok) {
+                    Swal.fire({ title: 'Error', text: 'No se pudo cargar la evidencia.', icon: 'error' });
+                    return;
+                }
+
+                // Mostrar modal con la imagen
+                const modalHtml = `
+                    <div class="modal fade" id="modal-evidencia-incidencia" tabindex="-1" role="dialog" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header bg-info text-white">
+                                    <h6 class="modal-title"><i class="fas fa-eye"></i> Evidencia de Incidencia</h6>
+                                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                                </div>
+                                <div class="modal-body text-center">
+                                    <img src="${urlEvidencia}" class="img-fluid rounded" style="max-height: 70vh;" alt="Evidencia de incidencia">
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Remover modal anterior si existe
+                const modalAnterior = document.getElementById('modal-evidencia-incidencia');
+                if (modalAnterior) modalAnterior.remove();
+
+                // Insertar y mostrar el modal
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                $('#modal-evidencia-incidencia').modal('show');
+
+                // Limpiar al cerrar
+                $('#modal-evidencia-incidencia').on('hidden.bs.modal', function() {
+                    $(this).remove();
+                });
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error al cargar la evidencia.', icon: 'error' });
+                console.error('Error al cargar evidencia:', e);
+            }
+        }
+
+        async function marcarComoRevisado(idIncidencia) {
+            try {
+                const res = await fetch('/api/incidencias/' + idIncidencia + '/marcar-revisado', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ 
+                        title: 'Éxito', 
+                        text: data.message, 
+                        icon: 'success', 
+                        timer: 1500, 
+                        showConfirmButton: false 
+                    });
+                    
+                    // Cerrar dropdown elegantemente antes de recargar
+                    const dropdownParent = document.getElementById('admin-notif-dropdown');
+                    const dropdownMenu = dropdownParent ? dropdownParent.querySelector('.dropdown-menu') : null;
+                    const dropdownToggle = document.getElementById('adminNotifDropdown');
+                    
+                    if (dropdownParent) dropdownParent.classList.remove('show');
+                    if (dropdownMenu) dropdownMenu.classList.remove('show');
+                    if (dropdownToggle) dropdownToggle.setAttribute('aria-expanded', 'false');
+                    
+                    // Recargar lista después de cerrar el dropdown
+                    setTimeout(() => cargarListaIncidencias(), 200);
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al marcar como revisado', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
             }
         }
 
@@ -698,6 +856,12 @@
                 icono = 'fa-door-closed';
                 tipoLabel = 'INCONVENIENTE EN PUERTA';
                 textoReporte = inc.motivoTexto || 'El repartidor informa de un inconveniente en el punto de entrega.';
+            } else if (inc.tipoIncidencia === 'CLIENTE_AUSENTE') {
+                headerBgColor = '#17a2b8'; // Celeste
+                headerTextColor = '#ffffff';
+                icono = 'fa-user-times';
+                tipoLabel = 'CLIENTE AUSENTE';
+                textoReporte = 'El pedido ' + (inc.codigoPedido || 'N/A') + ' no ha sido recibido por el cliente. El motorizado está en ruta o en espera.';
             }
 
             const hora = inc.createdAt ? new Date(inc.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';

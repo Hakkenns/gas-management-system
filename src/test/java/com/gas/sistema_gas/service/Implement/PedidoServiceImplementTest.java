@@ -50,23 +50,24 @@ class PedidoServiceImplementTest {
         cliente.setDireccion("Av. Siempre Viva 123");
         pedido.setCliente(cliente);
 
-        PedidoDTO.SimpleResponse mappedResponse = new PedidoDTO.SimpleResponse(
-            1L,
-            "NV001",
-            pedido.getFechaSolicitud(),
-            "Juanito",
-            "Av. Siempre Viva 123",
-            null,
-            "Entregar en la puerta principal",
-            null,
-            "PENDIENTE",
-            "PENDIENTE",
-            BigDecimal.TEN,
-            BigDecimal.TEN,
-            null,
-            "DOMICILIO",
-            null
-        );
+                PedidoDTO.SimpleResponse mappedResponse = new PedidoDTO.SimpleResponse(
+                    1L,
+                    "NV001",
+                    pedido.getFechaSolicitud(),
+                    "Juanito",
+                    "Av. Siempre Viva 123",
+                    null,
+                    "Entregar en la puerta principal",
+                    null,
+                    "PENDIENTE",
+                    "PENDIENTE",
+                    BigDecimal.TEN,
+                    BigDecimal.TEN,
+                    null,
+                    "DOMICILIO",
+                    null,
+                    List.of()
+                );
 
         when(pedidoRepository.findByTipoVentaAndEmpleadoIdWithMetodoPago("DOMICILIO", 10L)).thenReturn(List.of(pedido));
         when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
@@ -99,7 +100,8 @@ class PedidoServiceImplementTest {
             BigDecimal.ZERO,
             null,
             "DOMICILIO",
-            null
+            null,
+            List.of()
         );
 
         when(pedidoRepository.findById(1L)).thenReturn(Optional.of(pedido));

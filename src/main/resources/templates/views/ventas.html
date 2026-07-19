@@ -105,14 +105,17 @@
                                         <span class="badge badge-success" th:if="${venta.estadoPedido == 'ENTREGADO'}">ENTREGADO</span>
                                         <span class="badge badge-warning" th:if="${venta.estadoPedido == 'PENDIENTE'}">PENDIENTE</span>
                                         <span class="badge badge-danger" th:if="${venta.estadoPedido == 'ANULADO'}">ANULADO</span>
-                                        <span class="badge badge-secondary" th:if="${venta.estadoPedido != 'ENTREGADO' and venta.estadoPedido != 'PENDIENTE' and venta.estadoPedido != 'ANULADO'}" th:text="${venta.estadoPedido}"></span>
+                                        <span class="badge badge-danger" th:if="${venta.estadoPedido == 'RECHAZADO'}">RECHAZADO</span>
+                                        <span class="badge badge-info" th:if="${venta.estadoPedido == 'CLIENTE_AUSENTE'}">CLIENTE AUSENTE</span>
+                                        <span class="badge badge-secondary" th:if="${venta.estadoPedido != 'ENTREGADO' and venta.estadoPedido != 'PENDIENTE' and venta.estadoPedido != 'ANULADO' and venta.estadoPedido != 'RECHAZADO' and venta.estadoPedido != 'CLIENTE_AUSENTE'}" th:text="${venta.estadoPedido}"></span>
                                     </td>
                                     <td class="estado-pago">
                                         <span class="badge badge-success" th:if="${venta.estadoPago == 'PAGADO'}">PAGADO</span>
                                         <span class="badge badge-warning" th:if="${venta.estadoPago == 'PENDIENTE'}">PENDIENTE</span>
                                         <span class="badge badge-primary" th:if="${venta.estadoPago == 'CREDITO' and (venta.fechaLimitePago == null or !venta.fechaLimitePago.isBefore(#temporals.createNow()))}">A CRÉDITO</span>
                                         <span class="badge badge-danger" th:if="${venta.estadoPago == 'CREDITO' and venta.fechaLimitePago != null and venta.fechaLimitePago.isBefore(#temporals.createNow())}">VENCIDO</span>
-                                        <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE' and venta.estadoPago != 'CREDITO'}" th:text="${venta.estadoPago}"></span>
+                                        <span class="badge badge-danger" th:if="${venta.estadoPago == 'CANCELADO'}">CANCELADO</span>
+                                        <span class="badge badge-secondary" th:if="${venta.estadoPago != 'PAGADO' and venta.estadoPago != 'PENDIENTE' and venta.estadoPago != 'CREDITO' and venta.estadoPago != 'CANCELADO'}" th:text="${venta.estadoPago}"></span>
                                     </td>
                                     <td th:text="${venta.fechaLimitePago != null ? #temporals.format(venta.fechaLimitePago, 'dd/MM/yyyy') : '-'}"></td>
                                     <td th:text="${venta.nombreEmpleado != null and venta.nombreEmpleado != '' ? venta.nombreEmpleado : 'Sin Asignar'}"></td>

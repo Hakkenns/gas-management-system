@@ -32,16 +32,19 @@ public class Incidencia {
     private Pedido pedido;
 
     @Column(name = "tipo", nullable = false, length = 50)
-    private String tipo; // 'CRITICA', 'INCIDENCIA'
+    private String tipo; // 'CRITICA', 'INCIDENCIA', 'WARNING', 'INFO'
 
     @Column(name = "tipo_incidencia", nullable = false, length = 50)
-    private String tipoIncidencia; // 'AVERIA_VEHICULO', 'ACCIDENTE', 'RECHAZO'
+    private String tipoIncidencia; // 'AVERIA_VEHICULO', 'ACCIDENTE', 'RECHAZO_POST_LLEGADA', 'CLIENTE_AUSENTE'
 
     @Column(name = "tipo_label", nullable = false, length = 100)
     private String tipoLabel;
 
     @Column(name = "estado", nullable = false, length = 20)
-    private String estado = "PENDIENTE"; // 'PENDIENTE', 'ATENDIDO'
+    private String estado = "PENDIENTE"; // 'PENDIENTE', 'ATENDIDO', 'CONFIRMADO'
+
+    @Column(name = "url_evidencia", length = 500)
+    private String urlEvidencia;
 
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;

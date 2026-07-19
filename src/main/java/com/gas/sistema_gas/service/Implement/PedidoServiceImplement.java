@@ -477,7 +477,7 @@ public class PedidoServiceImplement implements PedidoService {
 
         String estadoActual = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "PENDIENTE";
         String estadoNormalizado = nuevoEstado.trim().toUpperCase();
-        List<String> estadosValidos = List.of("PENDIENTE", "ACEPTADO", "CARGADO", "EN_CAMINO", "EN_DOMICILIO", "ENTREGADO", "ANULADO");
+        List<String> estadosValidos = List.of("PENDIENTE", "ACEPTADO", "CARGADO", "EN_CAMINO", "EN_DOMICILIO", "ENTREGADO", "ANULADO", "RECHAZADO", "CLIENTE_AUSENTE", "CANCELADO");
         if (!estadosValidos.contains(estadoNormalizado)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de pedido inválido: " + nuevoEstado);
         }
@@ -490,6 +490,19 @@ public class PedidoServiceImplement implements PedidoService {
             if (!"PENDIENTE".equals(estadoActual)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede cancelarse desde PENDIENTE");
             }
+        } else if (estadoNormalizado.equals("RECHAZADO") || estadoNormalizado.equals("CANCELADO")) {
+            // Estados de incidencia - permitir desde EN_DOMICILIO
+            if (!"EN_DOMICILIO".equals(estadoActual)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede marcarse como " + estadoNormalizado + " desde EN_DOMICILIO");
+            }
+        } else if (estadoNormalizado.equals("CLIENTE_AUSENTE")) {
+            // CLIENTE_AUSENTE solo desde EN_DOMICILIO
+            if (!"EN_DOMICILIO".equals(estadoActual)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede marcarse como CLIENTE_AUSENTE desde EN_DOMICILIO");
+            }
+        } else if ("CLIENTE_AUSENTE".equals(estadoActual) && "ACEPTADO".equals(estadoNormalizado)) {
+            // Permitir reinicio del flujo desde CLIENTE_AUSENTE hacia ACEPTADO
+            // No se requiere validación adicional
         } else if (indiceActual == -1 || indiceNuevo == -1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de pedido no permitido para este flujo");
         } else if (indiceNuevo != indiceActual + 1) {

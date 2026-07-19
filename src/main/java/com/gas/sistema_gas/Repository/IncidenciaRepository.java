@@ -9,4 +9,5 @@ public interface IncidenciaRepository extends JpaRepository<Incidencia, Long> {
     List<Incidencia> findByEstadoOrderByCreatedAtDesc(String estado);
     long countByEstado(String estado);
     List<Incidencia> findByEmpleadoIdOrderByCreatedAtDesc(Long empleadoId);
+    List<Incidencia> findByPedidoId(Long pedidoId);
 }
