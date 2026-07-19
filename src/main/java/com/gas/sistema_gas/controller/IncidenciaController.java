@@ -262,6 +262,18 @@ public class IncidenciaController {
         // Notificar al motorizado en tiempo real que su rechazo fue aceptado
         if (empleadoAnterior != null) {
             String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + (codigoPedido != null ? codigoPedido : "N/A");
+            
+            // Guardar respuesta en BD para que aparezca en la bandeja de soporte del repartidor
+            RespuestaIncidencia respuesta = new RespuestaIncidencia();
+            respuesta.setMotoReemplazo("");
+            respuesta.setCreatedAt(LocalDateTime.now());
+            respuesta.setUpdatedAt(LocalDateTime.now());
+            // Asociar a la primera incidencia del pedido
+            if (!incidencias.isEmpty()) {
+                respuesta.setIncidencia(incidencias.get(0));
+            }
+            respuestaIncidenciaRepository.save(respuesta);
+            
             messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + empleadoAnterior.getId(),
                 Map.of(
                     "mensaje", mensajeNotificacion,
@@ -538,6 +550,8 @@ public class IncidenciaController {
             return "Se ha registrado un cambio de vehículo. Tu nueva unidad asignada es: " + motoReemplazo + ".";
         } else if ("ACCIDENTE".equalsIgnoreCase(tipoIncidencia)) {
             return "Se ha registrado un reporte de accidente. Unidad de auxilio " + motoReemplazo + " y asistencia médica enviadas de inmediato.";
+        } else if ("RECHAZO_POST_LLEGADA".equalsIgnoreCase(tipoIncidencia)) {
+            return "El administrador ha revisado y aceptado el rechazo del pedido.";
         }
         return "Notificación de soporte recibida.";
     }
@@ -673,9 +687,11 @@ public class IncidenciaController {
 
         // Enviar notificación WebSocket al repartidor
         if (incidencia.getEmpleado() != null) {
+            String codigoPedido = incidencia.getPedido() != null ? incidencia.getPedido().getCodigo() : "N/A";
+            String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + codigoPedido;
             messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + incidencia.getEmpleado().getId(),
                 Map.of(
-                    "mensaje", "Notificación recibida y aceptada por el administrador",
+                    "mensaje", mensajeNotificacion,
                     "fecha", LocalDateTime.now().toString(),
                     "tipoIncidencia", incidencia.getTipoIncidencia(),
                     "motoReemplazo", ""

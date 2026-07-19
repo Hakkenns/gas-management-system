@@ -29,6 +29,8 @@ $(function() {
                         if (texto === 'ENTREGADO') clase = 'badge-success';
                         else if (texto === 'PENDIENTE') clase = 'badge-warning';
                         else if (texto === 'ANULADO') clase = 'badge-danger';
+                        else if (texto === 'RECHAZADO') clase = 'badge-danger';
+                        else if (texto === 'EN_REVISION') clase = 'badge-info';
                         else clase = 'badge-info';
 
                         if (badge.length) {
@@ -48,6 +50,7 @@ $(function() {
                         else if (textoPago === 'PENDIENTE') clasePago = 'badge-warning';
                         else if (textoPago === 'CREDITO') clasePago = 'badge-primary';
                         else if (textoPago === 'VENCIDO') clasePago = 'badge-danger';
+                        else if (textoPago === 'CANCELADO') clasePago = 'badge-danger';
 
                         if (badgePago.length) {
                             badgePago.attr('class', `badge ${clasePago}`);
