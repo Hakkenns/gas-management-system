@@ -564,7 +564,7 @@
                         // Poblar la lista con las incidencias
                         incidencias.forEach(inc => {
                             const esCritica = inc.tipoIncidencia === 'AVERIA_VEHICULO' || inc.tipoIncidencia === 'ACCIDENTE';
-                            const esClienteAusente = inc.tipoIncidencia === 'CLIENTE_AUSENTE';
+                            const esClienteAusente = inc.tipoIncidencia === 'CLIENTE_AUSENTE' || inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA';
                             const itemClass = esCritica ? 'notif-item-emergency' : (esClienteAusente ? 'notif-item-cliente-ausente' : 'notif-item-warning');
                             
                             // Configurar icono y texto según tipo de incidencia
@@ -609,10 +609,10 @@
                                 btnClass = 'btn-info';
                             } else if (inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA') {
                                 icono = 'fa-times-circle';
-                                tipoLabel = 'RECHAZO POST LLEGADA';
+                                tipoLabel = 'PEDIDO RECHAZADO';
                                 textoReporte = 'El motorizado reportó un rechazo de pedido del cliente en ' + (inc.codigoPedido || 'N/A');
-                                badgeClass = 'badge-danger';
-                                btnClass = 'btn-danger';
+                                badgeClass = 'badge-info';
+                                btnClass = 'btn-info';
                             } else if (inc.tipoIncidencia === 'CLIENTE_AUSENTE') {
                                 icono = 'fa-user-times';
                                 tipoLabel = 'CLIENTE AUSENTE';
@@ -856,6 +856,12 @@
                 icono = 'fa-door-closed';
                 tipoLabel = 'INCONVENIENTE EN PUERTA';
                 textoReporte = inc.motivoTexto || 'El repartidor informa de un inconveniente en el punto de entrega.';
+            } else if (inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA') {
+                headerBgColor = '#17a2b8'; // Celeste
+                headerTextColor = '#ffffff';
+                icono = 'fa-times-circle';
+                tipoLabel = 'PEDIDO RECHAZADO';
+                textoReporte = 'El motorizado reportó un rechazo de pedido del cliente en ' + (inc.codigoPedido || 'N/A');
             } else if (inc.tipoIncidencia === 'CLIENTE_AUSENTE') {
                 headerBgColor = '#17a2b8'; // Celeste
                 headerTextColor = '#ffffff';
