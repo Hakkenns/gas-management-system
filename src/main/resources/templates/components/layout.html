@@ -683,7 +683,7 @@
                                             <i class="fas fa-check"></i> Marcar como Revisado
                                         </button>
                                         ` : `
-                                        <button class="btn-notif-action ${btnClass} flex-fill" style="${btnInlineStyle}; margin: 0;" onclick="event.stopPropagation(); abrirModalSegunTipoIncidencia(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}', ${inc.idPedido}, '${inc.codigoPedido || ''}')">
+                                        <button class="btn-notif-action ${btnClass} flex-fill" style="${btnInlineStyle}; margin: 0;" onclick="event.stopPropagation(); ${inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA' ? `confirmarRechazoAdmin(${inc.idPedido})` : `abrirModalSegunTipoIncidencia(${inc.id}, '${inc.empleadoNombre || ''}', '${inc.tipoIncidencia}', ${inc.idPedido}, '${inc.codigoPedido || ''}')`}">
                                             <i class="fas fa-motorcycle"></i> ${inc.tipoIncidencia === 'RECHAZO_DISTANCIA' || inc.tipoIncidencia === 'RECHAZO_DIRECCION' ? 'Asignar Repartidor' : (inc.tipoIncidencia === 'RECHAZO_POST_LLEGADA' ? 'Confirmar Rechazo' : 'Redirigir Motoasignación y Auxiliar')}
                                         </button>
                                         `}
@@ -1141,6 +1141,57 @@
                     cargarListaIncidencias();
                 } else {
                     Swal.fire({ title: 'Error', text: data.message || 'Error al reasignar', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+
+        // ========== FUNCIÓN PARA CONFIRMAR RECHAZO (PEDIDO RECHAZADO) ==========
+        async function confirmarRechazoAdmin(idPedido) {
+            if (!idPedido) {
+                Swal.fire({ title: 'Error', text: 'ID de pedido no válido.', icon: 'error' });
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: '¿Confirmar rechazo?',
+                text: 'Se revertirá el stock, se cancelará el pedido y se notificará al motorizado.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#17a2b8',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, confirmar rechazo',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch('/api/incidencias/confirmar-rechazo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idPedido: idPedido })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Rechazo confirmado',
+                        text: data.message,
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    // Cerrar dropdown y recargar lista
+                    const dropdownParent = document.getElementById('admin-notif-dropdown');
+                    const dropdownMenu = dropdownParent ? dropdownParent.querySelector('.dropdown-menu') : null;
+                    const dropdownToggle = document.getElementById('adminNotifDropdown');
+                    if (dropdownParent) dropdownParent.classList.remove('show');
+                    if (dropdownMenu) dropdownMenu.classList.remove('show');
+                    if (dropdownToggle) dropdownToggle.setAttribute('aria-expanded', 'false');
+                    setTimeout(() => cargarListaIncidencias(), 200);
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al confirmar rechazo', icon: 'error' });
                 }
             } catch (e) {
                 Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });

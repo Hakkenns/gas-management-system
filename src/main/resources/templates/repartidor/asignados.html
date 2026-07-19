@@ -59,7 +59,7 @@
                         <span class="font-weight-bold text-sm" th:text="${orden.codigo}"></span>
                     </div>
                     <div class="col-6 p-0 text-right">
-                        <span class="badge" th:id="${'badge-' + orden.idPedido}" th:text="${orden.estadoPedido}" th:classappend="${orden.estadoPedido == 'PENDIENTE'} ? ' badge-warning' : (${orden.estadoPedido == 'ENTREGADO'} ? ' badge-success' : ' badge-secondary')">ASIGNADO</span>
+                        <span class="badge" th:id="${'badge-' + orden.idPedido}" th:text="${orden.estadoPedido == 'EN_REVISION' ? 'En Revisión' : orden.estadoPedido}" th:classappend="${orden.estadoPedido == 'PENDIENTE'} ? ' badge-warning' : (${orden.estadoPedido == 'ENTREGADO'} ? ' badge-success' : (${orden.estadoPedido == 'EN_REVISION'} ? ' badge-danger' : ' badge-secondary'))">ASIGNADO</span>
                     </div>
                 </div>
             </div>

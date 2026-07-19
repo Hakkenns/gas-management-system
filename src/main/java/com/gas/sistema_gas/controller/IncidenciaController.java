@@ -158,14 +158,11 @@ public class IncidenciaController {
 
         // Actualizar estado del pedido según tipo
         if ("RECHAZO_POST_LLEGADA".equals(tipoUpper)) {
-            // El pedido desaparece de la lista del motorizado - lo desasignamos
-            pedido.setEmpleado(null);
-            pedido.setEstadoPedido("RECHAZADO");
-            pedido.setEstadoPago("CANCELADO");
+            // El pedido NO desaparece de la lista del motorizado - se queda visible con "EN_REVISION"
+            pedido.setEstadoPedido("EN_REVISION");
+            // mantenemos el empleado asignado
             pedidoRepository.save(pedido);
-
-            // Retornar stock automáticamente
-            retornarStockPedido(pedido);
+            // NO retornamos stock aún - eso lo hará el admin al confirmar
         } else {
             // CLIENTE_AUSENTE: el pedido NO desaparece, solo cambia badge
             pedido.setEstadoPedido("CLIENTE_AUSENTE");
@@ -239,6 +236,9 @@ public class IncidenciaController {
         }
 
         Pedido pedido = pedidoOpt.get();
+        Empleado empleadoAnterior = pedido.getEmpleado(); // Guardar antes de desasignar
+        String codigoPedido = pedido.getCodigo();
+        
         pedido.setEstadoPedido("RECHAZADO");
         pedido.setEstadoPago("CANCELADO");
         pedido.setEmpleado(null);
@@ -258,6 +258,27 @@ public class IncidenciaController {
         // Actualizar contador
         long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
         messagingTemplate.convertAndSend("/topic/admin/incidencias", contadorPendientes);
+
+        // Notificar al motorizado en tiempo real que su rechazo fue aceptado
+        if (empleadoAnterior != null) {
+            String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + (codigoPedido != null ? codigoPedido : "N/A");
+            messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + empleadoAnterior.getId(),
+                Map.of(
+                    "mensaje", mensajeNotificacion,
+                    "fecha", LocalDateTime.now().toString(),
+                    "tipoIncidencia", "RECHAZO_POST_LLEGADA",
+                    "motoReemplazo", ""
+                )
+            );
+            // También enviar al canal de pedidos para que desaparezca de su lista
+            messagingTemplate.convertAndSend("/topic/pedidos/" + empleadoAnterior.getId(),
+                Map.of(
+                    "mensaje", "rechazo_confirmado",
+                    "idPedido", pedido.getId(),
+                    "codigo", codigoPedido
+                )
+            );
+        }
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

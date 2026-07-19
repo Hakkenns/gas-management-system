@@ -619,10 +619,18 @@
         function aplicarFiltroMetodoPago() {
             const valorParaApi = selectedMetodoPago.includes('TODOS') ? 'TODOS' : selectedMetodoPago.join(',');
             currentFilters.metodoPago = valorParaApi === 'TODOS' ? '' : valorParaApi;
-            currentPage = 0;
-            allLoadedPedidos = [];
-            document.getElementById('pedidos-list').innerHTML = '';
-            cargarPedidos(true);
+            
+            // Cerrar dropdown inmediatamente antes de la recarga pesada
+            try { $('#btnFiltros').dropdown('hide'); } catch(e) {}
+            
+            // Usar requestAnimationFrame para no bloquear la UI
+            requestAnimationFrame(function() {
+                currentPage = 0;
+                allLoadedPedidos = [];
+                document.getElementById('pedidos-list').innerHTML = '';
+                document.getElementById('no-pedidos').style.display = 'none';
+                cargarPedidos(true);
+            });
         }
 
         // Event listeners

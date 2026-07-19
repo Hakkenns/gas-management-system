@@ -1270,6 +1270,7 @@
             if (normalized === 'EN_DOMICILIO') return 'indomicilio';
             if (normalized === 'ENTREGADO') return 'delivered';
             if (normalized === 'CLIENTE_AUSENTE') return 'created'; // Reiniciar flujo desde CLIENTE_AUSENTE
+            if (normalized === 'EN_REVISION') return 'indomicilio'; // Mantener visible con estado de revisión
             return 'created';
         }
 
@@ -1464,6 +1465,38 @@
                 orderActionBtn.onclick = null;
                 orderActionBtn.style.display = 'block';
                 if (estadoInfoTexto) estadoInfoTexto.textContent = 'El pedido ya fue entregado.';
+            }
+
+            // Verificar si el pedido está EN_REVISION para deshabilitar botones
+            const estadoActual = document.getElementById('pedidoEstadoActual')?.value;
+            if (estadoActual === 'EN_REVISION') {
+                // Deshabilitar botón Ir a pago
+                if (btnPago) {
+                    btnPago.style.display = 'block';
+                    btnPago.disabled = true;
+                    btnPago.classList.remove('btn-success');
+                    btnPago.classList.add('btn-secondary');
+                    btnPago.style.opacity = '0.6';
+                    btnPago.style.cursor = 'not-allowed';
+                    btnPago.innerHTML = '<i class="fas fa-money-bill-wave"></i> Ir a pago';
+                }
+                // Deshabilitar botón Reportar Incidencia
+                const btnIncidencia = document.getElementById('btnReportarIncidencia');
+                if (btnIncidencia) {
+                    btnIncidencia.style.display = 'block';
+                    btnIncidencia.disabled = true;
+                    btnIncidencia.classList.remove('btn-info');
+                    btnIncidencia.classList.add('btn-secondary');
+                    btnIncidencia.style.opacity = '0.6';
+                    btnIncidencia.style.cursor = 'not-allowed';
+                    btnIncidencia.innerHTML = '<i class="fas fa-flag"></i> Reportar Incidencia';
+                    btnIncidencia.onclick = null;
+                }
+                // Mostrar mensaje informativo
+                if (estadoInfoTexto) {
+                    estadoInfoTexto.textContent = 'Este pedido se encuentra en revisión por el administrador.';
+                    estadoInfoTexto.className = 'small text-danger font-weight-bold mt-2';
+                }
             }
 
             btnPago.style.display = (status === 'indomicilio') ? 'block' : 'none';
