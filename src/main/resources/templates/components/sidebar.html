@@ -15,7 +15,7 @@
 
         <nav class="mt-2">
 
-            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false" style="overflow: visible;">
 
                 <li th:each="opcion : ${menu}" 
                     th:class="${#lists.isEmpty(opcion.hijos)} ? 'nav-item' : 'nav-item has-treeview'">
@@ -29,7 +29,9 @@
 
                     <a th:if="${not #lists.isEmpty(opcion.hijos)}" 
                        href="#" 
-                       class="nav-link">
+                       class="nav-link"
+                       data-toggle="treeview"
+                       role="button">
                         <i class="nav-icon" th:classappend="${opcion.icono}"></i>
                         <p>
                             <span th:text="${opcion.nombre}"></span>
@@ -37,7 +39,7 @@
                         </p>
                     </a>
 
-                    <ul th:if="${not #lists.isEmpty(opcion.hijos)}" class="nav nav-treeview pl-3">
+                    <ul th:if="${not #lists.isEmpty(opcion.hijos)}" class="nav nav-treeview pl-3" style="display: none;">
                         <li th:each="sub : ${opcion.hijos}" class="nav-item">
                             <a th:href="@{ '/' + ${sub.ruta} }" class="nav-link">
                                 <i class="nav-icon" th:classappend="${sub.icono}"></i>

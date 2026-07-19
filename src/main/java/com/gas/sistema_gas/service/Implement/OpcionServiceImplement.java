@@ -1,5 +1,6 @@
 package com.gas.sistema_gas.service.Implement;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,7 +30,7 @@ public class OpcionServiceImplement implements OpcionService {
     @Transactional
     public List<OpcionDTO.SimpleResponse> listAll() {
         // Traemos solo los módulos principales activos
-        return repository.findByPadreIsNullAndEstado(1).stream()
+        List<OpcionDTO.SimpleResponse> opciones = repository.findByPadreIsNullAndEstado(1).stream()
                 .map(opcion -> {
                     // Filtramos sus hijos para que solo viajen los que están activos
                     List<Opcion> hijosFiltrados = null;
@@ -57,6 +58,8 @@ public class OpcionServiceImplement implements OpcionService {
                     return dto;
                 })
                 .collect(Collectors.toList());
+
+        return buildVentasGroup(opciones);
     }
 
     @Override
@@ -70,7 +73,7 @@ public class OpcionServiceImplement implements OpcionService {
         }
 
         // Para otros perfiles: traemos raíces activas y filtramos hijos asignados a su perfil
-        return repository.findByPadreIsNullAndEstado(1).stream()
+        List<OpcionDTO.SimpleResponse> opciones = repository.findByPadreIsNullAndEstado(1).stream()
             .map(opcion -> {
                 // Filtrar hijos activos y con permiso del perfil
                 List<Opcion> hijosFiltrados = null;
@@ -107,6 +110,41 @@ public class OpcionServiceImplement implements OpcionService {
                 return padreTienePermiso || (dto.hijos() != null && !dto.hijos().isEmpty());
             })
             .collect(Collectors.toList());
+
+        return buildVentasGroup(opciones);
+    }
+
+    private List<OpcionDTO.SimpleResponse> buildVentasGroup(List<OpcionDTO.SimpleResponse> opciones) {
+        List<OpcionDTO.SimpleResponse> result = new ArrayList<>();
+        List<OpcionDTO.SimpleResponse> ventasChildren = new ArrayList<>();
+
+        for (OpcionDTO.SimpleResponse opcion : opciones) {
+            if (opcion.ruta() != null && ("ventas/local".equals(opcion.ruta()) || "ventas/domicilio".equals(opcion.ruta()))) {
+                ventasChildren.add(new OpcionDTO.SimpleResponse(
+                    opcion.id(),
+                    "ventas/local".equals(opcion.ruta()) ? "Venta local" : "Venta domicilio",
+                    "ventas/local".equals(opcion.ruta()) ? "fas fa-store" : "fas fa-motorcycle",
+                    opcion.ruta(),
+                    opcion.estado(),
+                    List.of()
+                ));
+            } else {
+                result.add(opcion);
+            }
+        }
+
+        if (!ventasChildren.isEmpty()) {
+            result.add(new OpcionDTO.SimpleResponse(
+                -1L,
+                "Ventas",
+                "fas fa-cash-register",
+                "ventas",
+                1,
+                ventasChildren
+            ));
+        }
+
+        return result;
     }
 
     @Override
