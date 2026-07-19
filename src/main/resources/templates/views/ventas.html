@@ -6,30 +6,15 @@
 
         <div class="content p-3">
             <h3 class="mb-3">
-                <i class="fas fa-cash-register"></i>
-                <strong>Gestión de Ventas</strong>
+                <i class="fas fa-cash-register" th:if="${activeTab != 'local' && activeTab != 'domicilio'}"></i>
+                <i class="fas fa-store" th:if="${activeTab == 'local' and session.usuarioPerfilId != 4}"></i>
+                <i class="fas fa-motorcycle" th:if="${activeTab == 'domicilio'}"></i>
+                <strong th:text="${activeTab == 'local' and session.usuarioPerfilId != 4 ? 'Venta Local' : (activeTab == 'domicilio' ? 'Venta Domicilio' : 'Gestión de Ventas')}" ></strong>
             </h3>
             <hr>
 
-            <!-- Bootstrap Tabs Navigation -->
-            <ul class="nav nav-tabs mb-3" id="tab-ventas" role="tablist">
-                <li class="nav-item" th:if="${session.usuarioPerfilId != 4}">
-                    <a class="nav-link" th:classappend="${activeTab == 'local' ? 'active' : ''}" id="local-tab" data-toggle="tab" href="#local-content" role="tab" aria-controls="local" aria-selected="true">
-                        <i class="fas fa-store"></i> Ventas Local
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" th:classappend="${(activeTab == 'domicilio' or session.usuarioPerfilId == 4) ? 'active' : ''}" id="domicilio-tab" data-toggle="tab" href="#domicilio-content" role="tab" aria-controls="domicilio" aria-selected="false">
-                        <i class="fas fa-motorcycle"></i> Ventas Domicilio
-                    </a>
-                </li>
-            </ul>
-
-            <!-- Tab Content -->
-            <div class="tab-content" id="tab-ventas-content">
-                
-                <!-- Tab 1: Ventas Local -->
-                <div class="tab-pane fade" th:classappend="${activeTab == 'local' ? 'show active' : ''}" id="local-content" role="tabpanel" aria-labelledby="local-tab" th:if="${session.usuarioPerfilId != 4}">
+            <div class="row" th:if="${activeTab == 'local' and session.usuarioPerfilId != 4}">
+                <div class="col-12">
                     <button id="btn-crear-venta-local" class="btn btn-info mb-3 btn-crear-venta" data-tipo="LOCAL">
                         <i class="fas fa-plus"></i> Nueva venta local
                     </button>
@@ -81,9 +66,10 @@
                         </table>
                     </div>
                 </div>
+            </div>
 
-                <!-- Tab 2: Ventas Domicilio -->
-                <div class="tab-pane fade" th:classappend="${(activeTab == 'domicilio' or session.usuarioPerfilId == 4) ? 'show active' : ''}" id="domicilio-content" role="tabpanel" aria-labelledby="domicilio-tab">
+            <div class="row" th:if="${activeTab == 'domicilio'}">
+                <div class="col-12">
                     <button id="btn-crear-venta-domicilio" class="btn btn-info mb-3 btn-crear-venta" data-tipo="DOMICILIO" th:if="${session.usuarioPerfilId != 4}">
                         <i class="fas fa-plus"></i> Nueva venta a domicilio
                     </button>
@@ -144,7 +130,6 @@
                         </table>
                     </div>
                 </div>
-
             </div>
         </div>
 
