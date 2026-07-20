@@ -71,6 +71,37 @@ INSERT INTO `catalogo_proveedores` (`id_catalogo`, `id_proveedor`, `id_producto`
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `categoria_capacidades`
+--
+
+CREATE TABLE `categoria_capacidades` (
+  `id_capacidad` bigint(20) NOT NULL,
+  `id_categoria` bigint(20) NOT NULL,
+  `valor_capacidad` decimal(5,2) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Índices para la tabla `categoria_capacidades`
+--
+ALTER TABLE `categoria_capacidades`
+  ADD PRIMARY KEY (`id_capacidad`),
+  ADD KEY `fk_capacidad_categoria` (`id_categoria`);
+
+--
+-- AUTO_INCREMENT de la tabla `categoria_capacidades`
+--
+ALTER TABLE `categoria_capacidades`
+  MODIFY `id_capacidad` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- Filtros para la tabla `categoria_capacidades`
+--
+ALTER TABLE `categoria_capacidades`
+  ADD CONSTRAINT `fk_capacidad_categoria` FOREIGN KEY (`id_categoria`) REFERENCES `categorias` (`id_categoria`) ON DELETE CASCADE;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `categorias`
 --
 

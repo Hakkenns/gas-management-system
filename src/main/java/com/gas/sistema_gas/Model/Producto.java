@@ -71,6 +71,16 @@ public class Producto {
     private Integer stockVacios = 0;
     
 
+    @Column(name = "stock_reservado", nullable = false, columnDefinition = "DECIMAL(10,2) DEFAULT 0.00")
+    private BigDecimal stockReservado = BigDecimal.ZERO;
+
+    @Transient
+    public BigDecimal getStockDisponible() {
+        BigDecimal real = (this.stockLlenos != null) ? this.stockLlenos : BigDecimal.ZERO;
+        BigDecimal reservado = (this.stockReservado != null) ? this.stockReservado : BigDecimal.ZERO;
+        return real.subtract(reservado);
+    }
+
     // ------------------------------------
 
     @Column(name = "requiere_envase", nullable = false)

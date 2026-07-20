@@ -12,4 +12,5 @@ public interface CategoriaService {
     void setState(Long id, Integer estado);
     void deleteCategory(Long id);
     CategoriaDTO.SimpleResponse findById(Long id);
+    CategoriaDTO.DetalleResponse findDetalleById(Long id);
 }
