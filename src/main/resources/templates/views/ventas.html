@@ -56,9 +56,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:if="${#lists.isEmpty(ventasLocal)}">
-                                    <td colspan="9" class="text-center">No hay ventas registradas</td>
-                                </tr>
                                 <tr th:each="venta : ${ventasLocal}">
                                     <td th:text="${venta.idPedido}"></td>
                                     <td th:text="${venta.codigo}"></td>
@@ -134,9 +131,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:if="${#lists.isEmpty(ventasDomicilio)}">
-                                    <td colspan="11" class="text-center">No hay ventas registradas</td>
-                                </tr>
                                 <tr th:each="venta : ${ventasDomicilio}">
                                     <td th:text="${venta.idPedido}"></td>
                                     <td th:text="${venta.codigo}"></td>

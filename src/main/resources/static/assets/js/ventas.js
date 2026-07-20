@@ -502,7 +502,9 @@ $(function() {
 
 // Inicialización de DataTables para Ventas
 function initTablaVentas() {
-    if ($.fn.DataTable) {
+    if (!$.fn.DataTable) return;
+
+    try {
         // Inicializar tabla de ventas locales si existe
         const tableLocal = $('#tabla-ventas-local');
         if (tableLocal.length && $.fn.dataTable.isDataTable(tableLocal)) {
@@ -692,13 +694,19 @@ function initTablaVentas() {
                 });
             }
         }
+    } catch (e) {
+        console.warn("Error inicializando DataTable de ventas:", e);
     }
 }
 
 // Inicializar tablas cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
     if ($.fn.DataTable) {
-        initTablaVentas();
+        try {
+            initTablaVentas();
+        } catch (e) {
+            console.warn("Error inicializando tablas de ventas con DataTables. Los botones seguirán funcionando.", e);
+        }
     }
 });
 

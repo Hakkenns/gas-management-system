@@ -57,6 +57,23 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
 
         InventarioLote guardado = inventarioLoteRepository.save(lote);
 
+        // ================================================================
+        // FIX: Sincronizar stockLlenos del Producto inmediatamente después
+        // de registrar un nuevo lote, sumando en tiempo real la cantidadActual
+        // de todos los lotes activos de este producto.
+        // ================================================================
+        BigDecimal stockTotalLotes = inventarioLoteRepository
+                .findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                .stream()
+                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Si el stock cambió respecto al valor actual del producto, actualizamos
+        if (stockTotalLotes.compareTo(producto.getStockLlenos() != null ? producto.getStockLlenos() : BigDecimal.ZERO) != 0) {
+            producto.setStockLlenos(stockTotalLotes);
+            productoRepository.save(producto);
+        }
+
         // 4. Construimos la respuesta SimpleResponse rellenando los nombres reales
         return mapearASimpleResponseConNombres(guardado);
     }

@@ -1,7 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
     let arrayDetalles = []; // Almacena temporalmente los artículos antes de enviar al controller
 
-    initTablaCompras();
+    try {
+        initTablaCompras();
+    } catch (e) {
+        console.warn("La tabla de compras no pudo inicializarse con DataTables. Los botones seguirán funcionando.", e);
+    }
 
     // Delegación de eventos para clicks
     document.addEventListener("click", function (e) {
@@ -459,7 +463,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initTablaCompras() {
-    if ($.fn.DataTable) {
+    if (!$.fn.DataTable) return;
+    if (!$('#tabla-compras').length) return;
+
+    try {
         const table = $('#tabla-compras');
         if ($.fn.dataTable.isDataTable(table)) {
             table.DataTable().destroy();
@@ -608,6 +615,8 @@ function initTablaCompras() {
                 renderCustomPagination(dataTable, customPager);
             });
         }
+    } catch (e) {
+        console.warn("Error inicializando DataTable de compras:", e);
     }
 }
 

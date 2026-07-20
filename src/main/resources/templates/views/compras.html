@@ -73,9 +73,6 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:if="${#lists.isEmpty(compras)}">
-                            <td colspan="7" class="text-center">No hay registros de compras</td>
-                        </tr>
                         <tr th:each="c : ${compras}">
                             <td th:text="${c.id}"></td>
                             <td th:text="${c.numDocumento}"></td>
