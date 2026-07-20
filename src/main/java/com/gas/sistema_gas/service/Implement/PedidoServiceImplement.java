@@ -318,10 +318,13 @@ public class PedidoServiceImplement implements PedidoService {
 
             BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
             
-            // Calcular el stock disponible (stock_llenos - stock_reservado)
-            BigDecimal stockLlenos = producto.getStockLlenos() != null ? producto.getStockLlenos() : BigDecimal.ZERO;
+            // Calcular el stock disponible: suma real de cantidadActual de inventario_lotes - stock_reservado
+            BigDecimal stockRealLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                .stream()
+                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
-            BigDecimal stockDisponible = stockLlenos.subtract(stockReservado);
+            BigDecimal stockDisponible = stockRealLotes.subtract(stockReservado);
 
             if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,

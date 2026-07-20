@@ -677,6 +677,13 @@ public class IncidenciaController {
         incidencia.setUpdatedAt(LocalDateTime.now());
         incidenciaRepository.save(incidencia);
 
+        // CLIENTE_AUSENTE: retornar stock automáticamente al confirmar
+        if (incidencia.getPedido() != null && "CLIENTE_AUSENTE".equalsIgnoreCase(incidencia.getTipoIncidencia())) {
+            Pedido pedido = incidencia.getPedido();
+            // Liberar stock_reservado
+            retornarStockPedido(pedido);
+        }
+
         // Guardar respuesta en BD para que aparezca en la bandeja del repartidor
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
         respuesta.setIncidencia(incidencia);

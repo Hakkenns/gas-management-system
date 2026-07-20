@@ -451,6 +451,12 @@ public class MotorizadoController {
         PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(idPedido, idMetodo, montoRecibido, numOperacion);
         var pago = pedidoPagosService.registrarPagoYape(dto, evidencia, evidenciaVuelto);
 
+        // Procesar retorna balón vacío (para pago único)
+        String retornaBalonVacioUnico = null;
+        if (requestedWith != null && "XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
+            retornaBalonVacioUnico = ""; // No se envía desde pagar-yape, solo desde confirmar-entrega
+        }
+
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             return ResponseEntity.ok(java.util.Map.of("success", true, "idPago", pago.getId()));
         }
@@ -464,6 +470,7 @@ public class MotorizadoController {
             @RequestParam("pagosJson") String pagosJson,
             @RequestPart(value = "evidencias", required = false) List<MultipartFile> evidencias,
             @RequestPart(value = "evidenciaVuelto", required = false) MultipartFile evidenciaVuelto,
+            @RequestParam(value = "retornaBalonVacio", required = false, defaultValue = "false") String retornaBalonVacio,
             HttpSession session) {
 
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
@@ -498,6 +505,11 @@ public class MotorizadoController {
             ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(idPedido, pagos);
             List<PedidoPago> pagosGuardados = pedidoPagosService.registrarPagosMultiples(dto, evidencias, evidenciaVuelto);
 
+            // Procesar retorna balón vacío
+            if ("true".equalsIgnoreCase(retornaBalonVacio)) {
+                procesarRetornoBalonVacio(idPedido);
+            }
+
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Pago registrado correctamente",
@@ -506,6 +518,25 @@ public class MotorizadoController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "message", "Error al procesar el pago: " + e.getMessage()));
+        }
+    }
+
+    @Autowired
+    private com.gas.sistema_gas.Repository.DetallePedidoRepository detallePedidoRepositoryRetorna;
+    @Autowired
+    private com.gas.sistema_gas.Repository.ProductoRepository productoRepositoryRetorna;
+
+    private void procesarRetornoBalonVacio(Long idPedido) {
+        // Buscar los detalles del pedido para identificar productos que requieren envase
+        var detalles = detallePedidoRepositoryRetorna.findByPedido_Id(idPedido);
+        for (var detalle : detalles) {
+            var producto = detalle.getProducto();
+            if (Boolean.TRUE.equals(producto.getRequiereEnvase())) {
+                // Incrementar stockVacios por la cantidad comprada (el cliente devuelve un balón por cada uno comprado)
+                Integer vaciosActuales = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
+                producto.setStockVacios(vaciosActuales + detalle.getCantidad());
+                productoRepositoryRetorna.save(producto);
+            }
         }
     }
 }

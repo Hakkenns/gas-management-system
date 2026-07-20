@@ -449,6 +449,7 @@
                                         <th>Nombre</th>
                                         <th>Categoría</th>
                                         <th width="20%">Precio Venta</th>
+                                        <th width="12%">Stock Disp.</th>
                                         <th width="15%">Acción</th>
                                     </tr>
                                 </thead>
@@ -458,12 +459,17 @@
                                         th:data-id="${p.id}"
                                         th:data-nombre="${p.nombre}"
                                         th:data-precio="${p.precioVenta}"
+                                        th:data-stock-disponible="${p.stockDisponible}"
                                         th:data-categoria="${p.idCategoria != null ? p.idCategoria : ''}"
                                         th:data-capacidad="${p.capacidad}"
                                         th:data-unidad="${p.unidadMedida}">
                                         <td th:text="|${p.nombre}${p.capacidad != null and p.unidadMedida != null ? ' - ' + p.capacidad + ' ' + p.unidadMedida : ''}|"></td>
                                         <td th:text="${p.nombreCategoria != null ? p.nombreCategoria : '-'}"></td>
                                         <td class="text-right" th:text="'S/ ' + ${p.precioVenta}"></td>
+                                        <td class="text-center">
+                                            <span th:if="${p.stockDisponible != null and p.stockDisponible > 0}" class="badge badge-success" th:text="${p.stockDisponible}"></span>
+                                            <span th:if="${p.stockDisponible == null or p.stockDisponible <= 0}" class="badge badge-danger">0</span>
+                                        </td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
                                         </td>
