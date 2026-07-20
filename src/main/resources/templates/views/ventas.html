@@ -19,6 +19,27 @@
                         <i class="fas fa-plus"></i> Nueva venta local
                     </button>
 
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 p-2 bg-light rounded border">
+                        <!-- Selector de registros por página (izquierda) -->
+                        <div class="d-flex align-items-center">
+                            <label class="mr-2 mb-0 font-weight-bold text-sm">Mostrar</label>
+                            <select id="ventas-local-length" class="form-control form-control-sm" style="width: auto;">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="30">30</option>
+                                <option value="40">40</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="ml-2 mb-0 text-sm">registros</span>
+                        </div>
+
+                        <!-- Buscador (derecha) -->
+                        <div class="d-flex align-items-center ml-auto mt-2 mt-md-0">
+                            <label class="mr-2 mb-0 font-weight-bold text-sm">Buscar:</label>
+                            <input type="search" id="ventas-local-search" class="form-control form-control-sm" style="width: 200px;">
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped tabla-ventas-dinamica" id="tabla-ventas-local">
                             <thead class="thead-dark">
@@ -73,6 +94,27 @@
                     <button id="btn-crear-venta-domicilio" class="btn btn-info mb-3 btn-crear-venta" data-tipo="DOMICILIO" th:if="${session.usuarioPerfilId != 4}">
                         <i class="fas fa-plus"></i> Nueva venta a domicilio
                     </button>
+
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 p-2 bg-light rounded border">
+                        <!-- Selector de registros por página (izquierda) -->
+                        <div class="d-flex align-items-center">
+                            <label class="mr-2 mb-0 font-weight-bold text-sm">Mostrar</label>
+                            <select id="ventas-domicilio-length" class="form-control form-control-sm" style="width: auto;">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="30">30</option>
+                                <option value="40">40</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="ml-2 mb-0 text-sm">registros</span>
+                        </div>
+
+                        <!-- Buscador (derecha) -->
+                        <div class="d-flex align-items-center ml-auto mt-2 mt-md-0">
+                            <label class="mr-2 mb-0 font-weight-bold text-sm">Buscar:</label>
+                            <input type="search" id="ventas-domicilio-search" class="form-control form-control-sm" style="width: 200px;">
+                        </div>
+                    </div>
 
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped tabla-ventas-dinamica" id="tabla-ventas-domicilio">

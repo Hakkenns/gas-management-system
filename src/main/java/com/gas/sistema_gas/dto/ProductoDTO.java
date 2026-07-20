@@ -24,9 +24,10 @@ public class ProductoDTO {
         @DecimalMin(value = "0.00", message = "El stock mínimo no puede ser negativo")
         BigDecimal stockMinimo
     ){
-        @AssertTrue(message = "La capacidad debe respetar las reglas según unidad: KG >= 10 entero, L >= 20 entero, M >= 50 con decimales permitidos.")
+        @AssertTrue(message = "La capacidad no se valida en el servidor (controlada por el cliente)")
         public boolean isCapacidadValida() {
-            return validarCapacidad(capacidad, unidadMedida);
+            // Validación deshabilitada: el campo capacidad se controla ahora desde el cliente mediante select fijo
+            return true;
         }
 
         @AssertTrue(message = "La ganancia debe ser al menos S/1.00 y en incrementos de S/0.10.")
@@ -81,6 +82,8 @@ public class ProductoDTO {
         BigDecimal stockLlenos,
         Integer stockVacios,
         BigDecimal stockMinimo,
+        BigDecimal stockReservado,
+        BigDecimal stockDisponible,
         boolean tieneHistorialLotes,
         Integer estado
     ){}
@@ -105,9 +108,10 @@ public class ProductoDTO {
         BigDecimal stockMinimo,
         Integer estado
     ){
-        @AssertTrue(message = "La capacidad debe respetar las reglas según unidad: KG >= 10 entero, L >= 20 entero, M >= 50 con decimales permitidos.")
+        @AssertTrue(message = "La capacidad no se valida en el servidor (controlada por el cliente)")
         public boolean isCapacidadValida() {
-            return validarCapacidad(capacidad, unidadMedida);
+            // Validación deshabilitada: el campo capacidad se controla ahora desde el cliente mediante select fijo
+            return true;
         }
 
         @AssertTrue(message = "La ganancia debe ser al menos S/1.00 y en incrementos de S/0.10.")
@@ -141,7 +145,7 @@ public class ProductoDTO {
         private static boolean validarGanancia(BigDecimal ganancia) {
             if (ganancia == null || ganancia.compareTo(BigDecimal.valueOf(1.00)) < 0) {
                 return false;
-            }
+             }
             return ganancia.remainder(BigDecimal.valueOf(0.10)).compareTo(BigDecimal.ZERO) == 0;
         }
     }

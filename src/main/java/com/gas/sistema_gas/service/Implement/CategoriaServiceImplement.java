@@ -1,5 +1,17 @@
 package com.gas.sistema_gas.service.Implement;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -10,7 +22,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.CategoriaMapper;
 import com.gas.sistema_gas.Model.Categoria;
+import com.gas.sistema_gas.Model.CategoriaCapacidad;
+import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Repository.CategoriaCapacidadRepository;
 import com.gas.sistema_gas.Repository.CategoriaRepository;
+import com.gas.sistema_gas.Repository.ProductoRepository;
+import com.gas.sistema_gas.dto.CapacidadInfoDTO;
 import com.gas.sistema_gas.dto.CategoriaDTO;
 import com.gas.sistema_gas.service.CategoriaService;
 
@@ -24,6 +41,12 @@ public class CategoriaServiceImplement implements CategoriaService {
 
     @Autowired
     private CategoriaRepository categoriaRepository;
+
+    @Autowired
+    private ProductoRepository productoRepository;
+
+    @Autowired
+    private CategoriaCapacidadRepository categoriaCapacidadRepository;
 
     @Override
     @Transactional
@@ -44,6 +67,19 @@ public class CategoriaServiceImplement implements CategoriaService {
         Categoria categoria = categoriaMapper.toEntity(createDto);
 
         configurarBanderasPorTipoUnidad(categoria, createDto.tipoUnidad());
+
+        // Guardar capacidades asociadas
+        if (createDto.capacidades() != null && !createDto.capacidades().isEmpty()) {
+            List<CategoriaCapacidad> capacidades = createDto.capacidades().stream()
+                    .map(valor -> {
+                        CategoriaCapacidad cap = new CategoriaCapacidad();
+                        cap.setCategoria(categoria);
+                        cap.setValorCapacidad(BigDecimal.valueOf(valor));
+                        return cap;
+                    })
+                    .collect(Collectors.toList());
+            categoria.setCapacidades(capacidades);
+        }
 
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
@@ -68,6 +104,20 @@ public class CategoriaServiceImplement implements CategoriaService {
 
         configurarBanderasPorTipoUnidad(categoria, updateDto.tipoUnidad());
 
+        // Actualizar capacidades: eliminar existentes y crear nuevas
+        categoria.getCapacidades().clear();
+        if (updateDto.capacidades() != null && !updateDto.capacidades().isEmpty()) {
+            List<CategoriaCapacidad> nuevasCapacidades = updateDto.capacidades().stream()
+                    .map(valor -> {
+                        CategoriaCapacidad cap = new CategoriaCapacidad();
+                        cap.setCategoria(categoria);
+                        cap.setValorCapacidad(BigDecimal.valueOf(valor));
+                        return cap;
+                    })
+                    .collect(Collectors.toList());
+            categoria.getCapacidades().addAll(nuevasCapacidades);
+        }
+
         return categoriaMapper.toSimpleResponse(categoriaRepository.save(categoria));
     }
 
@@ -87,6 +137,12 @@ public class CategoriaServiceImplement implements CategoriaService {
         Categoria categoria = categoriaRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
 
+        // VALIDACIÓN DE INTEGRIDAD REFERENCIAL: Verificar si hay productos asociados
+        if (!productoRepository.findByCategoriaId(id).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta categoría no se puede eliminar porque tiene productos asociados.");
+        }
+
         categoria.setEstado(2);
         categoriaRepository.save(categoria);
     }
@@ -97,6 +153,41 @@ public class CategoriaServiceImplement implements CategoriaService {
         return categoriaRepository.findById(id)
                 .map(categoriaMapper::toSimpleResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
+    }
+
+    @Override
+    @Transactional
+    public CategoriaDTO.DetalleResponse findDetalleById(Long id) {
+        Categoria categoria = categoriaRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La categoría no existe"));
+
+        // Obtener productos de esta categoría para verificar capacidades en uso
+        List<Producto> productos = productoRepository.findByCategoriaId(id);
+        List<BigDecimal> capacidadesEnUso = productos.stream()
+                .map(Producto::getCapacidad)
+                .filter(cap -> cap != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // Construir lista de capacidades con flag enUso
+        List<CapacidadInfoDTO> capacidadesInfo = categoria.getCapacidades().stream()
+                .map(cap -> {
+                    boolean enUso = capacidadesEnUso.contains(cap.getValorCapacidad());
+                    return new CapacidadInfoDTO(cap.getValorCapacidad(), enUso);
+                })
+                .collect(Collectors.toList());
+
+        return new CategoriaDTO.DetalleResponse(
+                categoria.getId(),
+                categoria.getNombre(),
+                categoria.getDescripcion(),
+                categoria.getEstado(),
+                categoria.getUnidadMedida(),
+                categoria.getRequiereCapacidad(),
+                categoria.getEtiquetaCapacidad(),
+                categoria.getManejaEnvase(),
+                capacidadesInfo
+        );
     }
 
     // =========================================================================

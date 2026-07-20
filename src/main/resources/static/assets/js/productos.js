@@ -87,6 +87,56 @@ document.addEventListener("DOMContentLoaded", function () {
         infoStockMinimo.innerText = unidad === "M" ? "Alerta de stock bajo por metros" : "Alerta de stock bajo por unidad";
     }
 
+    async function cargarCapacidadesCategoria(categoriaId, selectedCapacidad = "") {
+        if (!categoriaId || !capacidadInput) {
+            return;
+        }
+
+        capacidadInput.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Seleccione una capacidad";
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        capacidadInput.appendChild(placeholder);
+
+        try {
+            const response = await fetch(`/categorias/${categoriaId}`);
+            if (!response.ok) {
+                throw new Error("No se pudo cargar la categoría");
+            }
+            const data = await response.json();
+            const unidad = data.unidadMedida || unidadMedidaSelect.value || "";
+            const etiqueta = data.etiquetaCapacidad || labelCapacidad.innerText || "Capacidad";
+            labelCapacidad.innerText = etiqueta;
+
+            const capacidades = Array.isArray(data.capacidades) ? data.capacidades : [];
+            capacidades.sort((a, b) => parseFloat(a.valor) - parseFloat(b.valor));
+
+            capacidades.forEach(cap => {
+                const option = document.createElement("option");
+                option.value = cap.valor;
+                // Mostrar solo el número de capacidad — la unidad se muestra en el campo separado
+                option.textContent = String(cap.valor);
+                if (String(cap.valor) === String(selectedCapacidad)) {
+                    option.selected = true;
+                }
+                capacidadInput.appendChild(option);
+            });
+
+            if (selectedCapacidad && !capacidades.some(cap => String(cap.valor) === String(selectedCapacidad))) {
+                const option = document.createElement("option");
+                option.value = selectedCapacidad;
+                // No añadir sufijos como "(actual)", mostrar sólo el número
+                option.textContent = String(selectedCapacidad);
+                option.selected = true;
+                capacidadInput.appendChild(option);
+            }
+        } catch (error) {
+            console.error("Error cargando capacidades de categoría:", error);
+        }
+    }
+
     let imagenesStaged = cargarImagenesStagedDesdeStorage();
 
     function cargarEstadoImagenStaged(productoId) {
@@ -139,6 +189,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const categoriaId = categoriaSelect.value;
         if (!categoriaId) {
             contenedorCapacidad.style.display = "none";
+            capacidadInput.innerHTML = "";
             contenedorStockVacios.style.display = "none";
             unidadMedidaSelect.value = "";
             if (contenedorRequiereEnvase) {
@@ -171,7 +222,7 @@ document.addEventListener("DOMContentLoaded", function () {
             capacidadInput.required = true;
         } else {
             contenedorCapacidad.style.display = "none";
-            capacidadInput.value = "";
+            capacidadInput.innerHTML = "";
             capacidadInput.required = false;
         }
 
@@ -217,27 +268,6 @@ document.addEventListener("DOMContentLoaded", function () {
             alert("Por favor, ingrese el nombre del producto.");
             return false;
         }
-
-        // Validación estricta de capacidad según unidad de medida
-        const unidadActual = unidadMedidaSelect.value;
-        if (unidadActual === "UND") {
-            capacidadInput.value = "";
-        } else {
-            const capVal = parseFloat(capacidadInput.value) || 0;
-            if (unidadActual === "KG" && capVal < 10) {
-                alert("KG debe ser >= 10");
-                return false;
-            }
-            if (unidadActual === "L" && capVal < 20) {
-                alert("L debe ser >= 20");
-                return false;
-            }
-            if (unidadActual === "M" && capVal < 50) {
-                alert("M debe ser >= 50");
-                return false;
-            }
-        }
-
         return true;
     }
 
@@ -245,6 +275,62 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!gananciaProductoInput) return;
         gananciaProductoInput.readOnly = !esEditable;
         gananciaProductoInput.style.backgroundColor = esEditable ? "#ffffff" : "#e9ecef";
+    }
+
+    // Bloquear la mayoría de campos cuando se entra en modo 'Editar producto'
+    function aplicarRestriccionesEdicionProducto() {
+        // Campos que se permiten editar: stockVacios, stockMinimo, descripcion
+        // Dejar imagenes y pestaña de imagen intacta
+
+        // Campos a bloquear (usar readonly en lugar de disabled para que FormData los lea)
+        const camposBloquear = [
+            nombreInput,
+            categoriaSelect,
+            capacidadInput,
+            unidadMedidaSelect,
+            precioCompraInput,
+            precioVentaInput,
+            gananciaProductoInput,
+            requiereEnvaseCheckbox,
+            document.getElementById('btn-buscar-categoria')
+        ];
+
+        camposBloquear.forEach(node => {
+            if (!node) return;
+            try {
+                node.readOnly = true;
+                node.style.backgroundColor = '#e9ecef';
+            } catch (e) {}
+        });
+
+        // Asegurar que los campos permitidos estén habilitados
+        if (stockVaciosInput) { stockVaciosInput.readOnly = false; stockVaciosInput.style.backgroundColor = ''; }
+        if (stockMinimoInput) { stockMinimoInput.readOnly = false; stockMinimoInput.style.backgroundColor = ''; }
+        if (descripcionInput) descripcionInput.readOnly = false;
+    }
+
+    function habilitarCamposPorDefecto() {
+        // Restaurar el estado esperado para CREAR (como estaba en la plantilla):
+        // - permitir editar: nombre, categoría, capacidad, ganancia, stockVacios, stockMinimo, descripcion, requiereEnvase
+        // - mantener readonly: precioCompra, precioVenta, unidadMedida
+
+        if (nombreInput) { nombreInput.readOnly = false; nombreInput.style.backgroundColor = ''; }
+        if (categoriaSelect) { categoriaSelect.readOnly = false; categoriaSelect.style.backgroundColor = ''; }
+        if (capacidadInput) { capacidadInput.readOnly = false; capacidadInput.style.backgroundColor = ''; }
+        if (gananciaProductoInput) { gananciaProductoInput.readOnly = false; gananciaProductoInput.style.backgroundColor = ''; }
+        if (stockVaciosInput) { stockVaciosInput.readOnly = false; stockVaciosInput.style.backgroundColor = ''; }
+        if (stockMinimoInput) { stockMinimoInput.readOnly = false; stockMinimoInput.style.backgroundColor = ''; }
+        if (descripcionInput) { descripcionInput.readOnly = false; descripcionInput.style.backgroundColor = ''; }
+        if (requiereEnvaseCheckbox) { requiereEnvaseCheckbox.readOnly = false; }
+
+        // Mantener precio y unidad readonly (como en la plantilla)
+        if (precioCompraInput) { precioCompraInput.readOnly = true; precioCompraInput.style.backgroundColor = '#e9ecef'; }
+        if (precioVentaInput) { precioVentaInput.readOnly = true; precioVentaInput.style.backgroundColor = '#e9ecef'; }
+        if (unidadMedidaSelect) { unidadMedidaSelect.readOnly = true; unidadMedidaSelect.style.backgroundColor = '#e9ecef'; }
+
+        // Rehabilitar el botón de buscar categoría
+        const btnBuscar = document.getElementById('btn-buscar-categoria');
+        if (btnBuscar) btnBuscar.disabled = false;
     }
 
     // ============ MANEJADORES DEL MODAL DE BÚSQUEDA DE CATEGORÍAS ============
@@ -303,6 +389,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Disparar cambios
             actualizarVisibilidadCampos();
+            cargarCapacidadesCategoria(categoriaId);
             actualizarMensajeGanancia();
             actualizarMensajeStockMinimo();
 
@@ -416,7 +503,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     const productoId = idInput.value;
                     limpiarEstadoImagenStaged(productoId);
                     if (window.jQuery) window.jQuery("#modal-producto").modal("hide");
-                    recargarTabla();
+                    // Recargar tabla preservando la página actual
+                    recargarTabla(true);
                 } else {
                     alert("Atención: " + res.message);
                 }
@@ -432,10 +520,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
             idInput.value = editButton.dataset.id;
             nombreInput.value = editButton.dataset.nombre;
+            descripcionInput.value = editButton.dataset.descripcion || "";
             categoriaSelect.value = editButton.dataset.idcategoria;
+            const categoriaId = editButton.dataset.idcategoria;
 
             // Llenar el display con el nombre de la categoría
-            const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${editButton.dataset.idcategoria}"]`);
+            const filaCategoria = tablaBusquedaCategorias.querySelector(`tr[data-id="${categoriaId}"]`);
             if (filaCategoria) {
                 categoriaDisplay.value = filaCategoria.dataset.nombre;
             }
@@ -443,6 +533,8 @@ document.addEventListener("DOMContentLoaded", function () {
             precioCompraInput.value = editButton.dataset.preciocompra;
             precioVentaInput.value = editButton.dataset.precioventa;
             stockMinimoInput.value = editButton.dataset.stockminimo;
+            // Asegurar que el campo de stock llenos muestre el valor real (el template no lo incluía antes)
+            if (stockLlenosInput) stockLlenosInput.value = editButton.dataset.stockllenos || 0;
 
             // =====================================================================
             // 🌟 CORRECCIÓN VISUAL: Inyecta la Ganancia Base real en el modal
@@ -456,7 +548,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
             actualizarVisibilidadCampos();
 
-            if (capacidadInput) capacidadInput.value = editButton.dataset.capacidad || "";
+            if (capacidadInput) {
+                cargarCapacidadesCategoria(categoriaId, editButton.dataset.capacidad || "");
+            }
             if (stockVaciosInput) stockVaciosInput.value = editButton.dataset.stockvacios || 0;
             requiereEnvaseCheckbox.checked = editButton.dataset.requiereenvase === "true";
 
@@ -473,6 +567,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 .then(lotes => {
                     const tieneLotes = Array.isArray(lotes) && lotes.length > 0;
                     actualizarGananciaEditable(!tieneLotes);
+                    // Aplicar restricciones de edición: bloquear campos que no deben modificarse
+                    aplicarRestriccionesEdicionProducto();
+                    // Forzar carga de capacidad seleccionada después de cargar las opciones
+                    if (capacidadInput && editButton.dataset.capacidad) {
+                        setTimeout(() => {
+                            capacidadInput.value = editButton.dataset.capacidad;
+                        }, 50);
+                    }
                     if (window.jQuery) window.jQuery("#modal-producto").modal("show");
                 })
                 .catch(err => {
@@ -527,7 +629,8 @@ document.addEventListener("DOMContentLoaded", function () {
                         if (window.jQuery) {
                             window.jQuery("#toast-estado").toast("show");
                         }
-                        recargarTabla();
+                        // Recargar tabla preservando página actual
+                        recargarTabla(true);
                     } else {
                         alert("Error al cambiar de estado: " + res.message);
                     }
@@ -589,14 +692,229 @@ document.addEventListener("DOMContentLoaded", function () {
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
         actualizarGananciaEditable(true);
+        // Asegurar que los campos estén habilitados en creación
+        habilitarCamposPorDefecto();
         $("#modal-producto").modal("show");
     });
 
-    function recargarTabla() {
+    function obtenerFilaProducto(productoId) {
+        return document.querySelector(`#tabla-productos tbody tr[data-id="${productoId}"]`);
+    }
+
+    function mapUnidadMedida(unidad) {
+        return unidad === 'KG' ? 'KG'
+            : unidad === 'L' ? 'Litros'
+            : unidad === 'M' ? 'Metros'
+            : unidad === 'UND' ? 'UND'
+            : '-';
+    }
+
+    function formatMoney(valor) {
+        const numero = parseFloat(valor);
+        return Number.isFinite(numero) ? `S/ ${numero.toFixed(2)}` : 'S/ 0.00';
+    }
+
+    function renderEnvaseBadge(requiereEnvase) {
+        return requiereEnvase
+            ? '<span class="badge badge-info">SÍ</span>'
+            : '<span class="badge badge-secondary">NO</span>';
+    }
+
+    function renderEstadoBadge(estado) {
+        return estado === '1' || estado === 1
+            ? '<span class="badge badge-success">ACTIVO</span>'
+            : '<span class="badge badge-danger">INACTIVO</span>';
+    }
+
+    function redrawRow(row) {
+        if (window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable('#tabla-productos')) {
+            const dataTable = $('#tabla-productos').DataTable();
+            dataTable.row(row).invalidate('dom').draw(false);
+        }
+    }
+
+    function actualizarFilaProducto(productoId, datos) {
+        const row = obtenerFilaProducto(productoId);
+        if (!row) {
+            return;
+        }
+
+        const cells = row.cells;
+
+        if (datos.nombre !== undefined) {
+            cells[2].textContent = datos.nombre;
+        }
+        if (datos.nombreCategoria !== undefined) {
+            cells[3].textContent = datos.nombreCategoria;
+        }
+        if (datos.capacidad !== undefined) {
+            cells[4].textContent = datos.capacidad || '-';
+        }
+        if (datos.unidadMedida !== undefined) {
+            cells[5].textContent = mapUnidadMedida(datos.unidadMedida);
+        }
+        if (datos.precioCompra !== undefined) {
+            cells[6].textContent = formatMoney(datos.precioCompra);
+        }
+        if (datos.precioVenta !== undefined) {
+            cells[7].textContent = formatMoney(datos.precioVenta);
+        }
+        if (datos.stockLlenos !== undefined) {
+            cells[8].textContent = datos.stockLlenos;
+        }
+        if (datos.stockVacios !== undefined) {
+            cells[9].textContent = datos.stockVacios;
+        }
+        if (datos.stockMinimo !== undefined) {
+            cells[10].textContent = datos.stockMinimo;
+        }
+        if (datos.requiereEnvase !== undefined) {
+            cells[11].innerHTML = renderEnvaseBadge(datos.requiereEnvase);
+        }
+
+        const editButton = row.querySelector('.btn-editar-producto');
+        if (editButton) {
+            if (datos.nombre !== undefined) editButton.dataset.nombre = datos.nombre;
+            if (datos.idCategoria !== undefined) editButton.dataset.idcategoria = datos.idCategoria;
+            if (datos.capacidad !== undefined) editButton.dataset.capacidad = datos.capacidad;
+            if (datos.unidadMedida !== undefined) editButton.dataset.unidadmedida = datos.unidadMedida;
+            if (datos.precioCompra !== undefined) editButton.dataset.preciocompra = datos.precioCompra;
+            if (datos.precioVenta !== undefined) editButton.dataset.precioventa = datos.precioVenta;
+            if (datos.stockLlenos !== undefined) editButton.dataset.stockllenos = datos.stockLlenos;
+            if (datos.stockMinimo !== undefined) editButton.dataset.stockminimo = datos.stockMinimo;
+            if (datos.stockVacios !== undefined) editButton.dataset.stockvacios = datos.stockVacios;
+            if (datos.requiereEnvase !== undefined) editButton.dataset.requiereenvase = datos.requiereEnvase;
+            if (datos.ganancia !== undefined) editButton.dataset.ganancia = datos.ganancia;
+        }
+
+        const descButton = row.querySelector('.btn-ver-descripcion');
+        if (descButton) {
+            if (datos.nombre !== undefined) descButton.dataset.nombre = datos.nombre;
+            if (datos.descripcion !== undefined) descButton.dataset.descripcion = datos.descripcion;
+            if (datos.ganancia !== undefined) descButton.dataset.ganancia = datos.ganancia;
+        }
+
+        const catalogoButton = row.querySelector('.btn-catalogo-proveedores');
+        if (catalogoButton && datos.nombre !== undefined) {
+            catalogoButton.dataset.nombre = datos.nombre;
+        }
+
+        const verLotesButton = row.querySelector('.btn-ver-lotes');
+        if (verLotesButton && datos.nombre !== undefined) {
+            verLotesButton.dataset.nombre = datos.nombre;
+        }
+
+        const stateCell = cells[12];
+        const currentEstado = datos.estado !== undefined ? datos.estado : stateCell.textContent.includes('ACTIVO') ? '1' : '0';
+        stateCell.innerHTML = renderEstadoBadge(currentEstado);
+
+        const btnEliminar = row.querySelector('.btn-eliminar-producto');
+        if (btnEliminar && datos.stockLlenos !== undefined) {
+            const hasStock = parseInt(datos.stockLlenos, 10) > 0;
+            btnEliminar.disabled = hasStock;
+            btnEliminar.classList.toggle('disabled', hasStock);
+            btnEliminar.classList.toggle('btn-secondary', hasStock);
+            btnEliminar.classList.toggle('btn-danger', !hasStock);
+            btnEliminar.title = hasStock
+                ? 'No se puede eliminar por historial de inventario'
+                : 'Eliminar';
+        }
+
+        const btnEstado = row.querySelector('.btn-estado-producto');
+        if (btnEstado) {
+            const estado = datos.estado !== undefined ? datos.estado.toString() : currentEstado;
+            if (estado === '1') {
+                btnEstado.dataset.estado = '0';
+                btnEstado.className = 'btn btn-secondary btn-xs btn-estado-producto';
+                const hasStock = datos.stockLlenos !== undefined ? parseInt(datos.stockLlenos, 10) > 0 : false;
+                btnEstado.disabled = hasStock;
+                btnEstado.classList.toggle('disabled', hasStock);
+                btnEstado.title = hasStock
+                    ? 'No se puede inactivar: Aún cuenta con stock disponible en el inventario'
+                    : 'Inhabilitar';
+                btnEstado.innerHTML = '<i class="fas fa-ban"></i>';
+            } else {
+                btnEstado.dataset.estado = '1';
+                btnEstado.className = 'btn btn-success btn-xs btn-estado-producto';
+                btnEstado.disabled = false;
+                btnEstado.title = 'Activar';
+                btnEstado.innerHTML = '<i class="fas fa-check"></i>';
+            }
+        }
+
+        redrawRow(row);
+    }
+
+    function actualizarEstadoFila(productoId, nuevoEstado) {
+        const row = obtenerFilaProducto(productoId);
+        if (!row) {
+            return;
+        }
+
+        const cells = row.cells;
+        cells[12].innerHTML = renderEstadoBadge(nuevoEstado);
+
+        const btnEstado = row.querySelector('.btn-estado-producto');
+        if (btnEstado) {
+            if (nuevoEstado === '1') {
+                btnEstado.dataset.estado = '0';
+                btnEstado.className = 'btn btn-secondary btn-xs btn-estado-producto';
+                const stockLlenos = parseInt(cells[8].textContent, 10) || 0;
+                const disabled = stockLlenos > 0;
+                btnEstado.disabled = disabled;
+                btnEstado.classList.toggle('disabled', disabled);
+                btnEstado.title = disabled
+                    ? 'No se puede inactivar: Aún cuenta con stock disponible en el inventario'
+                    : 'Inhabilitar';
+                btnEstado.innerHTML = '<i class="fas fa-ban"></i>';
+            } else {
+                btnEstado.dataset.estado = '1';
+                btnEstado.className = 'btn btn-success btn-xs btn-estado-producto';
+                btnEstado.disabled = false;
+                btnEstado.title = 'Activar';
+                btnEstado.innerHTML = '<i class="fas fa-check"></i>';
+            }
+        }
+
+        redrawRow(row);
+    }
+
+    function recargarTabla(preservarPagina = false) {
+        const contenedor = document.getElementById("contenedor-tabla-productos");
+        if (!contenedor) return;
+
+        // Capturar página actual antes de destruir
+        let paginaActual = 0;
+        if (preservarPagina && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable('#tabla-productos')) {
+            paginaActual = $('#tabla-productos').DataTable().page.info().page;
+        }
+
+        const oldWrapper = contenedor.querySelector('.dataTables_wrapper');
+        if (oldWrapper) {
+            oldWrapper.remove();
+        }
+
+        const oldTable = contenedor.querySelector('#tabla-productos');
+        if (oldTable && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(oldTable)) {
+            $(oldTable).DataTable().clear().destroy();
+        }
+
         fetch("/productos/tabla")
             .then(response => response.text())
             .then(html => {
-                document.getElementById("contenedor-tabla-productos").innerHTML = html;
+                contenedor.innerHTML = html;
+
+                if (window.jQuery && $.fn.DataTable) {
+                    initTablaProductos();
+                    // Restaurar página si se solicitó
+                    if (preservarPagina && paginaActual > 0) {
+                        setTimeout(() => {
+                            if ($.fn.dataTable.isDataTable('#tabla-productos')) {
+                                $('#tabla-productos').DataTable().page(paginaActual).draw(false);
+                            }
+                        }, 100);
+                    }
+                }
             })
             .catch(err => console.error("Error al refrescar la tabla:", err));
     }
@@ -990,3 +1308,283 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 });
+
+// Inicialización de DataTables para Productos
+function initTablaProductos() {
+    if ($.fn.DataTable) {
+        const table = $('#tabla-productos');
+        if ($.fn.dataTable.isDataTable(table)) {
+            table.DataTable().clear().destroy();
+            table.removeClass('dataTable');
+            table.removeAttr('style');
+        }
+
+        table.css('width', '100%');
+
+        const dataTable = table.DataTable({
+            dom: 'rt<"bottom"ip><"clear">',
+            paging: true,
+            pageLength: 10,
+            lengthMenu: [[10, 20, 30, 40, 50], [10, 20, 30, 40, 50]],
+            lengthChange: true,
+            searching: true,
+            ordering: true,
+            info: true,
+            autoWidth: false,
+            responsive: true,
+            pagingType: 'simple',
+            language: {
+                search: 'Buscar:',
+                lengthMenu: 'Mostrar _MENU_ registros',
+                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
+                infoEmpty: 'No hay registros',
+                infoFiltered: '(filtrado de _MAX_ registros)',
+                zeroRecords: 'No se encontraron resultados',
+                paginate: {
+                    previous: 'Anterior',
+                    next: 'Siguiente'
+                }
+            }
+        });
+
+        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
+        $(window).off('resize.productosTable');
+        $(window).on('resize.productosTable', function () {
+            dataTable.columns.adjust().draw();
+        });
+
+        // Asegurar que el ancho de la tabla se recalcula correctamente al inicializar
+        dataTable.columns.adjust().draw();
+
+        // Conectar controles personalizados
+        const $lengthSelect = $('#productos-length');
+        const $searchInput = $('#productos-search');
+
+        // Cambiar número de registros por página
+        if ($lengthSelect.length) {
+            $lengthSelect.on('change', function () {
+                const pageLength = parseInt($(this).val(), 10);
+                dataTable.page.len(pageLength).draw();
+            });
+        }
+
+        // Búsqueda personalizada
+        if ($searchInput.length) {
+            $searchInput.on('keyup', function () {
+                dataTable.search(this.value).draw();
+            });
+        }
+
+        // Ocultar controles nativos duplicados de DataTables
+        const $wrapper = table.closest('.dataTables_wrapper');
+        if ($wrapper.length) {
+            const wrapperEl = $wrapper[0];
+            const paginateContainer = wrapperEl.querySelector('.dataTables_paginate');
+            if (paginateContainer) {
+                paginateContainer.style.display = 'none';
+            }
+
+            const defaultInfo = wrapperEl.querySelector('.dataTables_info');
+            if (defaultInfo) {
+                defaultInfo.style.display = 'none';
+            }
+
+            const pagerRow = document.createElement('div');
+            pagerRow.className = 'compras-pager-row';
+            wrapperEl.appendChild(pagerRow);
+
+            const infoBar = document.createElement('div');
+            infoBar.className = 'compras-info-bar';
+            pagerRow.appendChild(infoBar);
+
+            const customPager = document.createElement('div');
+            customPager.className = 'compras-custom-pagination';
+            customPager.setAttribute('aria-label', 'Paginación de productos');
+            pagerRow.appendChild(customPager);
+
+            injectCustomPaginationStyles();
+            renderCustomInfo(dataTable, infoBar);
+            renderCustomPagination(dataTable, customPager);
+            attachSwipePagination(wrapperEl, dataTable);
+
+            dataTable.on('draw.dt', () => {
+                renderCustomInfo(dataTable, infoBar);
+                renderCustomPagination(dataTable, customPager);
+            });
+        }
+    }
+}
+
+// Inicializar tabla cuando se carga la página
+document.addEventListener('DOMContentLoaded', function() {
+    if ($.fn.DataTable) {
+        initTablaProductos();
+    }
+});
+
+// Funciones de paginación personalizada (reutilizadas de compras.js)
+function injectCustomPaginationStyles() {
+    if (document.getElementById('compras-custom-pagination-style')) {
+        return;
+    }
+
+    const style = document.createElement('style');
+    style.id = 'compras-custom-pagination-style';
+    style.textContent = `
+        .compras-info-bar {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            margin: 10px 0 6px;
+            font-size: 0.95rem;
+            color: #495057;
+            font-weight: 600;
+            visibility: visible !important;
+            opacity: 1 !important;
+            flex: 1;
+        }
+        .compras-pager-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-top: 4px;
+            gap: 12px;
+        }
+        .compras-custom-pagination {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 0;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+            overflow: hidden;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        .compras-custom-pagination .page-btn {
+            min-width: 38px;
+            height: 38px;
+            padding: 0 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            background: #fff;
+            color: #343a40;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .compras-custom-pagination .page-btn.active {
+            background: #0d6efd;
+            color: #fff;
+            border-color: #0d6efd;
+        }
+        .compras-custom-pagination .page-btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+        .compras-custom-pagination .page-btn:hover:not(:disabled) {
+            background: #e9ecef;
+        }
+        /* Ocultar controles nativos duplicados de DataTables */
+        .dataTables_wrapper .dataTables_length:not(:first-of-type),
+        .dataTables_wrapper .dataTables_filter:not(:first-of-type) {
+            display: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function renderCustomInfo(dataTable, infoElement) {
+    const info = dataTable.page.info();
+    const totalRecords = info.recordsTotal;
+    const start = totalRecords === 0 ? 0 : info.start + 1;
+    const end = totalRecords === 0 ? 0 : info.end;
+
+    infoElement.textContent = totalRecords === 0
+        ? 'No hay registros para mostrar'
+        : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
+}
+
+function renderCustomPagination(dataTable, pagerElement) {
+    const info = dataTable.page.info();
+    const totalPages = info.pages;
+    const currentPage = info.page;
+
+    pagerElement.innerHTML = '';
+
+    if (totalPages <= 1) {
+        pagerElement.style.display = 'none';
+        return;
+    }
+
+    pagerElement.style.display = 'flex';
+    pagerElement.style.visibility = 'visible';
+    pagerElement.style.opacity = '1';
+
+    const createPageButton = (label, pageIndex, isActive = false, disabled = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.className = `page-btn${isActive ? ' active' : ''}`;
+        button.setAttribute('aria-current', isActive ? 'page' : 'false');
+
+        if (disabled) {
+            button.disabled = true;
+        } else {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                }
+                dataTable.page(pageIndex).draw(false);
+            });
+        }
+
+        return button;
+    };
+
+    const prevButton = createPageButton('‹', Math.max(0, currentPage - 1), false, currentPage === 0);
+    prevButton.setAttribute('aria-label', 'Página anterior');
+    pagerElement.appendChild(prevButton);
+
+    const startPage = Math.max(0, Math.min(currentPage - 1, totalPages - 3));
+    const endPage = Math.min(totalPages - 1, startPage + 2);
+
+    for (let pageIndex = startPage; pageIndex <= endPage; pageIndex += 1) {
+        const pageButton = createPageButton(String(pageIndex + 1), pageIndex, pageIndex === currentPage);
+        pagerElement.appendChild(pageButton);
+    }
+
+    const nextButton = createPageButton('›', Math.min(totalPages - 1, currentPage + 1), false, currentPage >= totalPages - 1);
+    nextButton.setAttribute('aria-label', 'Página siguiente');
+    pagerElement.appendChild(nextButton);
+}
+
+function attachSwipePagination(wrapperElement, dataTable) {
+    let touchStartX = 0;
+
+    wrapperElement.addEventListener('touchstart', (event) => {
+        touchStartX = event.touches[0].clientX;
+    }, { passive: true });
+
+    wrapperElement.addEventListener('touchend', (event) => {
+        const touchEndX = event.changedTouches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+
+        if (Math.abs(deltaX) < 50) {
+            return;
+        }
+
+        if (deltaX < 0) {
+            dataTable.page('next').draw(false);
+        } else {
+            dataTable.page('previous').draw(false);
+        }
+    }, { passive: true });
+}

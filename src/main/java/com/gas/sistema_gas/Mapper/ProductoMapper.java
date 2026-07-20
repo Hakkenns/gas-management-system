@@ -24,6 +24,7 @@ public interface ProductoMapper {
     @Mapping(source = "descripcion", target = "descripcion")
     @Mapping(source = "estado", target = "estado")
     @Mapping(target = "tieneHistorialLotes", constant = "false")
+    @Mapping(target = "stockDisponible", expression = "java(producto.getStockDisponible())")
     ProductoDTO.SimpleResponse toSimpleResponse(Producto producto);
 
     //paraupdate esto es el qeui nos esta fallando

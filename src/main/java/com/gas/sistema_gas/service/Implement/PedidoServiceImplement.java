@@ -301,6 +301,9 @@ public class PedidoServiceImplement implements PedidoService {
         BigDecimal montoAcumulado = BigDecimal.ZERO;
 
         for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
+            if (item.idProducto() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del producto no puede ser nulo");
+            }
             Producto producto = productoRepository.findById(item.idProducto())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
@@ -315,23 +318,32 @@ public class PedidoServiceImplement implements PedidoService {
 
             BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
             
-            // Calcular el stock real en caliente desde los lotes
-            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                    .stream()
-                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            // Calcular el stock disponible (stock_llenos - stock_reservado)
+            BigDecimal stockLlenos = producto.getStockLlenos() != null ? producto.getStockLlenos() : BigDecimal.ZERO;
+            BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+            BigDecimal stockDisponible = stockLlenos.subtract(stockReservado);
 
             if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Stock insuficiente para " + producto.getNombre());
             }
 
-            // Descontar por PEPS en los lotes
-            inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
-
-            // Mantener sincronizado el campo estático stock_llenos de la tabla productos
-            BigDecimal nuevoStockProducto = stockDisponible.subtract(cantidadSolicitada);
-            producto.setStockLlenos(nuevoStockProducto);
+            // Si es venta LOCAL (ENTREGADO directo): descontar stock real y NO reservar
+            // Si es DOMICILIO (PENDIENTE): solo reservar stock
+            if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+                // Descontar stock real por PEPS
+                inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
+                // Sincronizar stock_llenos desde lotes
+                BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                producto.setStockLlenos(stockActualLotes);
+            } else {
+                // DOMICILIO: solo RESERVAR stock (sumar a stock_reservado)
+                BigDecimal nuevoReservado = stockReservado.add(cantidadSolicitada);
+                producto.setStockReservado(nuevoReservado);
+            }
             productoRepository.save(producto);
 
             DetallePedido detalle = new DetallePedido();
@@ -380,8 +392,11 @@ public class PedidoServiceImplement implements PedidoService {
         BigDecimal totalPagos = BigDecimal.ZERO;
         if (!pagosDto.isEmpty()) {
             for (PedidoDTO.PagoCreate pagoDto : pagosDto) {
-                if (pagoDto == null || pagoDto.idMetodoPago() == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cada pago debe incluir un método de pago");
+                if (pagoDto == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pago inválido en la solicitud");
+                }
+                if (pagoDto.idMetodoPago() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del método de pago no puede ser nulo");
                 }
                 if (pagoDto.monto() == null || pagoDto.monto().compareTo(BigDecimal.ZERO) <= 0) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto de cada pago debe ser mayor a cero");
@@ -497,6 +512,52 @@ public class PedidoServiceImplement implements PedidoService {
         }
 
         pedido.setEstadoPedido(estadoNormalizado);
+
+        // ===== CONTROL DE INVENTARIO SEGÚN ESTADOS =====
+        
+        // Si pasa a CARGADO: descuenta stock real y libera reserva (idempotente)
+        if ("CARGADO".equals(estadoNormalizado) && !"CARGADO".equals(estadoActual) 
+                && !"EN_CAMINO".equals(estadoActual) && !"EN_DOMICILIO".equals(estadoActual)
+                && !"ENTREGADO".equals(estadoActual)) {
+            
+            List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+            for (DetallePedido detalle : detalles) {
+                Producto producto = detalle.getProducto();
+                BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
+                
+                // Descontar stock real por PEPS
+                inventarioLoteService.descontarStockPorPEPS(producto.getId(), cant);
+                
+                // Sincronizar stock_llenos desde lotes
+                BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                producto.setStockLlenos(stockActualLotes);
+                
+                // Restar la reserva (libera el stock_reservado)
+                BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+                BigDecimal nuevaReserva = reservadoActual.subtract(cant);
+                producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
+                
+                productoRepository.save(producto);
+            }
+        }
+
+        // Si ANULA desde PENDIENTE: libera solo la reserva
+        if ("ANULADO".equals(estadoNormalizado)) {
+            List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+            for (DetallePedido detalle : detalles) {
+                Producto producto = detalle.getProducto();
+                BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
+                
+                BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+                BigDecimal nuevaReserva = reservadoActual.subtract(cant);
+                producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
+                
+                productoRepository.save(producto);
+            }
+        }
 
         if ("ENTREGADO".equals(estadoNormalizado)) {
             pedido.setFechaEntrega(pedido.getFechaEntrega() != null ? pedido.getFechaEntrega() : LocalDateTime.now());

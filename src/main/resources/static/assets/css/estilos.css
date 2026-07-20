@@ -218,7 +218,7 @@ body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
     position: fixed;
     top: 20px;
     right: 20px;
-
+    z-index: 1050;
 }
 
 #modal-buscar-proveedor {
@@ -251,6 +251,17 @@ body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
     height: 4px;
     background-color: #28a745; /* El mismo verde de éxito */
     animation: progresoToast 3500ms linear forwards; /* Sincronizado con el data-delay */
+}
+
+/* Ocultar flechas del input number en todos los navegadores */
+#input-nueva-capacidad::-webkit-outer-spin-button,
+#input-nueva-capacidad::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#input-nueva-capacidad[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 /*DESDE AQUI SERA EL ESTILO DE LA ALERTA*/

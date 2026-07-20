@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -48,7 +50,8 @@ public class Categoria {
     @Column(name = "maneja_envase", nullable = false)
     private Boolean manejaEnvase = false;
 
-
+    @OneToMany(mappedBy = "categoria", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<CategoriaCapacidad> capacidades = new ArrayList<>();
 
     // Campos de auditoría según tu SQL
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")

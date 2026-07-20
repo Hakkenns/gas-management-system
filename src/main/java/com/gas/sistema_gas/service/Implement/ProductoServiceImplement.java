@@ -110,6 +110,8 @@ public class ProductoServiceImplement implements ProductoService {
                                                         suma,
                                                         base.stockVacios(),
                                                         base.stockMinimo(),
+                                                        base.stockReservado(),
+                                                        base.stockDisponible(),
                                                         tieneHistorialLotes,
                                                         base.estado());
                                 })
@@ -408,6 +410,8 @@ public class ProductoServiceImplement implements ProductoService {
                                                         suma,
                                                         base.stockVacios(),
                                                         base.stockMinimo(),
+                                                        base.stockReservado(),
+                                                        base.stockDisponible(),
                                                         tieneHistorialLotes,
                                                         base.estado());
                                 })
@@ -460,6 +464,8 @@ public class ProductoServiceImplement implements ProductoService {
                                                                         suma,
                                                                         base.stockVacios(),
                                                                         base.stockMinimo(),
+                                                                        base.stockReservado(),
+                                                                        base.stockDisponible(),
                                                                         tieneHistorialLotes,
                                                                         base.estado());
                                 })

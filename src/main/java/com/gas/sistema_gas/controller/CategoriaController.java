@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 import com.gas.sistema_gas.dto.CategoriaDTO;
 import com.gas.sistema_gas.service.CategoriaService;
 import com.gas.sistema_gas.service.OpcionService;
@@ -44,6 +48,12 @@ public class CategoriaController {
         return "views/categoria :: tablaCategorias";
     }
 
+    @GetMapping("/{id}")
+    @ResponseBody
+    public CategoriaDTO.DetalleResponse getCategoriaDetalle(@PathVariable Long id) {
+        return categoriaService.findDetalleById(id);
+    }
+
     @PostMapping
     public String guardarCategoria(@Valid CategoriaDTO.Create categoriaDto,
             BindingResult result,
@@ -60,10 +70,9 @@ public class CategoriaController {
         if (id == null) {
             categoriaService.createCategory(categoriaDto);
         } else {
-            // CORREGIDO: Ahora enviamos también el 'tipoUnidad' al actualizar
             categoriaService.updateCategory(id,
                     new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion(),
-                            categoriaDto.tipoUnidad()));
+                            categoriaDto.tipoUnidad(), categoriaDto.capacidades()));
         }
 
         return "redirect:/categorias";
@@ -73,19 +82,49 @@ public class CategoriaController {
     @ResponseBody
     public Map<String, Object> guardarCategoriaAjax(@RequestParam(required = false) Long id,
             @Valid CategoriaDTO.Create categoriaDto,
-            BindingResult result) {
+            BindingResult result,
+            @RequestParam(value = "capacidades", required = false) String capacidadesStr) {
         if (result.hasErrors()) {
             String message = result.getAllErrors().get(0).getDefaultMessage();
             return Map.of("status", "ERROR", "message", message);
         }
 
+        // Parseo manual ultra-seguro del String de capacidades separadas por comas
+        List<BigDecimal> listaCapacidades = new ArrayList<>();
+        if (capacidadesStr != null && !capacidadesStr.trim().isEmpty()) {
+            try {
+                // Limpiar corchetes y comillas
+                String limpio = capacidadesStr.replace("[", "").replace("]", "").replace("\"", "").trim();
+                if (!limpio.isEmpty()) {
+                    // Separar por comas y convertir a BigDecimal
+                    String[] partes = limpio.split(",");
+                    for (String parte : partes) {
+                        String valor = parte.trim();
+                        if (!valor.isEmpty()) {
+                            listaCapacidades.add(new BigDecimal(valor));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Si falla el parseo, continuar con lista vacía
+            }
+        }
+
+        // Convertir List<BigDecimal> a List<Double> para el DTO
+        List<Double> listaCapacidadesDouble = listaCapacidades.stream()
+                .map(BigDecimal::doubleValue)
+                .collect(Collectors.toList());
+
+        CategoriaDTO.Create finalDto = new CategoriaDTO.Create(
+                categoriaDto.nombre(), categoriaDto.descripcion(),
+                categoriaDto.tipoUnidad(), listaCapacidadesDouble);
+
         if (id == null) {
-            categoriaService.createCategory(categoriaDto);
+            categoriaService.createCategory(finalDto);
         } else {
-            // CORREGIDO: Ahora enviamos también el 'tipoUnidad' en la petición por AJAX
             categoriaService.updateCategory(id,
                     new CategoriaDTO.Update(categoriaDto.nombre(), categoriaDto.descripcion(),
-                            categoriaDto.tipoUnidad()));
+                            categoriaDto.tipoUnidad(), listaCapacidadesDouble));
         }
 
         return Map.of("status", "OK");
@@ -111,7 +150,8 @@ public class CategoriaController {
             categoriaService.deleteCategory(id);
             return Map.of("status", "OK");
         } catch (Exception e) {
-            return Map.of("status", "ERROR", "message", "No se pudo eliminar la categoría.");
+            String mensaje = e.getMessage() != null ? e.getMessage() : "No se pudo eliminar la categoría.";
+            return Map.of("status", "ERROR", "message", mensaje);
         }
     }
 }
