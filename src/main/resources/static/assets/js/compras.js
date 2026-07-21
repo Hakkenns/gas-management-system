@@ -214,6 +214,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         renderizarFilas();
+
+        // Limpiar campos del formulario después de agregar el producto
+        if (selectProd) selectProd.value = '';
+        if (inputNombreProd) inputNombreProd.value = '';
+        if (inputUnidad) inputUnidad.value = '';
+        if (inputCapacidad) inputCapacidad.value = '';
+        if (inputCategoria) inputCategoria.value = '';
+        if (inputCant) inputCant.value = '1';
+        if (inputPrecio) inputPrecio.value = '';
     });
 
     function renderizarFilas() {
@@ -249,6 +258,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 renderizarFilas();
             });
         });
+
+        // Bloquear/desbloquear el selector de proveedor según si hay productos en el detalle
+        actualizarEstadoProveedor();
+    }
+
+    function actualizarEstadoProveedor() {
+        const tieneProductos = arrayDetalles.length > 0;
+        const inputProveedor = document.getElementById('input-proveedor');
+        const displayProveedor = document.getElementById('display-proveedor');
+        const btnBuscarProveedor = document.getElementById('btn-buscar-proveedor');
+
+        if (tieneProductos) {
+            // Deshabilitar el campo proveedor para evitar cambios
+            if (displayProveedor) displayProveedor.setAttribute('disabled', 'disabled');
+            if (btnBuscarProveedor) btnBuscarProveedor.setAttribute('disabled', 'disabled');
+        } else {
+            // Habilitar el campo proveedor
+            if (displayProveedor) displayProveedor.removeAttribute('disabled');
+            if (btnBuscarProveedor) btnBuscarProveedor.removeAttribute('disabled');
+        }
     }
 
     // Guardar el formulario completo vía AJAX enviando RequestBody
