@@ -158,7 +158,12 @@ public class PedidoServiceImplement implements PedidoService {
     @Override
     @Transactional
     public PedidoDTO.SimpleResponse createOrder(PedidoDTO.Create createDto, Long idUsuarioLogueado) {
-        if (createDto.detalles() == null || createDto.detalles().isEmpty()) {
+        boolean hayDetallesGas = createDto.detalles() != null && !createDto.detalles().isEmpty();
+        boolean hayEnvaseVenta = createDto.envaseMovimientos() != null 
+            && "VENTA".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
+            && createDto.envaseMovimientos().stream().anyMatch(e -> e.cantidad() != null && e.cantidad() > 0);
+
+        if (!hayDetallesGas && !hayEnvaseVenta) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe agregar al menos un detalle de venta");
         }
 
@@ -300,79 +305,138 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
 
-        for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
-            if (item.idProducto() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del producto no puede ser nulo");
-            }
-            Producto producto = productoRepository.findById(item.idProducto())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
+        if (createDto.detalles() != null) {
+            for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
+                if (item.idProducto() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del producto no puede ser nulo");
+                }
+                Producto producto = productoRepository.findById(item.idProducto())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-            if (item.cantidad() == null || item.cantidad() < 1) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "La cantidad debe ser mayor a cero");
-            }
+                if (item.cantidad() == null || item.cantidad() < 1) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "La cantidad debe ser mayor a cero");
+                }
 
-            BigDecimal precioUnitario = item.precioUnitario() != null && item.precioUnitario().compareTo(BigDecimal.ZERO) > 0
-                    ? item.precioUnitario()
-                    : producto.getPrecioVenta();
+                BigDecimal precioUnitario = item.precioUnitario() != null && item.precioUnitario().compareTo(BigDecimal.ZERO) > 0
+                        ? item.precioUnitario()
+                        : producto.getPrecioVenta();
 
-            BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
-            
-            // Calcular el stock disponible: suma real de cantidadActual de inventario_lotes - stock_reservado
-            BigDecimal stockRealLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                .stream()
-                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
-            BigDecimal stockDisponible = stockRealLotes.subtract(stockReservado);
-
-            if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Stock insuficiente para " + producto.getNombre());
-            }
-
-            // Si es venta LOCAL (ENTREGADO directo): descontar stock real y NO reservar
-            // Si es DOMICILIO (PENDIENTE): solo reservar stock
-            if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
-                // Descontar stock real por PEPS
-                inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
-                // Sincronizar stock_llenos desde lotes
-                BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
+                
+                // Calcular el stock disponible: suma real de cantidadActual de inventario_lotes - stock_reservado
+                BigDecimal stockRealLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
                     .stream()
                     .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-                producto.setStockLlenos(stockActualLotes);
-            } else {
-                // DOMICILIO: solo RESERVAR stock (sumar a stock_reservado)
-                BigDecimal nuevoReservado = stockReservado.add(cantidadSolicitada);
-                producto.setStockReservado(nuevoReservado);
-            }
-            productoRepository.save(producto);
+                BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+                BigDecimal stockDisponible = stockRealLotes.subtract(stockReservado);
 
-            DetallePedido detalle = new DetallePedido();
-            detalle.setPedido(pedidoGuardado);
-            detalle.setProducto(producto);
-            detalle.setCantidad(item.cantidad());
-            detalle.setPrecioUnitario(precioUnitario);
-
-            BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
-            montoAcumulado = montoAcumulado.add(importeLinea);
-
-            detalleRepository.save(detalle);
-
-            // Registrar préstamo de envases si corresponde
-            if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
-                if (item.cantidadPrestada() > item.cantidad()) {
+                if (stockDisponible.compareTo(cantidadSolicitada) < 0) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
+                            "Stock insuficiente para " + producto.getNombre());
                 }
-                com.gas.sistema_gas.Model.ControlEnvase prestamo = new com.gas.sistema_gas.Model.ControlEnvase();
-                prestamo.setPedido(pedidoGuardado);
-                prestamo.setProducto(producto);
-                prestamo.setCliente(pedidoGuardado.getCliente());
-                prestamo.setCantidadPrestada(item.cantidadPrestada());
-                prestamo.setEstado("PRESTADO");
-                controlEnvaseRepository.save(prestamo);
+
+                // Si es venta LOCAL (ENTREGADO directo): descontar stock real y NO reservar
+                // Si es DOMICILIO (PENDIENTE): solo reservar stock
+                if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+                    // Descontar stock real por PEPS
+                    inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
+                    // Sincronizar stock_llenos desde lotes
+                    BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                        .stream()
+                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    producto.setStockLlenos(stockActualLotes);
+                } else {
+                    // DOMICILIO: solo RESERVAR stock (sumar a stock_reservado)
+                    BigDecimal nuevoReservado = stockReservado.add(cantidadSolicitada);
+                    producto.setStockReservado(nuevoReservado);
+                }
+                productoRepository.save(producto);
+
+                DetallePedido detalle = new DetallePedido();
+                detalle.setPedido(pedidoGuardado);
+                detalle.setProducto(producto);
+                detalle.setCantidad(item.cantidad());
+                detalle.setPrecioUnitario(precioUnitario);
+
+                BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
+                montoAcumulado = montoAcumulado.add(importeLinea);
+
+                detalleRepository.save(detalle);
+
+                // Registrar préstamo de envases si corresponde
+                if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
+                    if (item.cantidadPrestada() > item.cantidad()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
+                    }
+                    com.gas.sistema_gas.Model.ControlEnvase prestamo = new com.gas.sistema_gas.Model.ControlEnvase();
+                    prestamo.setPedido(pedidoGuardado);
+                    prestamo.setProducto(producto);
+                    prestamo.setCliente(pedidoGuardado.getCliente());
+                    prestamo.setCantidadPrestada(item.cantidadPrestada());
+                    prestamo.setEstado("PRESTADO");
+                    controlEnvaseRepository.save(prestamo);
+                }
+            }
+        }
+
+        // =====================================================================
+        // PROCESAR MOVIMIENTO DE ENVASES (nuevo modal de Movimiento de Envases)
+        // =====================================================================
+        String tipoMov = createDto.tipoMovimientoEnvase();
+        List<PedidoDTO.EnvaseMovimientoCreate> envaseMvts = createDto.envaseMovimientos();
+
+        if (envaseMvts != null && !envaseMvts.isEmpty()) {
+            for (PedidoDTO.EnvaseMovimientoCreate envMvt : envaseMvts) {
+                if (envMvt.idProducto() == null || envMvt.cantidad() == null || envMvt.cantidad() <= 0) {
+                    continue;
+                }
+
+                Producto productoEnvase = productoRepository.findById(envMvt.idProducto())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Producto de envase no encontrado"));
+
+                if ("VENTA".equalsIgnoreCase(tipoMov)) {
+                    // Venta de envases: agregar como detalle de pedido (suma al total)
+                    BigDecimal precioUnitarioEnvase = envMvt.precioUnitario() != null
+                        ? envMvt.precioUnitario()
+                        : productoEnvase.getPrecioVenta();
+
+                    DetallePedido detalleEnvase = new DetallePedido();
+                    detalleEnvase.setPedido(pedidoGuardado);
+                    detalleEnvase.setProducto(productoEnvase);
+                    detalleEnvase.setCantidad(envMvt.cantidad());
+                    detalleEnvase.setPrecioUnitario(precioUnitarioEnvase);
+                    detalleRepository.save(detalleEnvase);
+
+                    BigDecimal importeLineaEnvase = precioUnitarioEnvase.multiply(BigDecimal.valueOf(envMvt.cantidad()));
+                    montoAcumulado = montoAcumulado.add(importeLineaEnvase);
+
+                } else if ("PRESTAMO".equalsIgnoreCase(tipoMov)) {
+                    // Préstamo de envases: registrar en control_envase (no suma al total)
+                    com.gas.sistema_gas.Model.ControlEnvase prestamoEnvase = new com.gas.sistema_gas.Model.ControlEnvase();
+                    prestamoEnvase.setPedido(pedidoGuardado);
+                    prestamoEnvase.setProducto(productoEnvase);
+                    prestamoEnvase.setCliente(pedidoGuardado.getCliente());
+                    prestamoEnvase.setCantidadPrestada(envMvt.cantidad());
+                    prestamoEnvase.setEstado("PRESTADO");
+
+                    if (envMvt.fechaLimiteDevolucion() != null && !envMvt.fechaLimiteDevolucion().isBlank()) {
+                        prestamoEnvase.setFechaDevolucion(LocalDateTime.parse(envMvt.fechaLimiteDevolucion()));
+                    }
+
+                    controlEnvaseRepository.save(prestamoEnvase);
+
+                    // Descontar stock_vacios del producto cuando se presta un envase
+                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null ? productoEnvase.getStockVacios() : 0;
+                    if (stockVaciosActual >= envMvt.cantidad()) {
+                        productoEnvase.setStockVacios(stockVaciosActual - envMvt.cantidad());
+                        productoRepository.save(productoEnvase);
+                    }
+                }
             }
         }
 

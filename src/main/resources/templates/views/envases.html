@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+
+<body>
+    <div th:fragment="content">
+
+        <div class="content p-3">
+            <h3>
+                <i class="fas fa-recycle"></i>
+                <strong>Gestión de Envases - Deudores</strong>
+            </h3>
+            <hr>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 p-3 bg-light rounded border">
+                <div class="d-flex align-items-center">
+                    <label class="mr-2 mb-0 font-weight-bold text-sm">Mostrar</label>
+                    <select id="envases-length" class="form-control form-control-sm" style="width: auto;">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="30">30</option>
+                        <option value="40">40</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span class="ml-2 mb-0 text-sm">registros</span>
+                </div>
+
+                <div class="d-flex align-items-center ml-auto mt-2 mt-md-0">
+                    <label class="mr-2 mb-0 font-weight-bold text-sm">Buscar:</label>
+                    <input type="search" id="envases-search" class="form-control form-control-sm" style="width: 200px;">
+                </div>
+            </div>
+
+            <div id="contenedor-tabla-envases">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="tabla-envases">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Teléfono</th>
+                                <th>Dirección</th>
+                                <th>Pedido</th>
+                                <th>Fecha Entrega</th>
+                                <th>Producto</th>
+                                <th>Envases Debidos</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-tabla-envases">
+                            <!-- Se carga dinámicamente vía JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Devolución -->
+        <div class="modal fade" id="modal-devolucion" tabindex="-1" data-backdrop="false">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-undo-alt"></i> Registrar Devolución
+                        </h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="devolucion-id-control">
+
+                        <div class="alert alert-info">
+                            <strong>Cliente:</strong> <span id="devolucion-cliente-nombre"></span><br>
+                            <strong>Producto:</strong> <span id="devolucion-producto-nombre"></span><br>
+                            <strong>Envases prestados:</strong> <span id="devolucion-cantidad-prestada"></span><br>
+                            <strong>Ya devueltos:</strong> <span id="devolucion-cantidad-devueltos"></span><br>
+                            <strong>Pendiente:</strong> <span id="devolucion-pendiente" class="text-danger font-weight-bold"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="devolucion-cantidad">Cantidad a devolver hoy</label>
+                            <input type="number" class="form-control" id="devolucion-cantidad" min="1" value="1" step="1">
+                            <small class="form-text text-muted">Ingrese cuántos envases está devolviendo el cliente.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" id="btn-confirmar-devolucion">
+                            <i class="fas fa-check"></i> Confirmar Devolución
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/envases.js}"></script>
+    </div>
+</body>
+
+</html>

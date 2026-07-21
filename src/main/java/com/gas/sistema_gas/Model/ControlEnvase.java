@@ -46,6 +46,9 @@ public class ControlEnvase {
     @NotNull(message = "La cantidad prestada es obligatoria")
     private Integer cantidadPrestada;
 
+    @Column(name = "cantidad_devuelta", nullable = false)
+    private Integer cantidadDevuelta = 0;
+
     @Column(name = "fecha_prestamo", nullable = false)
     private LocalDateTime fechaPrestamo;
 

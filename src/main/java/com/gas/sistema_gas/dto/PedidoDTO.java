@@ -31,7 +31,10 @@ public class PedidoDTO {
         LocalDateTime fechaLimitePago,
         List<PagoCreate> pagos,
         @NotNull(message = "El detalle de la venta es obligatorio")
-        List<DetalleCreate> detalles
+        List<DetalleCreate> detalles,
+        // Movimiento de envases
+        String tipoMovimientoEnvase, // "NINGUNO", "VENTA", "PRESTAMO"
+        List<EnvaseMovimientoCreate> envaseMovimientos
     ){}
 
     // Para cada linea del carrito de compras
@@ -40,6 +43,15 @@ public class PedidoDTO {
         Integer cantidad,
         BigDecimal precioUnitario,
         Integer cantidadPrestada
+    ){}
+
+    // Para cada envase en el movimiento de envases
+    public record EnvaseMovimientoCreate(
+        Long idProducto,
+        Integer cantidad,
+        BigDecimal precioUnitario,
+        String fechaLimiteDevolucion,
+        String observacion
     ){}
 
     public record PagoCreate(
@@ -113,32 +125,4 @@ public class PedidoDTO {
         String urlImagen,
         String tipoEvidencia
     ){}
-
-    /*
-     * DTO opcional por si necesitas ver el detalle completo de un pedido específico
-     
-    public record FullResponse(
-        Long id,
-        String codigo,
-        LocalDateTime fechaSolicitud,
-        String nombreCliente,
-        String direccionEntrega,
-        String nombreEmpleado,
-        BigDecimal subtotal,
-        BigDecimal montoTotal,
-        String estadoPedido,
-        String metodoPago,
-        List<DetalleResponse> detalles
-    ){}
-
-
-     * DTO para mostrar los productos dentro de un FullResponse
-    public record DetalleResponse(
-        Long idProducto,
-        String nombreProducto,
-        Integer cantidad,
-        BigDecimal precioUnitario,
-        BigDecimal importe // (cantidad * precioUnitario)
-  
-     */
 }

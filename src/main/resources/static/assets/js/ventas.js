@@ -121,11 +121,14 @@ $(function() {
         $('#input-id-cliente').val('');
         $('#cliente-feedback').text('Ingrese DNI y busque, o complete datos manualmente.');
         $('#tabla-filas-venta').empty();
+        $('#tabla-envases-mov').empty();
         $('#tabla-pagos-venta').html('<tr><td colspan="4" class="text-center text-muted">No se han registrado pagos aún.</td></tr>');
         $('#txt-subtotal').text('0.00');
         $('#txt-total-general').text('0.00');
         $('#row-num-operacion').hide();
         $('#input-num-operacion').prop('required', false);
+        $('#select-tipo-mov-envase').val('NINGUNO');
+        $('#subseccion-mov-envase').hide();
     }
 
     function abrirModalVenta(tipo) {
@@ -165,30 +168,62 @@ $(function() {
         }
     });
 
-    // Buscar cliente por DNI
+    // Buscar cliente por DNI en la BD local
     $('#btn-buscar-cliente').on('click', function() {
         const dni = $('#input-dni-cliente').val().trim();
         if (!dni || dni.length !== 8) {
-            alert('Ingrese un DNI válido de 8 dígitos');
+            Swal.fire({
+                icon: 'warning',
+                title: 'DNI inválido',
+                text: 'Ingrese un DNI válido de 8 dígitos',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
 
-        $.getJSON(`/clientes/api/consultar-dni/${dni}`)
+        $.getJSON(`/ventas/cliente?dni=${dni}`)
             .done(function(res) {
-                if (res && res.datos) {
-                    const info = res.datos;
-                    const nombre = `${info.nombres} ${info.ape_paterno} ${info.ape_materno || ''}`;
-                    $('#input-nombre-cliente').val(nombre.toUpperCase());
-                    $('#input-id-cliente').val(''); // No se asigna ID automáticamente
-                    $('#cliente-feedback').text('Cliente encontrado. Complete los datos manualmente si es necesario.');
+                if (res && res.id) {
+                    // Cliente encontrado en BD local: autocompletar todos los campos
+                    $('#input-id-cliente').val(res.id);
+                    $('#input-nombre-cliente').val(res.nombre || '');
+                    $('#input-telefono-cliente').val(res.telefono || '');
+                    $('#input-direccion-cliente').val(res.direccion || '');
+                    $('#input-referencia-cliente').val(res.referencia || '');
+                    $('#cliente-feedback').text('Cliente encontrado en la base de datos. Datos autocompletados.');
                 } else {
-                    alert('Cliente no encontrado. Complete los datos manualmente.');
+                    limpiarCamposCliente();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Cliente no encontrado',
+                        text: 'Complete los datos manualmente.',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#3085d6'
+                    });
                 }
             })
             .fail(function() {
-                alert('Error al buscar cliente. Complete los datos manualmente.');
+                // Cliente no existe en la BD (respuesta 404)
+                limpiarCamposCliente();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Cliente no encontrado',
+                    text: 'No existe un cliente registrado con ese DNI. Complete los datos manualmente.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
             });
     });
+
+    function limpiarCamposCliente() {
+        $('#input-id-cliente').val('');
+        $('#input-nombre-cliente').val('');
+        $('#input-telefono-cliente').val('');
+        $('#input-direccion-cliente').val('');
+        $('#input-referencia-cliente').val('');
+        $('#cliente-feedback').text('Cliente no encontrado. Complete los datos manualmente.');
+    }
 
     // Buscar producto
     $('#btn-buscar-producto').on('click', function() {
@@ -209,15 +244,52 @@ $(function() {
         });
     });
 
-    // Seleccionar producto: traer datos verdaderos desde el servidor y fijar cantidad = 1
+    // =========================================================================
+    // FIX SCROLL: Re-aplicar clases de Bootstrap al cerrar modal secundario
+    // =========================================================================
+    function fixModalScroll() {
+        const $body = $('body');
+        // Si el modal principal (#modal-venta) sigue abierto, forzar estado correcto
+        if ($('#modal-venta').hasClass('show')) {
+            $body.addClass('modal-open');
+            $body.css('overflow-y', 'auto');
+            $body.css('padding-right', '');
+        }
+    }
+
+    // Al cerrar el modal de búsqueda de productos, restaurar scroll del modal principal
+    $('#modal-buscar-producto').on('hidden.bs.modal', function() {
+        fixModalScroll();
+    });
+
+    // Al hacer clic en btn-seleccionar-producto (también usado por envases)
     $(document).on('click', '.btn-seleccionar-producto', function() {
         const fila = $(this).closest('tr');
         const id = fila.data('id');
         const nombre = fila.data('nombre');
+        const precio = fila.data('precio') || 0;
 
+        // Si el modal se abrió desde envases, llenar campos de envase
+        if ($('#subseccion-mov-envase').is(':visible')) {
+            $('#select-envase-producto').val(id);
+            $('#input-envase-nombre').val(nombre);
+            $('#select-envase-cantidad').val(1);
+
+            const tipo = $('#select-tipo-mov-envase').val();
+            if (tipo === 'VENTA') {
+                $('#select-envase-precio').val(parseFloat(precio).toFixed(2));
+            }
+
+            // Ocultar modal y fijar scroll
+            $('#modal-buscar-producto').modal('hide');
+            fixModalScroll();
+            $('#select-envase-cantidad').focus();
+            return;
+        }
+
+        // Selección normal para productos principales
         $('#select-producto').val(id);
         $('#input-producto-nombre').val(nombre);
-        // cantidad por defecto
         $('#select-cantidad').val(1);
 
         // Obtener datos oficiales del producto para asegurar precio unitario verdadero
@@ -227,11 +299,10 @@ $(function() {
                 return response.json();
             })
             .then(prod => {
-                const precioVenta = prod.precioVenta ?? prod.precioVenta; // fallback automático
+                const precioVenta = prod.precioVenta;
                 if (precioVenta !== undefined && precioVenta !== null) {
                     $('#select-precio').val(precioVenta);
                 } else {
-                    // fallback a data attribute si existe
                     const precioAttr = fila.data('precio') || '';
                     $('#select-precio').val(precioAttr);
                 }
@@ -241,12 +312,16 @@ $(function() {
                 $('#select-precio').val(precioAttr);
             })
             .finally(() => {
+                // Ocultar modal y fijar scroll
                 $('#modal-buscar-producto').modal('hide');
+                fixModalScroll();
                 $('#select-cantidad').focus();
             });
     });
 
-    // Agregar detalle a la venta
+    // =========================================================================
+    // VALIDACIÓN: Cantidad y precio no negativos/cero al agregar detalle
+    // =========================================================================
     $('#btn-agregar-detalle').on('click', function() {
         const productoId = $('#select-producto').val();
         const productoNombre = $('#input-producto-nombre').val();
@@ -254,8 +329,39 @@ $(function() {
         const precio = parseMoney($('#select-precio').val());
         const prestados = parseInt($('#input-cantidad-prestada').val()) || 0;
 
-        if (!productoId || !productoNombre || cantidad <= 0 || precio <= 0) {
-            alert('Complete todos los campos del producto correctamente');
+        // Validaciones con SweetAlert2
+        if (!productoId || !productoNombre) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Producto no seleccionado',
+                text: 'Busque y seleccione un producto antes de añadirlo.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            return;
+        }
+
+        if (cantidad <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cantidad inválida',
+                text: 'La cantidad debe ser mayor a 0.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#select-cantidad').focus();
+            return;
+        }
+
+        if (precio < 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Precio inválido',
+                text: 'El precio unitario no puede ser negativo.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#select-precio').focus();
             return;
         }
 
@@ -309,17 +415,169 @@ $(function() {
         calcularTotales();
     });
 
-    // Calcular totales
+    // =========================================================================
+    // CALCULAR TOTALES (incluye envases en venta)
+    // =========================================================================
     function calcularTotales() {
         let subtotal = 0;
-        // #tabla-filas-venta es el <tbody>, iterar sus filas directamente
+
+        // Sumar productos de gas
         $('#tabla-filas-venta tr').each(function() {
             subtotal += parseFloat($(this).data('subtotal')) || 0;
+        });
+
+        // Sumar envases en VENTA (tienen precio)
+        $('#tabla-envases-mov tr').each(function() {
+            const precio = parseFloat($(this).data('precio')) || 0;
+            const cantidad = parseInt($(this).data('cantidad')) || 0;
+            if (precio > 0) {
+                subtotal += precio * cantidad;
+            }
         });
 
         $('#txt-subtotal').text(formatMoney(subtotal));
         $('#txt-total-general').text(formatMoney(subtotal));
     }
+
+    // ====================================================================
+    // MOVIMIENTO DE ENVASES
+    // ====================================================================
+    let envaseMovimientos = [];
+
+    // Mostrar/ocultar subseccion segun tipo de movimiento
+    $('#select-tipo-mov-envase').on('change', function() {
+        const tipo = $(this).val();
+        if (tipo === 'NINGUNO') {
+            $('#subseccion-mov-envase').hide();
+        } else {
+            $('#subseccion-mov-envase').show();
+            if (tipo === 'VENTA') {
+                $('#grupo-envase-precio').show();
+                $('#grupo-envase-fecha-limite').hide();
+                $('.col-envase-precio').show();
+                $('.col-envase-fecha').hide();
+            } else if (tipo === 'PRESTAMO') {
+                $('#grupo-envase-precio').hide();
+                $('#grupo-envase-fecha-limite').show();
+                $('.col-envase-precio').hide();
+                $('.col-envase-fecha').show();
+            }
+        }
+    });
+
+    // Buscar producto para envase
+    $('#btn-buscar-envase-producto').on('click', function() {
+        $('#modal-buscar-producto').modal('show');
+    });
+
+    $('#input-envase-nombre').on('click', function() {
+        $('#modal-buscar-producto').modal('show');
+    });
+
+    // =========================================================================
+    // VALIDACIÓN: Envase - Cantidad y precio no negativos/cero
+    // =========================================================================
+    $('#btn-agregar-envase').on('click', function() {
+        const idProducto = $('#select-envase-producto').val();
+        const nombreProducto = $('#input-envase-nombre').val();
+        const cantidad = parseInt($('#select-envase-cantidad').val()) || 0;
+        const precio = parseMoney($('#select-envase-precio').val());
+        const tipo = $('#select-tipo-mov-envase').val();
+        const fechaLimite = $('#select-envase-fecha-limite').val() || '';
+
+        // Validaciones con SweetAlert2
+        if (!idProducto || !nombreProducto) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Producto de envase no seleccionado',
+                text: 'Seleccione un producto de envase.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            return;
+        }
+
+        if (cantidad <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cantidad inválida',
+                text: 'La cantidad debe ser mayor a 0.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#select-envase-cantidad').focus();
+            return;
+        }
+
+        if (tipo === 'VENTA' && precio <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Precio inválido',
+                text: 'Ingrese un precio unitario válido para la venta del envase (mayor a 0).',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#select-envase-precio').focus();
+            return;
+        }
+
+        const existingRow = $('#tabla-envases-mov tr').filter(function() {
+            return $(this).data('productoId') === idProducto;
+        }).first();
+
+        if (existingRow.length) {
+            const existingCantidad = parseInt(existingRow.data('cantidad')) || 0;
+            const nuevaCantidad = existingCantidad + cantidad;
+            existingRow.data('cantidad', nuevaCantidad);
+            existingRow.find('td').eq(1).text(nuevaCantidad);
+            if (tipo === 'VENTA') {
+                const nuevoSubtotal = nuevaCantidad * parseFloat(existingRow.data('precio'));
+                existingRow.find('td').eq(3).text('S/ ' + formatMoney(nuevoSubtotal));
+            }
+        } else {
+            const tr = $('<tr>');
+            if (tipo === 'VENTA') {
+                const subtotal = cantidad * precio;
+                tr.html(`
+                    <td>${nombreProducto}</td>
+                    <td class="text-center">${cantidad}</td>
+                    <td class="text-right">S/ ${formatMoney(precio)}</td>
+                    <td class="text-center col-envase-fecha" style="display:none;">-</td>
+                    <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
+                `);
+                tr.data('precio', precio);
+            } else {
+                tr.html(`
+                    <td>${nombreProducto}</td>
+                    <td class="text-center">${cantidad}</td>
+                    <td class="text-right col-envase-precio" style="display:none;">-</td>
+                    <td class="text-center col-envase-fecha">${fechaLimite || '-'}</td>
+                    <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
+                `);
+            }
+            tr.attr('data-producto-id', idProducto);
+            tr.data('productoId', idProducto);
+            tr.data('cantidad', cantidad);
+            tr.data('fechaLimite', fechaLimite);
+            $('#tabla-envases-mov').append(tr);
+        }
+
+        // Recalcular totales (los envases VENTA afectan el total)
+        calcularTotales();
+
+        // Limpiar campos
+        $('#select-envase-producto').val('');
+        $('#input-envase-nombre').val('');
+        $('#select-envase-cantidad').val('1');
+        $('#select-envase-precio').val('');
+        $('#select-envase-fecha-limite').val('');
+    });
+
+    // Quitar envase
+    $(document).on('click', '.btn-quitar-envase', function() {
+        $(this).closest('tr').remove();
+        calcularTotales();
+    });
 
     // Agregar pago
     $('#btn-agregar-pago').on('click', function() {
@@ -329,12 +587,24 @@ $(function() {
         const numOperacion = $('#input-num-operacion').val();
 
         if (!metodoId || monto <= 0) {
-            alert('Seleccione método de pago y ingrese un monto válido');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Datos de pago inválidos',
+                text: 'Seleccione método de pago e ingrese un monto válido.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
 
         if ((metodoNombre === 'YAPE' || metodoNombre === 'PLIN') && !numOperacion) {
-            alert('Ingrese el número de operación para Yape/Plin');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Número de operación requerido',
+                text: 'Ingrese el número de operación para Yape/Plin.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
 
@@ -367,22 +637,99 @@ $(function() {
         }
     });
 
-    // Guardar venta
+    // =========================================================================
+    // GUARDAR VENTA - Validaciones integrales con SweetAlert2
+    // =========================================================================
     $('#form-venta').on('submit', function(e) {
         e.preventDefault();
 
-        // Validar que haya al menos un producto
-        if ($('#tabla-filas-venta tr').length === 0) {
-            alert('Agregue al menos un producto a la venta');
+        // ---------------------------------------------------------------
+        // 1. Validar teléfono del cliente (AHORA OBLIGATORIO)
+        // ---------------------------------------------------------------
+        const telefono = $('#input-telefono-cliente').val().trim();
+        if (!telefono) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Teléfono requerido',
+                text: 'El número de teléfono del cliente es obligatorio.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#input-telefono-cliente').focus();
+            return;
+        }
+
+        // ---------------------------------------------------------------
+        // 2. Validar nombre del cliente
+        // ---------------------------------------------------------------
+        const nombreCliente = $('#input-nombre-cliente').val().trim();
+        if (!nombreCliente) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Nombre requerido',
+                text: 'El nombre del cliente es obligatorio.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $('#input-nombre-cliente').focus();
+            return;
+        }
+
+        // ---------------------------------------------------------------
+        // 3. Validar que haya al menos productos de gas O envases
+        // ---------------------------------------------------------------
+        const hayProductosGas = $('#tabla-filas-venta tr').length > 0;
+        const hayMovimientoEnvases = $('#tabla-envases-mov tr').length > 0;
+        const tipoMovEnvase = $('#select-tipo-mov-envase').val() || 'NINGUNO';
+        const hayEnvases = tipoMovEnvase !== 'NINGUNO' && hayMovimientoEnvases;
+
+        if (!hayProductosGas && !hayEnvases) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin productos ni envases',
+                text: 'Debe agregar al menos un producto (gas) o registrar un movimiento de envases para guardar la venta.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
 
         const tipoVenta = $('#select-tipo-venta').val();
 
-        // Validar pagos sólo para venta local
-        if (tipoVenta === 'LOCAL' && $('#tabla-pagos-venta tr').filter(function() { return $(this).data('idMetodoPago') !== undefined; }).length === 0) {
-            alert('Registre al menos un pago');
-            return;
+        // ---------------------------------------------------------------
+        // 4. Validar pagos para venta local
+        // ---------------------------------------------------------------
+        if (tipoVenta === 'LOCAL') {
+            const pagosCount = $('#tabla-pagos-venta tr').filter(function() {
+                return $(this).data('idMetodoPago') !== undefined;
+            }).length;
+            if (pagosCount === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pago requerido',
+                    text: 'Para venta local debe registrar al menos un pago.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
+                return;
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // 5. Validar motorizado para domicilio
+        // ---------------------------------------------------------------
+        if (tipoVenta === 'DOMICILIO') {
+            const motorizado = $('#select-motorizado').val();
+            if (!motorizado) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Motorizado requerido',
+                    text: 'Para venta a domicilio debe seleccionar un motorizado/repartidor.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
+                return;
+            }
         }
 
         // Construir JSON de la venta
@@ -415,7 +762,9 @@ $(function() {
         });
 
         // Recopilar pagos
-        $('#tabla-pagos-venta tr').filter(function() { return $(this).data('idMetodoPago') !== undefined; }).each(function() {
+        $('#tabla-pagos-venta tr').filter(function() {
+            return $(this).data('idMetodoPago') !== undefined;
+        }).each(function() {
             venta.pagos.push({
                 idMetodoPago: $(this).data('idMetodoPago') ? Number($(this).data('idMetodoPago')) : null,
                 monto: $(this).data('monto'),
@@ -423,13 +772,40 @@ $(function() {
             });
         });
 
+        // Agregar datos de movimiento de envases
+        venta.tipoMovimientoEnvase = tipoMovEnvase;
+        venta.envaseMovimientos = [];
+        if (tipoMovEnvase !== 'NINGUNO') {
+            $('#tabla-envases-mov tr').each(function() {
+                venta.envaseMovimientos.push({
+                    idProducto: $(this).data('productoId') ? Number($(this).data('productoId')) : null,
+                    cantidad: $(this).data('cantidad'),
+                    precioUnitario: $(this).data('precio') || 0,
+                    fechaLimiteDevolucion: $(this).data('fechaLimite') || '',
+                    observacion: ''
+                });
+            });
+        }
+
         // Validar IDs antes de enviar
         if (venta.detalles.some(d => d.idProducto == null)) {
-            alert('Error: uno de los productos no tiene ID. Seleccione el producto nuevamente.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error en productos',
+                text: 'Uno de los productos no tiene ID. Seleccione el producto nuevamente.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
         if (tipoVenta === 'LOCAL' && venta.pagos.some(p => p.idMetodoPago == null)) {
-            alert('Error: uno de los pagos no tiene método de pago. Verifique los pagos registrados.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error en pagos',
+                text: 'Uno de los pagos no tiene método de pago. Verifique los pagos registrados.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
             return;
         }
 
@@ -441,15 +817,34 @@ $(function() {
             data: JSON.stringify(venta),
             success: function(response) {
                 if (response.status === 'OK') {
-                    alert('Venta registrada correctamente');
-                    location.reload();
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Venta registrada!',
+                        text: 'La venta se ha registrado correctamente.',
+                        confirmButtonText: 'Aceptar',
+                        confirmButtonColor: '#28a745'
+                    }).then(function() {
+                        location.reload();
+                    });
                 } else {
-                    alert(response.message || 'Error al guardar la venta');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error al guardar',
+                        text: response.message || 'Error al guardar la venta',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#3085d6'
+                    });
                 }
             },
             error: function(xhr) {
                 const errorMsg = xhr.responseJSON?.message || xhr.responseText || 'Error al procesar la venta';
-                alert('Error al procesar la venta: ' + errorMsg);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error del servidor',
+                    text: errorMsg,
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
             }
         });
     });
@@ -495,7 +890,13 @@ $(function() {
                 $('#modal-detalle-venta').modal('show');
             })
             .fail(function() {
-                alert('No se pudo cargar el detalle de la venta. Intenta de nuevo.');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al cargar detalle',
+                    text: 'No se pudo cargar el detalle de la venta. Intente de nuevo.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
             });
     });
 });

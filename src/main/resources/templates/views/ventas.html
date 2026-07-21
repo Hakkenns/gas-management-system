@@ -214,8 +214,8 @@
 
                             <div class="row">
                                 <div class="form-group col-md-4">
-                                    <label>Teléfono <small class="text-muted">(opcional)</small></label>
-                                    <input type="text" class="form-control" id="input-telefono-cliente" placeholder="9 dígitos" maxlength="9">
+                                    <label>Teléfono <small class="text-danger">(obligatorio)</small></label>
+                                    <input type="text" class="form-control" id="input-telefono-cliente" placeholder="9 dígitos" maxlength="9" required>
                                 </div>
                                 <div class="form-group col-md-4" id="group-condicion-pago">
                                     <label>Condición de Pago</label>
@@ -348,6 +348,75 @@
                                         <button type="button" id="btn-agregar-detalle" class="btn btn-success btn-block">
                                             <i class="fas fa-plus"></i> Añadir
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ================================================================ -->
+                            <!-- NUEVA SECCION: MOVIMIENTO DE ENVASES -->
+                            <!-- ================================================================ -->
+                            <div class="card border-info mt-3" id="card-movimiento-envases">
+                                <div class="card-header bg-info text-white py-2">
+                                    <i class="fas fa-recycle"></i> Movimiento de Envases
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label>Tipo de movimiento</label>
+                                        <select class="form-control" id="select-tipo-mov-envase">
+                                            <option value="NINGUNO">Ninguno (solo venta de gas)</option>
+                                            <option value="VENTA">Venta de envases</option>
+                                            <option value="PRESTAMO">Prestamo de envases</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Sub-seccion que se muestra si se selecciona VENTA o PRESTAMO -->
+                                    <div id="subseccion-mov-envase" style="display:none;">
+                                        <div class="row align-items-end">
+                                            <div class="form-group col-md-4 mb-0">
+                                                <label>Producto (Envase)</label>
+                                                <div class="input-group">
+                                                    <input type="hidden" id="select-envase-producto">
+                                                    <input type="text" class="form-control" id="input-envase-nombre" placeholder="Seleccionar producto..." readonly style="background-color:#fff;cursor:default;">
+                                                    <div class="input-group-append">
+                                                        <button type="button" id="btn-buscar-envase-producto" class="btn btn-primary btn-sm" title="Buscar producto envase">
+                                                            <i class="fas fa-search"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-2 mb-0">
+                                                <label>Cantidad</label>
+                                                <input type="number" class="form-control" id="select-envase-cantidad" min="1" value="1">
+                                            </div>
+                                            <div class="form-group col-md-2 mb-0" id="grupo-envase-precio">
+                                                <label>Precio Unitario</label>
+                                                <input type="number" class="form-control" id="select-envase-precio" step="0.10" min="0.10">
+                                            </div>
+                                            <div class="form-group col-md-2 mb-0" id="grupo-envase-fecha-limite" style="display:none;">
+                                                <label>Fecha limite devol.</label>
+                                                <input type="date" class="form-control" id="select-envase-fecha-limite">
+                                            </div>
+                                            <div class="form-group col-md-2 mb-0">
+                                                <button type="button" id="btn-agregar-envase" class="btn btn-success btn-block">
+                                                    <i class="fas fa-plus"></i> Anadir
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="table-responsive mt-2">
+                                            <table class="table table-sm table-bordered">
+                                                <thead class="bg-light">
+                                                    <tr>
+                                                        <th>Producto</th>
+                                                        <th width="12%">Cantidad</th>
+                                                        <th width="15%" class="col-envase-precio">P. Unitario</th>
+                                                        <th width="15%" class="col-envase-fecha" style="display:none;">Fecha Limite</th>
+                                                        <th width="10%">Quitar</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tabla-envases-mov"></tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
