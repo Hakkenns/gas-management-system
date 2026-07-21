@@ -1,5 +1,7 @@
 package com.gas.sistema_gas.dto;
 
+import java.math.BigDecimal;
+
 import jakarta.validation.constraints.NotNull;
 
 public class CatalogoProveedorDTO {
@@ -20,5 +22,18 @@ public class CatalogoProveedorDTO {
         String nombreProveedor,
         Long idProducto,
         String nombreProducto
+    ){}
+
+    // Respuesta plana para el modal de Compras. Evita serializar entidades
+    // JPA y sus relaciones lazy (categoría/envase) fuera de la transacción.
+    public record ProductoCompraResponse(
+        Long id,
+        String nombre,
+        BigDecimal precioVenta,
+        BigDecimal gananciaProducto,
+        Long idCategoria,
+        String nombreCategoria,
+        BigDecimal capacidad,
+        String unidadMedida
     ){}
 }

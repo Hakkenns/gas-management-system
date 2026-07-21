@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import com.gas.sistema_gas.dto.CatalogoProveedorDTO;
 import com.gas.sistema_gas.service.CatalogoProveedorService;
-import com.gas.sistema_gas.Model.Producto;
 
 @Controller
 @RequestMapping("/catalogo-proveedores")
@@ -58,8 +57,8 @@ public class CatalogoProveedorController {
     // 🔍 RUTA CRÍTICA PARA LA LUPA DE COMPRAS: Retorna los productos del proveedor en tiempo real
     @GetMapping("/proveedor/{idProveedor}/productos")
     @ResponseBody
-    public ResponseEntity<List<Producto>> listarProductosPorProveedor(@PathVariable Long idProveedor) {
-        List<Producto> productosFiltrados = catalogoProveedorService.listarProductosPorProveedor(idProveedor);
+    public ResponseEntity<List<CatalogoProveedorDTO.ProductoCompraResponse>> listarProductosPorProveedor(@PathVariable Long idProveedor) {
+        List<CatalogoProveedorDTO.ProductoCompraResponse> productosFiltrados = catalogoProveedorService.listarProductosPorProveedor(idProveedor);
         return ResponseEntity.ok(productosFiltrados);
     }
         // =========================================================================

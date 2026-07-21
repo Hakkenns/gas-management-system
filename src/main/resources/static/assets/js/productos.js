@@ -23,6 +23,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const stockMinimoInput = document.getElementById("producto-stockMinimo");
     const requiereEnvaseCheckbox = document.getElementById("producto-requiereEnvase");
     const contenedorStockVacios = document.getElementById("contenedor-stockVacios");
+    const contenedorEnvaseAsociado = document.getElementById("contenedor-envaseAsociado");
+    const envaseSelect = document.getElementById("producto-envaseId");
 
     // Elementos del formulario - Imagen
     const archivoImagenInput = document.getElementById("producto-archivo-imagen");
@@ -196,6 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 contenedorRequiereEnvase.style.display = "none";
                 requiereEnvaseCheckbox.checked = false;
             }
+            actualizarVisibilidadEnvase();
             return;
         }
 
@@ -214,6 +217,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // 2. Control del campo Unidad de Medida (Automático y Bloqueado)
         unidadMedidaSelect.value = unidadMedida;
+        cargarEnvases();
 
         // 3. Control de Capacidad Dinámica
         if (requiereCapacidad) {
@@ -252,6 +256,48 @@ document.addEventListener("DOMContentLoaded", function () {
                 contenedorRequiereEnvase.style.display = "none";
                 requiereEnvaseCheckbox.checked = false;
             }
+        }
+        actualizarVisibilidadEnvase();
+    }
+
+    function cargarEnvases(envaseSeleccionado = "") {
+        if (!envaseSelect) return;
+
+        const unidadProducto = (unidadMedidaSelect.value || '').trim().toUpperCase();
+        const seleccionSolicitada = envaseSeleccionado || envaseSelect.value;
+
+        Array.from(envaseSelect.options).forEach(option => {
+            // La opción "Sin envase" debe permanecer siempre disponible.
+            if (!option.value) {
+                option.hidden = false;
+                option.disabled = false;
+                return;
+            }
+
+            const unidadEnvase = (option.dataset.unidadMedida || '').trim().toUpperCase();
+            const coincideUnidad = Boolean(unidadProducto) && unidadEnvase === unidadProducto;
+            option.hidden = !coincideUnidad;
+            option.disabled = !coincideUnidad;
+        });
+
+        const opcionSeleccionada = Array.from(envaseSelect.options).find(option =>
+            option.value === String(seleccionSolicitada) && !option.hidden
+        );
+        envaseSelect.value = opcionSeleccionada ? seleccionSolicitada : '';
+    }
+
+    function actualizarVisibilidadEnvase(envaseSeleccionado = "") {
+        if (!contenedorEnvaseAsociado || !envaseSelect || !requiereEnvaseCheckbox) return;
+
+        const requiereEnvase = requiereEnvaseCheckbox.checked;
+        contenedorEnvaseAsociado.style.display = requiereEnvase ? 'block' : 'none';
+        envaseSelect.disabled = !requiereEnvase;
+        envaseSelect.required = requiereEnvase;
+
+        if (requiereEnvase) {
+            cargarEnvases(envaseSeleccionado);
+        } else {
+            envaseSelect.value = '';
         }
     }
 
@@ -402,9 +448,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Eventos de cambio en unidad de medida
     unidadMedidaSelect.addEventListener("change", function () {
+        cargarEnvases();
         actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
+    });
+
+    requiereEnvaseCheckbox.addEventListener("change", function () {
+        actualizarVisibilidadEnvase();
     });
 
     // ============ MANEJO DE CÁLCULO DE PRECIO VENTA ============
@@ -553,6 +604,14 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             if (stockVaciosInput) stockVaciosInput.value = editButton.dataset.stockvacios || 0;
             requiereEnvaseCheckbox.checked = editButton.dataset.requiereenvase === "true";
+            if (requiereEnvaseCheckbox.checked) {
+                fetch(`/productos/${editButton.dataset.id}/envase`)
+                    .then(response => response.ok ? response.json() : { envaseId: null })
+                    .then(data => actualizarVisibilidadEnvase(data.envaseId || ""))
+                    .catch(() => actualizarVisibilidadEnvase());
+            } else {
+                actualizarVisibilidadEnvase();
+            }
 
             calcularPrecioVenta();
             cargarEstadoImagenStaged(editButton.dataset.id);
@@ -678,6 +737,7 @@ document.addEventListener("DOMContentLoaded", function () {
         categoriaSelect.value = "";
         idInput.value = "";
         requiereEnvaseCheckbox.checked = false;
+        actualizarVisibilidadEnvase();
         precioCompraInput.value = "0.00";
         precioVentaInput.value = "0.00";
         stockLlenosInput.value = 0;

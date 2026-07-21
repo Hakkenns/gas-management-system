@@ -335,6 +335,20 @@
                                             </div>
                                         </div>
 
+                                        <div class="row mt-2" id="contenedor-envaseAsociado" style="display: none;">
+                                            <div class="col-md-12 form-group">
+                                                <label for="producto-envaseId">Envase Asociado</label>
+                                                <select class="form-control" id="producto-envaseId" name="envaseId" disabled>
+                                                    <option value="">Sin envase</option>
+                                                    <option th:each="envase : ${envases}"
+                                                        th:value="${envase.id}"
+                                                        th:data-unidad-medida="${envase.unidadMedida}"
+                                                        th:text="${envase.nombre + ' - ' + envase.capacidad + ' ' + envase.unidadMedida}">
+                                                    </option>
+                                                </select>
+                                            </div>
+                                        </div>
+
 
 
                                         <div class="row mt-2">

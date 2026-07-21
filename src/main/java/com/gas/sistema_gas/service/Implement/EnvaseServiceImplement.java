@@ -10,8 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.ControlEnvase;
+import com.gas.sistema_gas.Model.Envase;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
+import com.gas.sistema_gas.Repository.EnvaseRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.service.EnvaseService;
@@ -26,6 +28,39 @@ public class EnvaseServiceImplement implements EnvaseService {
 
     @Autowired
     private ProductoRepository productoRepository;
+
+    @Autowired
+    private EnvaseRepository envaseRepository;
+
+    @Override
+    @Transactional
+    public List<Envase> listarTodos() {
+        return envaseRepository.findAll().stream()
+                .filter(envase -> Boolean.TRUE.equals(envase.getEstado()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public Envase obtenerPorId(Long id) {
+        return envaseRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "El envase no existe"));
+    }
+
+    @Override
+    @Transactional
+    public Envase guardar(Envase envase) {
+        return envaseRepository.save(envase);
+    }
+
+    @Override
+    @Transactional
+    public void eliminar(Long id) {
+        Envase envase = obtenerPorId(id);
+        envase.setEstado(false);
+        envaseRepository.save(envase);
+    }
 
     @Override
     @Transactional

@@ -86,6 +86,10 @@ public class Producto {
     @Column(name = "requiere_envase", nullable = false)
     private Boolean requiereEnvase = false;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "envase_id", referencedColumnName = "id", nullable = true)
+    private Envase envase;
+
     @Column(nullable = false)
     private Integer estado = 1;
 

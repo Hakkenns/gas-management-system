@@ -76,10 +76,21 @@ public class CatalogoProveedorServiceImplement implements CatalogoProveedorServi
 
     @Override
     @Transactional
-    public List<Producto> listarProductosPorProveedor(Long idProveedor) {
+    public List<CatalogoProveedorDTO.ProductoCompraResponse> listarProductosPorProveedor(Long idProveedor) {
         // 🔍 EL BLINDAJE DE LA LUPA DE COMPRAS
-        // Llama a la consulta JPQL personalizada para limpiar la interfaz de usuario en compras
-        return catalogoProveedorRepository.findProductosByProveedorId(idProveedor);
+        // Se mapea dentro de la transacción para no exponer relaciones JPA lazy
+        // (incluido el envase, que puede ser nulo) al serializador JSON.
+        return catalogoProveedorRepository.findProductosByProveedorId(idProveedor).stream()
+                .map(producto -> new CatalogoProveedorDTO.ProductoCompraResponse(
+                        producto.getId(),
+                        producto.getNombre(),
+                        producto.getPrecioVenta(),
+                        producto.getGananciaProducto(),
+                        producto.getCategoria() != null ? producto.getCategoria().getId() : null,
+                        producto.getCategoria() != null ? producto.getCategoria().getNombre() : null,
+                        producto.getCapacidad(),
+                        producto.getUnidadMedida()))
+                .collect(Collectors.toList());
     }
 
     @Override

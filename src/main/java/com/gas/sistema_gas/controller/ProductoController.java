@@ -17,13 +17,18 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.gas.sistema_gas.dto.ProductoDTO;
+import com.gas.sistema_gas.Model.Envase;
+import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.service.OpcionService;
 import com.gas.sistema_gas.service.ProductoService;
 import com.gas.sistema_gas.service.CategoriaService;
+import com.gas.sistema_gas.service.EnvaseService;
 import com.gas.sistema_gas.service.ProveedorService; // <-- NUEVO: Tu servicio de proveedores
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 @Controller
@@ -37,6 +42,8 @@ public class ProductoController {
     private final CategoriaService categoriaService;
     private final ProveedorService proveedorService; // <-- NUEVA CAPA CONECTADA
     private final Validator validator;
+    private final EnvaseService envaseService;
+    private final ProductoRepository productoRepository;
 
     // Vista principal: Carga la plantilla base con el menú y los selectores
     @GetMapping
@@ -46,6 +53,7 @@ public class ProductoController {
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
+        model.addAttribute("envases", envaseService.listarTodos());
         
         // =====================================================================
         // 🌟 NUEVA LÍNEA: Enviamos los proveedores al Thymeleaf de la pantalla
@@ -79,7 +87,8 @@ public class ProductoController {
             @RequestParam(required = false) String id,
             @RequestParam(name = "archivoImagen", required = false) MultipartFile archivoImagen,
             @RequestParam(name = "imagenBase64", required = false) String imagenBase64,
-            @RequestParam(name = "quitarImagen", required = false) Boolean quitarImagen) {
+            @RequestParam(name = "quitarImagen", required = false) Boolean quitarImagen,
+            @RequestParam(name = "envaseId", required = false) Long envaseId) {
 
         if (result.hasErrors()) {
             String message = result.getAllErrors().get(0).getDefaultMessage();
@@ -92,8 +101,13 @@ public class ProductoController {
         }
 
         try {
+            if (productoDto.requiereEnvase() && envaseId == null) {
+                return Map.of("status", "ERROR", "message", "Debe seleccionar un envase asociado.");
+            }
+
             if (productoId == null) {
-                productoService.createProduct(productoDto, archivoImagen, imagenBase64);
+                ProductoDTO.SimpleResponse productoCreado = productoService.createProduct(productoDto, archivoImagen, imagenBase64);
+                asignarEnvase(productoCreado.id(), envaseId, productoDto.requiereEnvase());
             } else {
                 ProductoDTO.Update updateDto = new ProductoDTO.Update(
                         productoDto.nombre(),
@@ -114,11 +128,42 @@ public class ProductoController {
                 }
 
                 productoService.updateProduct(productoId, updateDto, archivoImagen, imagenBase64, quitarImagen);
+                asignarEnvase(productoId, envaseId, productoDto.requiereEnvase());
             }
             return Map.of("status", "OK");
         } catch (Exception e) {
             return Map.of("status", "ERROR", "message", "Error al procesar el producto: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/{id}/envase")
+    @ResponseBody
+    public Map<String, Long> obtenerEnvaseAsociado(@PathVariable Long id) {
+        Producto producto = productoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,
+                        "El producto no existe"));
+        Map<String, Long> respuesta = new HashMap<>();
+        respuesta.put("envaseId", producto.getEnvase() != null ? producto.getEnvase().getId() : null);
+        return respuesta;
+    }
+
+    private void asignarEnvase(Long productoId, Long envaseId, boolean requiereEnvase) {
+        Producto producto = productoRepository.findById(productoId)
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,
+                        "El producto no existe"));
+
+        if (!requiereEnvase) {
+            producto.setEnvase(null);
+        } else {
+            Envase envase = envaseService.obtenerPorId(envaseId);
+            if (!Boolean.TRUE.equals(envase.getEstado())) {
+                throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "El envase seleccionado no estÃ¡ activo");
+            }
+            producto.setEnvase(envase);
+        }
+
+        productoRepository.save(producto);
     }
 
     // Cambiar estado de producto vía AJAX (Activo / Inactivo)

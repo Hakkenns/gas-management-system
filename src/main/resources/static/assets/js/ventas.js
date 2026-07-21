@@ -129,6 +129,8 @@ $(function() {
         $('#input-num-operacion').prop('required', false);
         $('#select-tipo-mov-envase').val('NINGUNO');
         $('#subseccion-mov-envase').hide();
+        solicitudEnvaseActual++;
+        limpiarEnvaseVinculado();
     }
 
     function abrirModalVenta(tipo) {
@@ -225,8 +227,14 @@ $(function() {
         $('#cliente-feedback').text('Cliente no encontrado. Complete los datos manualmente.');
     }
 
-    // Buscar producto
+    // El mismo modal se utiliza para producto principal y envase. El destino
+    // se guarda al abrirlo, porque la sección de envases puede estar visible
+    // mientras se busca el producto principal.
+    let destinoBusquedaProducto = 'principal';
+
+    // Buscar producto principal
     $('#btn-buscar-producto').on('click', function() {
+        destinoBusquedaProducto = 'principal';
         $('#modal-buscar-producto').modal('show');
     });
 
@@ -269,15 +277,17 @@ $(function() {
         const nombre = fila.data('nombre');
         const precio = fila.data('precio') || 0;
 
-        // Si el modal se abrió desde envases, llenar campos de envase
-        if ($('#subseccion-mov-envase').is(':visible')) {
+        // Solo llenar el envase cuando el modal fue abierto desde sus controles.
+        if (destinoBusquedaProducto === 'envase') {
+            solicitudEnvaseActual++;
+            envaseVinculadoSeleccionado = null;
             $('#select-envase-producto').val(id);
             $('#input-envase-nombre').val(nombre);
             $('#select-envase-cantidad').val(1);
 
             const tipo = $('#select-tipo-mov-envase').val();
             if (tipo === 'VENTA') {
-                $('#select-envase-precio').val(parseFloat(precio).toFixed(2));
+                actualizarPrecioVentaEnvase(id, precio);
             }
 
             // Ocultar modal y fijar scroll
@@ -291,6 +301,9 @@ $(function() {
         $('#select-producto').val(id);
         $('#input-producto-nombre').val(nombre);
         $('#select-cantidad').val(1);
+        // Al cambiar el producto principal, se limpian de inmediato los
+        // campos de envase y solo se vuelven a llenar si hay relación y venta.
+        cargarEnvaseVinculado(id);
 
         // Obtener datos oficiales del producto para asegurar precio unitario verdadero
         fetch(`/productos/${id}`)
@@ -443,6 +456,92 @@ $(function() {
     // MOVIMIENTO DE ENVASES
     // ====================================================================
     let envaseMovimientos = [];
+    let envaseVinculadoSeleccionado = null;
+    let solicitudEnvaseActual = 0;
+
+    function limpiarEnvaseVinculado() {
+        envaseVinculadoSeleccionado = null;
+        $('#select-envase-producto').val('');
+        $('#input-envase-nombre').val('');
+        $('#select-envase-cantidad').val('');
+        $('#select-envase-precio').val('');
+        $('#select-envase-fecha-limite').val('');
+    }
+
+    function cargarEnvaseVinculado(productoId) {
+        const solicitudActual = ++solicitudEnvaseActual;
+        limpiarEnvaseVinculado();
+
+        fetch(`/productos/${productoId}/envase`)
+            .then(response => response.ok ? response.json() : null)
+            .then(relacionEnvase => {
+                if (solicitudActual !== solicitudEnvaseActual) return null;
+                const envaseId = relacionEnvase?.envaseId;
+                if (!envaseId) {
+                    return null;
+                }
+
+                // Solo la venta de envases autoselecciona el envase vinculado.
+                // Para cualquier otro movimiento los campos ya quedaron limpios.
+                if ($('#select-tipo-mov-envase').val() !== 'VENTA') {
+                    return null;
+                }
+
+                return fetch(`/envases/api/${envaseId}`)
+                    .then(response => response.ok ? response.json() : null)
+                    .then(envase => {
+                        if (!envase || solicitudActual !== solicitudEnvaseActual) return null;
+                        envaseVinculadoSeleccionado = {
+                            productoId,
+                            envaseId: envase.id,
+                            nombre: envase.nombre,
+                            precioEnvase: Number(envase.precioEnvase) || 0
+                        };
+                        preseleccionarEnvaseVinculado();
+                    });
+            })
+            .catch(() => {
+                if (solicitudActual === solicitudEnvaseActual) {
+                    limpiarEnvaseVinculado();
+                }
+            });
+    }
+
+    function preseleccionarEnvaseVinculado() {
+        if (!envaseVinculadoSeleccionado) return;
+
+        $('#select-envase-producto').val(envaseVinculadoSeleccionado.productoId);
+        $('#input-envase-nombre').val(envaseVinculadoSeleccionado.nombre);
+        $('#select-envase-cantidad').val(1);
+        $('#select-envase-precio').val(envaseVinculadoSeleccionado.precioEnvase.toFixed(2));
+    }
+
+    function actualizarPrecioVentaEnvase(productoId, precioProductoAlternativo) {
+        fetch(`/productos/${productoId}/envase`)
+            .then(response => response.ok ? response.json() : null)
+            .then(relacionEnvase => {
+                const envaseId = relacionEnvase?.envaseId;
+
+                if (!envaseId) {
+                    return Number(precioProductoAlternativo) || 0;
+                }
+
+                return fetch(`/envases/api/${envaseId}`)
+                    .then(response => response.ok ? response.json() : null)
+                    .then(envase => Number(envase?.precioEnvase) || 0);
+            })
+            .then(precioUnitario => {
+                if ($('#select-tipo-mov-envase').val() === 'VENTA'
+                    && String($('#select-envase-producto').val()) === String(productoId)) {
+                    $('#select-envase-precio').val(Number(precioUnitario).toFixed(2));
+                }
+            })
+            .catch(() => {
+                if ($('#select-tipo-mov-envase').val() === 'VENTA') {
+                    $('#select-envase-precio').val((Number(precioProductoAlternativo) || 0).toFixed(2));
+                }
+            });
+    }
 
     // Mostrar/ocultar subseccion segun tipo de movimiento
     $('#select-tipo-mov-envase').on('change', function() {
@@ -456,6 +555,16 @@ $(function() {
                 $('#grupo-envase-fecha-limite').hide();
                 $('.col-envase-precio').show();
                 $('.col-envase-fecha').hide();
+                // Al activar la venta de envases, consultar el vínculo del
+                // producto principal que ya está seleccionado arriba.
+                const productoPrincipalId = $('#select-producto').val();
+                if (productoPrincipalId) {
+                    cargarEnvaseVinculado(productoPrincipalId);
+                } else {
+                    // También invalida cualquier consulta anterior pendiente.
+                    solicitudEnvaseActual++;
+                    limpiarEnvaseVinculado();
+                }
             } else if (tipo === 'PRESTAMO') {
                 $('#grupo-envase-precio').hide();
                 $('#grupo-envase-fecha-limite').show();
@@ -467,10 +576,12 @@ $(function() {
 
     // Buscar producto para envase
     $('#btn-buscar-envase-producto').on('click', function() {
+        destinoBusquedaProducto = 'envase';
         $('#modal-buscar-producto').modal('show');
     });
 
     $('#input-envase-nombre').on('click', function() {
+        destinoBusquedaProducto = 'envase';
         $('#modal-buscar-producto').modal('show');
     });
 

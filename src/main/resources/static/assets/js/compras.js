@@ -399,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         fila.dataset.nombre = p.nombre;
                         fila.dataset.precio = p.precioVenta;
                         fila.dataset.ganancia = p.gananciaProducto || 0;
-                        fila.dataset.categoria = p.categoria ? p.categoria.id : "";
+                        fila.dataset.categoria = p.idCategoria || "";
                         fila.dataset.capacidad = p.capacidad || "";
                         fila.dataset.unidad = p.unidadMedida || "";
 
@@ -411,7 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         fila.innerHTML = `
                             <td>${nombreFormateado}</td>
-                            <td>${p.categoria ? p.categoria.nombre : "-"}</td>
+                            <td>${p.nombreCategoria || "-"}</td>
                             <td class="text-right">S/ ${parseFloat(p.precioVenta).toFixed(2)}</td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
