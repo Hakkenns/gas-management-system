@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div th:fragment="bottom-nav(activePage)">
+        <nav class="bottom-nav-custom" role="navigation" aria-label="Navegación inferior">
+            <a th:href="@{/motorizado/asignados}"
+               th:classappend="${activePage == 'asignados'} ? 'active' : ''">
+                <i class="fas fa-truck-fast"></i><span>Asignados</span>
+            </a>
+            <a th:href="@{/motorizado/historial}"
+               th:classappend="${activePage == 'historial'} ? 'active' : ''">
+                <i class="fas fa-clock-rotate-left"></i><span>Historial</span>
+            </a>
+            <a href="#" onclick="event.preventDefault(); abrirModalEmergencia();" style="position: relative; color: #dc3545 !important;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem;"></i><span style="font-size: 0.65rem;">Alerta</span>
+            </a>
+            <a href="#" onclick="event.preventDefault(); abrirModalRespuestas();" style="position: relative;">
+                <i class="fas fa-bell"></i><span>Respuestas</span>
+                <span class="badge badge-danger position-absolute" id="badge-repartidor-notif" style="top: -2px; right: 5px; font-size: 0.6rem; display:none;">0</span>
+            </a>
+            <a th:href="@{/motorizado/perfil}"
+               th:classappend="${activePage == 'perfil'} ? 'active' : ''">
+                <i class="far fa-user"></i><span>Perfil</span>
+            </a>
+        </nav>
+    </div>
+
+    <div th:fragment="menú">
+        <nav class="bottom-nav-custom" role="navigation" aria-label="Navegación inferior">
+            <a th:href="@{/motorizado/asignados}">
+                <i class="fas fa-truck-fast"></i><span>Asignados</span>
+            </a>
+            <a th:href="@{/motorizado/historial}">
+                <i class="fas fa-clock-rotate-left"></i><span>Historial</span>
+            </a>
+            <a th:href="@{/motorizado/perfil}" class="active">
+                <i class="far fa-user"></i><span>Perfil</span>
+            </a>
+        </nav>
+    </div>
+    <!-- ========== MODAL DE EMERGENCIA (Repartidor) ========== -->
+    <div class="modal fade" id="modal-emergencia" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h6 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Reportar Emergencia</h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">Selecciona el tipo de emergencia para reportar al administrador.</p>
+                    <div class="form-group">
+                        <label class="font-weight-bold text-sm">Tipo de incidencia</label>
+                        <select class="form-control" id="tipo-emergencia-select">
+                            <option value="">Seleccione...</option>
+                            <option value="AVERIA_VEHICULO">🚨 Moto averiada</option>
+                            <option value="ACCIDENTE">🚨 Accidente en ruta</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="reportarEmergencia()">
+                        <i class="fas fa-exclamation-triangle"></i> Reportar Crítico
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL DE RESPUESTAS DE SOPORTE (Repartidor) ========== -->
+    <div class="modal fade" id="modal-respuestas" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h6 class="modal-title"><i class="fas fa-comments"></i> Respuestas de Soporte</h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="respuestas-container">
+                        <p class="text-muted text-center">No hay respuestas de soporte aún.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* ===== NUEVO DISEÑO: Tarjetas tipo burbuja de chat (fondo blanco) ===== */
+        .respuesta-card {
+            background-color: #ffffff;
+            color: #212529;
+            border-radius: 12px;
+            padding: 14px 16px 10px 16px;
+            margin-bottom: 12px;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #28a745;
+        }
+        .respuesta-card .admin-label {
+            font-weight: 700;
+            font-size: 0.82rem;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #212529;
+        }
+        .respuesta-card .respuesta-texto {
+            font-size: 0.88rem;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            color: #343a40;
+        }
+        .respuesta-card .respuesta-hora {
+            font-size: 0.68rem;
+            text-align: right;
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+        .respuestas-scroll {
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar-thumb {
+            background: #28a745;
+            border-radius: 4px;
+        }
+        .respuestas-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    </style>
+
+    <script>
+        // ========== FUNCIONES AYUDANTES - DISEÑO BURBUJA DE CHAT ==========
+
+        // Formatea una fecha/hora ISO a formato HH:mm (ej. "19:09")
+        function formatearHora(fechaISO) {
+            if (!fechaISO) return '';
+            var d = new Date(fechaISO);
+            return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+
+        // Separa el string "motoReemplazo" en modelo y placa.
+        // El backend envía: "PLACA - MODELO" (ej: "NGA2415 - Honda GL125")
+        function separarModeloPlaca(motoReemplazo) {
+            if (!motoReemplazo) return { modelo: 'No especificada', placa: '' };
+            var partes = motoReemplazo.split(' - ');
+            if (partes.length === 2) {
+                return { placa: partes[0].trim(), modelo: partes[1].trim() };
+            }
+            // Fallback: si no hay separador, el string completo se usa como modelo
+            return { modelo: motoReemplazo.trim(), placa: '' };
+        }
+
+        // Genera el texto predeterminado según el tipo de incidencia y datos recibidos
+        function generarTextoRespuesta(tipoIncidencia, motoReemplazo) {
+            var datos = separarModeloPlaca(motoReemplazo);
+            if (tipoIncidencia === 'AVERIA_VEHICULO') {
+                var texto = 'Se ha registrado un cambio de vehículo. Tu nueva unidad asignada es: ' + datos.modelo;
+                texto += datos.placa ? ' de placa ' + datos.placa + '.' : '.';
+                return texto;
+            } else if (tipoIncidencia === 'ACCIDENTE') {
+                var texto = 'Se ha registrado un reporte de accidente. Unidad de auxilio ' + datos.modelo;
+                texto += datos.placa ? ' de placa ' + datos.placa : '';
+                texto += ' y asistencia médica enviadas de inmediato.';
+                return texto;
+            }
+            return 'Notificación de soporte recibida.';
+        }
+
+        // Renderiza una tarjeta de respuesta con el nuevo diseño tipo burbuja de chat
+        function renderizarTarjetaRespuesta(r) {
+            var hora = formatearHora(r.createdAt);
+            var texto = generarTextoRespuesta(r.tipoIncidencia, r.motoReemplazo);
+            return '<div class="respuesta-card">' +
+                        '<div class="admin-label">👤 Administrador:</div>' +
+                        '<div class="respuesta-texto">' + texto + '</div>' +
+                        '<p class="respuesta-hora">' + hora + '</p>' +
+                    '</div>';
+        }
+
+        // ========== SISTEMA DE INCIDENCIAS Y RESPUESTAS (REPARTIDOR) ==========
+        let repartidorEmpleadoId = null;
+        let ultimasRespuestasCount = 0;
+        let repartidorNotifActivo = false;
+
+        function iniciarNotificacionesRepartidor(empleadoId) {
+            if (repartidorNotifActivo) return;
+            repartidorEmpleadoId = empleadoId;
+            repartidorNotifActivo = true;
+            if (empleadoId) {
+                verificarRespuestas();
+                setInterval(verificarRespuestas, 7000);
+            }
+        }
+
+        async function verificarRespuestas() {
+            if (!repartidorEmpleadoId) return;
+            try {
+                const res = await fetch('/api/incidencias/repartidor/' + repartidorEmpleadoId + '/respuestas');
+                const data = await res.json();
+                if (!data.success) return;
+
+                const respuestas = data.respuestas || [];
+                const total = data.total || 0;
+
+                const badge = document.getElementById('badge-repartidor-notif');
+                if (badge) {
+                    if (total > 0) {
+                        badge.textContent = total;
+                        badge.style.display = 'inline';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+
+                // Si hay nuevas respuestas desde la última verificación, mostrar alerta
+                if (total > ultimasRespuestasCount) {
+                    // Mostrar un toast simple
+                    const nuevas = total - ultimasRespuestasCount;
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Nueva respuesta de soporte',
+                            text: 'Tienes ' + nuevas + ' respuesta(s) nueva(s) del administrador.',
+                            timer: 4000,
+                            showConfirmButton: false,
+                            toast: true,
+                            position: 'top-end'
+                        });
+                    }
+                }
+                ultimasRespuestasCount = total;
+
+            } catch (e) {
+                console.error('Error al verificar respuestas:', e);
+            }
+        }
+
+        function abrirModalEmergencia() {
+            $('#modal-emergencia').modal('show');
+        }
+
+        async function reportarEmergencia() {
+            const tipo = document.getElementById('tipo-emergencia-select').value;
+
+            if (!tipo) {
+                Swal.fire({ title: 'Atención', text: 'Selecciona un tipo de emergencia.', icon: 'warning' });
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/incidencias', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tipoIncidencia: tipo
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Emergencia reportada',
+                        text: 'El administrador recibirá tu alerta y te enviará auxilio.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    $('#modal-emergencia').modal('hide');
+                    document.getElementById('tipo-emergencia-select').value = '';
+                } else {
+                    Swal.fire({ title: 'Error', text: data.message || 'Error al reportar', icon: 'error' });
+                }
+            } catch (e) {
+                Swal.fire({ title: 'Error', text: 'Error de conexión', icon: 'error' });
+            }
+        }
+
+        async function abrirModalRespuestas() {
+            if (!repartidorEmpleadoId) {
+                Swal.fire({ title: 'Atención', text: 'No se pudo identificar al repartidor.', icon: 'warning' });
+                return;
+            }
+
+            const container = document.getElementById('respuestas-container');
+            if (!container) return;
+
+            try {
+                const res = await fetch('/api/incidencias/repartidor/' + repartidorEmpleadoId + '/respuestas');
+                const data = await res.json();
+                if (!data.success) {
+                    container.innerHTML = '<p class="text-muted text-center">Error al cargar respuestas.</p>';
+                    $('#modal-respuestas').modal('show');
+                    return;
+                }
+
+                const respuestas = data.respuestas || [];
+                if (respuestas.length === 0) {
+                    container.innerHTML = '<p class="text-muted text-center">No hay respuestas de soporte aún.</p>';
+                } else {
+                    let html = '<div class="respuestas-scroll">';
+                    respuestas.forEach(r => {
+                        html += renderizarTarjetaRespuesta(r);
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                }
+
+                $('#modal-respuestas').modal('show');
+            } catch (e) {
+                console.error('Error al cargar respuestas:', e);
+                container.innerHTML = '<p class="text-muted text-center">Error de conexión.</p>';
+                $('#modal-respuestas').modal('show');
+            }
+        }
+    </script>
+</body>
+</html>
