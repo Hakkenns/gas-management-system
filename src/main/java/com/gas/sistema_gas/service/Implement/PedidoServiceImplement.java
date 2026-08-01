@@ -541,7 +541,7 @@ public class PedidoServiceImplement implements PedidoService {
 
         if ("ENTREGADO".equalsIgnoreCase(updateDto.estadoPedido())) {
             pedido.setFechaEntrega(LocalDateTime.now());
-            pedido.setEstadoPago("PAGADO");
+            recalcularEstadoPago(pedido);
         }
 
         return mapToSimpleResponse(pedidoRepository.save(pedido));
@@ -641,7 +641,7 @@ public class PedidoServiceImplement implements PedidoService {
 
         if ("ENTREGADO".equals(estadoNormalizado)) {
             pedido.setFechaEntrega(pedido.getFechaEntrega() != null ? pedido.getFechaEntrega() : LocalDateTime.now());
-            pedido.setEstadoPago("PAGADO");
+            recalcularEstadoPago(pedido);
         }
 
         return mapToSimpleResponse(pedidoRepository.save(pedido));
@@ -791,5 +791,25 @@ public class PedidoServiceImplement implements PedidoService {
     public Page<PedidoDTO.SimpleResponse> listEntregadosByEmpleadoIdWithFilters(Long empleadoId, String buscar, String metodoPago, LocalDateTime fechaInicio, LocalDateTime fechaFin, Pageable pageable) {
         Page<Pedido> pedidosPage = pedidoRepository.findEntregadosByEmpleadoIdWithFilters(empleadoId, buscar, metodoPago, fechaInicio, fechaFin, pageable);
         return pedidosPage.map(this::mapToSimpleResponse);
+    }
+
+    /**
+     * Recalcula el estadoPago del pedido a partir de la suma REAL de pedido_pagos
+     * comparada con el montoTotal. El estadoPago es independiente del estadoPedido:
+     * un pedido puede estar ENTREGADO y seguir PENDIENTE, CREDITO o con pago parcial.
+     */
+    private void recalcularEstadoPago(Pedido pedido) {
+        BigDecimal montoTotal = pedido.getMontoTotal() != null ? pedido.getMontoTotal() : BigDecimal.ZERO;
+        BigDecimal totalPagado = pedidoPagoRepository.findByPedido_Id(pedido.getId()).stream()
+                .map(pago -> pago.getMonto() != null ? pago.getMonto() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalPagado.compareTo(montoTotal) >= 0 && montoTotal.compareTo(BigDecimal.ZERO) > 0) {
+            pedido.setEstadoPago("PAGADO");
+        } else if (totalPagado.compareTo(BigDecimal.ZERO) > 0 || pedido.getFechaLimitePago() != null) {
+            pedido.setEstadoPago("CREDITO");
+        } else {
+            pedido.setEstadoPago("PENDIENTE");
+        }
     }
 }

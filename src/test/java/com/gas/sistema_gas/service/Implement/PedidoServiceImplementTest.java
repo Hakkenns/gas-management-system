@@ -20,6 +20,9 @@ import org.springframework.web.server.ResponseStatusException;
 import com.gas.sistema_gas.Mapper.PedidoMapper;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
+import com.gas.sistema_gas.Repository.EvidenciaRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
@@ -31,6 +34,12 @@ class PedidoServiceImplementTest {
 
     @Mock
     private PedidoRepository pedidoRepository;
+
+    @Mock
+    private PedidoPagoRepository pedidoPagoRepository;
+
+    @Mock
+    private EvidenciaRepository evidenciaRepository;
 
     @Mock
     private PedidoMapper pedidoMapper;
@@ -70,6 +79,7 @@ class PedidoServiceImplementTest {
                 );
 
         when(pedidoRepository.findByTipoVentaAndEmpleadoIdWithMetodoPago("DOMICILIO", 10L)).thenReturn(List.of(pedido));
+        when(pedidoPagoRepository.findByPedido_Id(1L)).thenReturn(List.of());
         when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
 
         List<PedidoDTO.SimpleResponse> result = pedidoService.listByTipoVentaAndEmpleadoId("DOMICILIO", 10L);
@@ -106,6 +116,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findById(1L)).thenReturn(Optional.of(pedido));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(1L)).thenReturn(List.of());
         when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
 
         PedidoDTO.SimpleResponse result = pedidoService.updateEstadoPedido(1L, "ACEPTADO");
@@ -126,5 +137,146 @@ class PedidoServiceImplementTest {
                 () -> pedidoService.updateEstadoPedido(2L, "ACEPTADO"));
 
         assertEquals("El estado del pedido no puede retroceder", exception.getReason());
+    }
+
+    @Test
+    void deberiaMantenerPendienteAlEntregarPedidoSinPagos() {
+        Pedido pedido = new Pedido();
+        pedido.setId(3L);
+        pedido.setEstadoPedido("EN_DOMICILIO");
+        pedido.setEstadoPago("PENDIENTE");
+        pedido.setMontoTotal(new BigDecimal("100.00"));
+
+        PedidoDTO.SimpleResponse mappedResponse = new PedidoDTO.SimpleResponse(
+            3L,
+            "NV003",
+            LocalDateTime.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            "ENTREGADO",
+            "PENDIENTE",
+            new BigDecimal("100.00"),
+            new BigDecimal("100.00"),
+            null,
+            "DOMICILIO",
+            null,
+            List.of()
+        );
+
+        when(pedidoRepository.findById(3L)).thenReturn(Optional.of(pedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(3L)).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
+
+        pedidoService.updateEstadoPedido(3L, "ENTREGADO");
+
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        assertEquals("PENDIENTE", pedido.getEstadoPago());
+    }
+
+    @Test
+    void deberiaMantenerCreditoAlEntregarPedidoConPagoParcial() {
+        Pedido pedido = new Pedido();
+        pedido.setId(4L);
+        pedido.setEstadoPedido("EN_DOMICILIO");
+        pedido.setEstadoPago("CREDITO");
+        pedido.setMontoTotal(new BigDecimal("100.00"));
+
+        PedidoPago pagoParcial = new PedidoPago();
+        pagoParcial.setId(41L);
+        pagoParcial.setMonto(new BigDecimal("50.00"));
+
+        PedidoDTO.SimpleResponse mappedResponse = new PedidoDTO.SimpleResponse(
+            4L,
+            "NV004",
+            LocalDateTime.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            "ENTREGADO",
+            "CREDITO",
+            new BigDecimal("100.00"),
+            new BigDecimal("100.00"),
+            null,
+            "DOMICILIO",
+            null,
+            List.of()
+        );
+
+        when(pedidoRepository.findById(4L)).thenReturn(Optional.of(pedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(4L)).thenReturn(List.of(pagoParcial));
+        when(evidenciaRepository.findByPedidoPago_Id(41L)).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
+
+        pedidoService.updateEstadoPedido(4L, "ENTREGADO");
+
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        assertEquals("CREDITO", pedido.getEstadoPago());
+    }
+
+    @Test
+    void deberiaMarcarPagadoSoloCuandoLosPagosCubrenElTotal() {
+        Pedido pedido = new Pedido();
+        pedido.setId(5L);
+        pedido.setEstadoPedido("EN_DOMICILIO");
+        pedido.setEstadoPago("CREDITO");
+        pedido.setMontoTotal(new BigDecimal("100.00"));
+
+        PedidoPago pagoCompleto = new PedidoPago();
+        pagoCompleto.setId(51L);
+        pagoCompleto.setMonto(new BigDecimal("100.00"));
+
+        PedidoDTO.SimpleResponse mappedResponse = new PedidoDTO.SimpleResponse(
+            5L,
+            "NV005",
+            LocalDateTime.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            "ENTREGADO",
+            "PAGADO",
+            new BigDecimal("100.00"),
+            new BigDecimal("100.00"),
+            null,
+            "DOMICILIO",
+            null,
+            List.of()
+        );
+
+        when(pedidoRepository.findById(5L)).thenReturn(Optional.of(pedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(5L)).thenReturn(List.of(pagoCompleto));
+        when(evidenciaRepository.findByPedidoPago_Id(51L)).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(mappedResponse);
+
+        pedidoService.updateEstadoPedido(5L, "ENTREGADO");
+
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        assertEquals("PAGADO", pedido.getEstadoPago());
+    }
+
+    @Test
+    void mapperDeberiaIgnorarEstadoPagoEnviadoPorElFrontend() {
+        // Regla 4: el backend no debe confiar en el estadoPago que envía el frontend
+        Pedido pedido = new Pedido();
+        pedido.setEstadoPago("PENDIENTE");
+        pedido.setEstadoPedido("PENDIENTE");
+
+        PedidoMapper realMapper = org.mapstruct.factory.Mappers.getMapper(PedidoMapper.class);
+        PedidoDTO.Update updateDto = new PedidoDTO.Update(null, "ENTREGADO", "PAGADO", "OP123", "mi observacion");
+
+        realMapper.updateEntityFromDto(updateDto, pedido);
+
+        // El estadoPago "PAGADO" del frontend NO debe sobrescribir el estado real
+        assertEquals("PENDIENTE", pedido.getEstadoPago());
+        assertEquals("mi observacion", pedido.getObservaciones());
     }
 }

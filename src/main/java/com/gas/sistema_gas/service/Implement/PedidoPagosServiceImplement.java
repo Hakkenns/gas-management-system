@@ -125,12 +125,13 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             evidenciaRepository.save(ev);
         }
 
-        // 4) Marcar pedido como ENTREGADO y PAGADO
+        // 4) Marcar pedido como ENTREGADO y recalcular el estado de pago
+        //    según la suma REAL de pedido_pagos vs montoTotal (independiente del estadoPedido)
         pedido.setEstadoPedido("ENTREGADO");
         if (pedido.getFechaEntrega() == null) {
             pedido.setFechaEntrega(java.time.LocalDateTime.now());
         }
-        pedido.setEstadoPago("PAGADO");
+        recalcularEstadoPago(pedido);
         // Persistir explícitamente los cambios en la tabla pedidos
         pedidoRepository.save(pedido);
 
@@ -209,12 +210,13 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             evidenciaRepository.save(ev);
         }
 
-        // Marcar pedido como ENTREGADO y PAGADO
+        // Marcar pedido como ENTREGADO y recalcular el estado de pago
+        // según la suma REAL de pedido_pagos vs montoTotal (independiente del estadoPedido)
         pedido.setEstadoPedido("ENTREGADO");
         if (pedido.getFechaEntrega() == null) {
             pedido.setFechaEntrega(java.time.LocalDateTime.now());
         }
-        pedido.setEstadoPago("PAGADO");
+        recalcularEstadoPago(pedido);
         // Persistir explícitamente los cambios en la tabla pedidos (estado_pedido, fecha_entrega, estado_pago)
         pedidoRepository.save(pedido);
 
@@ -224,6 +226,26 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Override
     public List<PedidoPago> findByPedidoId(Long idPedido) {
         return pedidoPagoRepository.findByPedido_Id(idPedido);
+    }
+
+    /**
+     * Recalcula el estadoPago del pedido a partir de la suma REAL de pedido_pagos
+     * comparada con el montoTotal. Un pedido puede estar ENTREGADO y seguir
+     * PENDIENTE, CREDITO o con pago parcial.
+     */
+    private void recalcularEstadoPago(Pedido pedido) {
+        BigDecimal montoTotal = pedido.getMontoTotal() != null ? pedido.getMontoTotal() : BigDecimal.ZERO;
+        BigDecimal totalPagado = pedidoPagoRepository.findByPedido(pedido).stream()
+                .map(pago -> pago.getMonto() != null ? pago.getMonto() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalPagado.compareTo(montoTotal) >= 0 && montoTotal.compareTo(BigDecimal.ZERO) > 0) {
+            pedido.setEstadoPago("PAGADO");
+        } else if (totalPagado.compareTo(BigDecimal.ZERO) > 0 || pedido.getFechaLimitePago() != null) {
+            pedido.setEstadoPago("CREDITO");
+        } else {
+            pedido.setEstadoPago("PENDIENTE");
+        }
     }
 
     private String almacenarImagen(MultipartFile archivoImagen) {
