@@ -24,6 +24,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -114,7 +115,7 @@ public class IncidenciaController {
         }
 
         // Validar que el pedido exista y esté asignado al empleado
-        var pedidoOpt = pedidoRepository.findById(idPedido);
+        var pedidoOpt = pedidoRepository.findByIdForUpdate(idPedido);
         if (pedidoOpt.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(Map.of("success", false, "message", "Pedido no encontrado"));
@@ -177,17 +178,16 @@ public class IncidenciaController {
         String nombreMotorizado = empleado.getNombre();
 
         // Enviar notificación por WebSocket a los administradores con datos completos
-        Map<String, Object> notificacion = Map.of(
-                "tipoIncidencia", tipoUpper,
-                "idPedido", pedido.getId(),
-                "codigoPedido", codigoPedido,
-                "nombreMotorizado", nombreMotorizado,
-                "nombreCliente", nombreCliente,
-                "celularCliente", celularCliente,
-                "urlEvidencia", urlEvidencia,
-                "idIncidencia", incidencia.getId(),
-                "createdAt", incidencia.getCreatedAt() != null ? incidencia.getCreatedAt().toString() : LocalDateTime.now().toString()
-        );
+        Map<String, Object> notificacion = new java.util.HashMap<>();
+        notificacion.put("tipoIncidencia", tipoUpper);
+        notificacion.put("idPedido", pedido.getId());
+        notificacion.put("codigoPedido", codigoPedido);
+        notificacion.put("nombreMotorizado", nombreMotorizado);
+        notificacion.put("nombreCliente", nombreCliente);
+        notificacion.put("celularCliente", celularCliente);
+        notificacion.put("urlEvidencia", urlEvidencia);
+        notificacion.put("idIncidencia", incidencia.getId());
+        notificacion.put("createdAt", incidencia.getCreatedAt() != null ? incidencia.getCreatedAt().toString() : LocalDateTime.now().toString());
 
         messagingTemplate.convertAndSend("/topic/admin/incidencias/detalle", notificacion);
 
@@ -202,7 +202,7 @@ public class IncidenciaController {
         ));
     }
 
-    // POST /api/incidencias/confirmar-rechazo - Admin confirma rechazo (ya se ejecutó en reportar, esto es solo para trigger adicional)
+    // POST /api/incidencias/confirmar-rechazo - Admin confirma rechazo
     @PostMapping("/confirmar-rechazo")
     @Transactional
     public ResponseEntity<?> confirmarRechazo(@RequestBody Map<String, Object> body, HttpSession session) {
@@ -230,50 +230,73 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "ID de pedido requerido"));
         }
 
-        var pedidoOpt = pedidoRepository.findById(idPedido);
+        var pedidoOpt = pedidoRepository.findByIdForUpdate(idPedido);
         if (pedidoOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         Pedido pedido = pedidoOpt.get();
-        Empleado empleadoAnterior = pedido.getEmpleado(); // Guardar antes de desasignar
+        String estadoActual = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "";
+
+        // Idempotencia: si ya está RECHAZADO, no procesar
+        if ("RECHAZADO".equals(estadoActual)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "El rechazo ya fue confirmado"));
+        }
+
+        // Validar estado previo
+        if (!"EN_REVISION".equals(estadoActual)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "El pedido debe estar en EN_REVISION para confirmar el rechazo"));
+        }
+
+        // Buscar incidencia pendiente de tipo RECHAZO_POST_LLEGADA
+        List<Incidencia> incidencias = incidenciaRepository.findByPedidoId(idPedido);
+        boolean existeRechazoPendiente = incidencias.stream()
+                .anyMatch(inc -> "RECHAZO_POST_LLEGADA".equalsIgnoreCase(inc.getTipoIncidencia())
+                        && "PENDIENTE".equalsIgnoreCase(inc.getEstado()));
+
+        if (!existeRechazoPendiente) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "No existe un rechazo pendiente para confirmar"));
+        }
+
+        Empleado empleadoAnterior = pedido.getEmpleado();
         String codigoPedido = pedido.getCodigo();
-        
+
         pedido.setEstadoPedido("RECHAZADO");
         pedido.setEstadoPago("CANCELADO");
         pedido.setEmpleado(null);
         pedidoRepository.save(pedido);
 
-        // Retornar stock
+        // Retornar stock exactamente una vez
         retornarStockPedido(pedido);
 
-        // Marcar todas las incidencias de este pedido como CONFIRMADO
-        List<Incidencia> incidencias = incidenciaRepository.findByPedidoId(idPedido);
+        // Marcar solo las incidencias pendientes de tipo RECHAZO_POST_LLEGADA
         for (Incidencia inc : incidencias) {
-            inc.setEstado("CONFIRMADO");
-            inc.setUpdatedAt(LocalDateTime.now());
-            incidenciaRepository.save(inc);
+            if ("RECHAZO_POST_LLEGADA".equalsIgnoreCase(inc.getTipoIncidencia())
+                    && "PENDIENTE".equalsIgnoreCase(inc.getEstado())) {
+                inc.setEstado("CONFIRMADO");
+                inc.setUpdatedAt(LocalDateTime.now());
+                incidenciaRepository.save(inc);
+            }
         }
 
         // Actualizar contador
         long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
         messagingTemplate.convertAndSend("/topic/admin/incidencias", contadorPendientes);
 
-        // Notificar al motorizado en tiempo real que su rechazo fue aceptado
+        // Notificar al motorizado
         if (empleadoAnterior != null) {
             String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + (codigoPedido != null ? codigoPedido : "N/A");
-            
-            // Guardar respuesta en BD para que aparezca en la bandeja de soporte del repartidor
+
             RespuestaIncidencia respuesta = new RespuestaIncidencia();
             respuesta.setMotoReemplazo("");
             respuesta.setCreatedAt(LocalDateTime.now());
             respuesta.setUpdatedAt(LocalDateTime.now());
-            // Asociar a la primera incidencia del pedido
-            if (!incidencias.isEmpty()) {
-                respuesta.setIncidencia(incidencias.get(0));
-            }
+            respuesta.setIncidencia(incidencias.get(0));
             respuestaIncidenciaRepository.save(respuesta);
-            
+
             messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + empleadoAnterior.getId(),
                 Map.of(
                     "mensaje", mensajeNotificacion,
@@ -282,7 +305,6 @@ public class IncidenciaController {
                     "motoReemplazo", ""
                 )
             );
-            // También enviar al canal de pedidos para que desaparezca de su lista
             messagingTemplate.convertAndSend("/topic/pedidos/" + empleadoAnterior.getId(),
                 Map.of(
                     "mensaje", "rechazo_confirmado",
@@ -666,23 +688,56 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "No autenticado"));
         }
 
-        var incidenciaOpt = incidenciaRepository.findById(id);
+        var incidenciaOpt = incidenciaRepository.findByIdForUpdate(id);
         if (incidenciaOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Incidencia no encontrada"));
         }
 
         Incidencia incidencia = incidenciaOpt.get();
+
+        // Validar tipo de incidencia
+        if (!"CLIENTE_AUSENTE".equalsIgnoreCase(incidencia.getTipoIncidencia())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "Esta acción solo corresponde a Cliente Ausente"));
+        }
+
+        // Idempotencia: si ya está ATENDIDO, no procesar
+        if ("ATENDIDO".equalsIgnoreCase(incidencia.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
+        }
+
+        // Validar que esté PENDIENTE
+        if (!"PENDIENTE".equalsIgnoreCase(incidencia.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
+        }
+
+        // Validar que tenga pedido asociado
+        if (incidencia.getPedido() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
+        }
+
+        // Cargar pedido con bloqueo
+        Pedido pedido = pedidoRepository.findByIdForUpdate(incidencia.getPedido().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        // Validar estado del pedido
+        String estadoPedido = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "";
+        if (!"CLIENTE_AUSENTE".equals(estadoPedido)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
+        }
+
+        // Marcar incidencia como ATENDIDO
         incidencia.setEstado("ATENDIDO");
         incidencia.setUpdatedAt(LocalDateTime.now());
         incidenciaRepository.save(incidencia);
 
-        // CLIENTE_AUSENTE: retornar stock automáticamente al confirmar
-        if (incidencia.getPedido() != null && "CLIENTE_AUSENTE".equalsIgnoreCase(incidencia.getTipoIncidencia())) {
-            Pedido pedido = incidencia.getPedido();
-            // Liberar stock_reservado
-            retornarStockPedido(pedido);
-        }
+        // Retornar stock exactamente una vez
+        retornarStockPedido(pedido);
 
         // Guardar respuesta en BD para que aparezca en la bandeja del repartidor
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
@@ -694,7 +749,7 @@ public class IncidenciaController {
 
         // Enviar notificación WebSocket al repartidor
         if (incidencia.getEmpleado() != null) {
-            String codigoPedido = incidencia.getPedido() != null ? incidencia.getPedido().getCodigo() : "N/A";
+            String codigoPedido = pedido.getCodigo() != null ? pedido.getCodigo() : "N/A";
             String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + codigoPedido;
             messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + incidencia.getEmpleado().getId(),
                 Map.of(
