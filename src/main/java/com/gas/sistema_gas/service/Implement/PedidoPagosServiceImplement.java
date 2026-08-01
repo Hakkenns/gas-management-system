@@ -154,7 +154,72 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
 
-        // Eliminar registros anteriores de pedido_pagos para evitar duplicados
+        BigDecimal montoTotal = pedido.getMontoTotal();
+        if (montoTotal == null || montoTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido debe tener un monto total mayor a cero");
+        }
+
+        // 1) Validar y resolver TODOS los pagos ANTES de tocar la persistencia.
+        //    No se usa continue silencioso: cualquier pago inválido aborta la operación.
+        record PagoResuelto(PagoRegistroDTO dto, MetodoPago metodo) {}
+        List<PagoResuelto> pagosResueltos = new ArrayList<>();
+        for (PagoRegistroDTO pagoDto : dto.pagos) {
+            if (pagoDto.idMetodo == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Método de pago no válido");
+            }
+            if (pagoDto.monto == null || pagoDto.monto.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto debe ser mayor a cero");
+            }
+            MetodoPago metodo = metodoPagoRepository.findById(pagoDto.idMetodo)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
+            pagosResueltos.add(new PagoResuelto(pagoDto, metodo));
+        }
+
+        if (pagosResueltos.size() < 2) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pago mixto requiere al menos dos métodos de pago");
+        }
+
+        // 2) El pago mixto exige al menos dos métodos de pago DIFERENTES.
+        long metodosDistintos = pagosResueltos.stream()
+                .map(p -> p.metodo.getId())
+                .distinct()
+                .count();
+        if (metodosDistintos < 2) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pago mixto requiere al menos dos métodos de pago diferentes");
+        }
+
+        // 3) El campo monto del DTO representa el dinero recibido por ese método.
+        BigDecimal totalRecibido = pagosResueltos.stream()
+                .map(p -> p.dto.monto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalRecibido.compareTo(montoTotal) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El total pagado no cubre el monto del pedido");
+        }
+
+        // 4) El vuelto se calcula EXCLUSIVAMENTE en backend. pagoDto.vuelto se ignora.
+        BigDecimal vueltoTotal = totalRecibido.subtract(montoTotal);
+
+        PagoResuelto pagoEfectivoConVuelto = null;
+        if (vueltoTotal.compareTo(BigDecimal.ZERO) > 0) {
+            pagoEfectivoConVuelto = pagosResueltos.stream()
+                    .filter(p -> "Efectivo".equalsIgnoreCase(p.metodo.getNombre()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "No se puede entregar vuelto sin un pago en efectivo"));
+            if (pagoEfectivoConVuelto.dto.monto.compareTo(vueltoTotal) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El efectivo recibido no cubre el vuelto a entregar");
+            }
+            // El monto aplicado al efectivo debe ser estrictamente mayor que cero
+            BigDecimal montoAplicadoEfectivo = pagoEfectivoConVuelto.dto.monto.subtract(vueltoTotal);
+            if (montoAplicadoEfectivo.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cada método debe aplicar un monto mayor a cero al pedido");
+            }
+        }
+
+        // 4) Validaciones completas: recién ahora se puede reemplazar el historial de pagos.
         List<PedidoPago> pagosAnteriores = pedidoPagoRepository.findByPedido(pedido);
         if (!pagosAnteriores.isEmpty()) {
             pedidoPagoRepository.deleteAll(pagosAnteriores);
@@ -164,22 +229,33 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         List<PedidoPago> pagosGuardados = new ArrayList<>();
         int evidenciaIndex = 0;
 
-        for (PagoRegistroDTO pagoDto : dto.pagos) {
-            if (pagoDto.idMetodo == null) {
-                continue;
-            }
-
-            MetodoPago metodo = metodoPagoRepository.findById(pagoDto.idMetodo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
+        for (PagoResuelto pagoResuelto : pagosResueltos) {
+            boolean esEfectivoConVuelto = pagoResuelto == pagoEfectivoConVuelto;
 
             PedidoPago pago = new PedidoPago();
             pago.setPedido(pedido);
-            pago.setMetodoPago(metodo);
-            pago.setMonto(pagoDto.monto != null ? pagoDto.monto : BigDecimal.ZERO);
-            pago.setNumOperacion(pagoDto.numOperacion);
-            pago.setVuelto(pagoDto.vuelto != null ? pagoDto.vuelto : BigDecimal.ZERO);
+            pago.setMetodoPago(pagoResuelto.metodo);
+            pago.setNumOperacion(pagoResuelto.dto.numOperacion);
+            if (esEfectivoConVuelto) {
+                // El vuelto se descuenta únicamente del primer pago en Efectivo
+                pago.setMonto(pagoResuelto.dto.monto.subtract(vueltoTotal));
+                pago.setVuelto(vueltoTotal);
+            } else {
+                pago.setMonto(pagoResuelto.dto.monto);
+                pago.setVuelto(BigDecimal.ZERO);
+            }
 
             PedidoPago pagoGuardado = pedidoPagoRepository.save(pago);
+
+            // La evidencia del vuelto se asocia al pago en Efectivo que entrega el vuelto
+            if (esEfectivoConVuelto && evidenciaVuelto != null && !evidenciaVuelto.isEmpty()) {
+                String url = almacenarImagen(evidenciaVuelto);
+                Evidencia ev = new Evidencia();
+                ev.setPedidoPago(pagoGuardado);
+                ev.setUrlImagen(url);
+                ev.setTipoEvidencia("VUELTO");
+                evidenciaRepository.save(ev);
+            }
 
             // Guardar evidencia si hay archivo disponible para este pago
             if (evidencias != null && evidenciaIndex < evidencias.size()) {
@@ -198,16 +274,9 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             pagosGuardados.add(pagoGuardado);
         }
 
-        // Guardar evidencia de vuelto si se proporcionó
-        if (evidenciaVuelto != null && !evidenciaVuelto.isEmpty() && !pagosGuardados.isEmpty()) {
-            // Asociar la evidencia de vuelto al último pago registrado
-            PedidoPago ultimoPago = pagosGuardados.get(pagosGuardados.size() - 1);
-            String url = almacenarImagen(evidenciaVuelto);
-            Evidencia ev = new Evidencia();
-            ev.setPedidoPago(ultimoPago);
-            ev.setUrlImagen(url);
-            ev.setTipoEvidencia("VUELTO");
-            evidenciaRepository.save(ev);
+        // Salvaguarda: nunca marcar ENTREGADO sin pagos persistidos
+        if (pagosGuardados.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se pudo registrar ningún pago");
         }
 
         // Marcar pedido como ENTREGADO y recalcular el estado de pago
