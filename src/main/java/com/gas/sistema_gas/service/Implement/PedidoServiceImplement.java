@@ -554,7 +554,7 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estado del pedido es obligatorio");
         }
 
-        Pedido pedido = pedidoRepository.findById(id)
+        Pedido pedido = pedidoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
 
         String estadoActual = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "PENDIENTE";
@@ -591,57 +591,48 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estado del pedido no puede retroceder");
         }
 
-        pedido.setEstadoPedido(estadoNormalizado);
-
         // ===== CONTROL DE INVENTARIO SEGÚN ESTADOS =====
-        
-        // Si pasa a CARGADO: descuenta stock real y libera reserva (idempotente)
-        if ("CARGADO".equals(estadoNormalizado) && !"CARGADO".equals(estadoActual) 
-                && !"EN_CAMINO".equals(estadoActual) && !"EN_DOMICILIO".equals(estadoActual)
-                && !"ENTREGADO".equals(estadoActual)) {
-            
-            List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
-            for (DetallePedido detalle : detalles) {
-                Producto producto = detalle.getProducto();
-                BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
-                
-                // Descontar stock real por PEPS
-                inventarioLoteService.descontarStockPorPEPS(producto.getId(), cant);
-                
-                // Sincronizar stock_llenos desde lotes
-                BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                    .stream()
-                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-                producto.setStockLlenos(stockActualLotes);
-                
-                // Restar la reserva (libera el stock_reservado)
-                BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
-                BigDecimal nuevaReserva = reservadoActual.subtract(cant);
-                producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
-                
-                productoRepository.save(producto);
-            }
-        }
 
-        // Si ANULA desde PENDIENTE: libera solo la reserva
         if ("ANULADO".equals(estadoNormalizado)) {
-            List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
-            for (DetallePedido detalle : detalles) {
-                Producto producto = detalle.getProducto();
-                BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
-                
-                BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
-                BigDecimal nuevaReserva = reservadoActual.subtract(cant);
-                producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
-                
-                productoRepository.save(producto);
-            }
-        }
+            // Liberar reservas ANTES de marcar como ANULADO
+            liberarReservaPedido(pedido);
+            pedido.setEstadoPedido("ANULADO");
+        } else {
+            pedido.setEstadoPedido(estadoNormalizado);
 
-        if ("ENTREGADO".equals(estadoNormalizado)) {
-            pedido.setFechaEntrega(pedido.getFechaEntrega() != null ? pedido.getFechaEntrega() : LocalDateTime.now());
-            recalcularEstadoPago(pedido);
+            // Si pasa a CARGADO: descuenta stock real y libera reserva (idempotente)
+            if ("CARGADO".equals(estadoNormalizado) && !"CARGADO".equals(estadoActual)
+                    && !"EN_CAMINO".equals(estadoActual) && !"EN_DOMICILIO".equals(estadoActual)
+                    && !"ENTREGADO".equals(estadoActual)) {
+
+                List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+                for (DetallePedido detalle : detalles) {
+                    Producto producto = detalle.getProducto();
+                    BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
+
+                    // Descontar stock real por PEPS
+                    inventarioLoteService.descontarStockPorPEPS(producto.getId(), cant);
+
+                    // Sincronizar stock_llenos desde lotes
+                    BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                        .stream()
+                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    producto.setStockLlenos(stockActualLotes);
+
+                    // Restar la reserva (libera el stock_reservado)
+                    BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+                    BigDecimal nuevaReserva = reservadoActual.subtract(cant);
+                    producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
+
+                    productoRepository.save(producto);
+                }
+            }
+
+            if ("ENTREGADO".equals(estadoNormalizado)) {
+                pedido.setFechaEntrega(pedido.getFechaEntrega() != null ? pedido.getFechaEntrega() : LocalDateTime.now());
+                recalcularEstadoPago(pedido);
+            }
         }
 
         return mapToSimpleResponse(pedidoRepository.save(pedido));
@@ -667,40 +658,47 @@ public class PedidoServiceImplement implements PedidoService {
     @Override
     @Transactional
     public void deleteOrder(Long id) {
-        Pedido pedido = pedidoRepository.findById(id)
+        Pedido pedido = pedidoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
 
-        if ("ANULADO".equals(pedido.getEstadoPedido())) {
+        String estadoActual = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "PENDIENTE";
+
+        if ("ANULADO".equals(estadoActual)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido ya está anulado");
         }
 
-        // 3. Importante: Que el Repo tenga findByPedido(Pedido pedido)
-        List<DetallePedido> detalles = detalleRepository.findByPedido(pedido);
-
-        for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            BigDecimal cantidadADevolver = BigDecimal.valueOf(detalle.getCantidad());
-            
-            // Devolver stock al último lote de este producto
-            List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
-            if (!lotes.isEmpty()) {
-                com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
-                ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadADevolver));
-                inventarioLoteRepository.save(ultimoLote);
-            }
-
-            // Sincronizar el campo estático stock_llenos
-            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                    .stream()
-                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            producto.setStockLlenos(stockDisponible);
-            productoRepository.save(producto);
+        if (!"PENDIENTE".equals(estadoActual)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se puede anular un pedido en estado PENDIENTE");
         }
 
+        // Liberar reservas antes de marcar como ANULADO
+        liberarReservaPedido(pedido);
 
         pedido.setEstadoPedido("ANULADO");
         pedidoRepository.save(pedido);
+    }
+
+    /**
+     * Libera el stockReservado de todos los detalles de un pedido.
+     * No toca InventarioLote, no llama descontarStockPorPEPS, no modifica stockLlenos.
+     * Lanza CONFLICT si la reserva es menor que la cantidad del detalle.
+     */
+    private void liberarReservaPedido(Pedido pedido) {
+        List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+        for (DetallePedido detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
+
+            BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+
+            if (reservadoActual.compareTo(cant) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "La reserva del producto es menor que la cantidad del pedido");
+            }
+
+            producto.setStockReservado(reservadoActual.subtract(cant));
+            productoRepository.save(producto);
+        }
     }
 
     @Override
