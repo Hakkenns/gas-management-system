@@ -20,7 +20,6 @@ public class SecurityInterceptor implements HandlerInterceptor {
     private static final String[] ALLOWED_PATHS = {
         "/login",
         "/assets/",
-        "/api/",           // APIs públicas si las necesitas
         "/error"
     };
 
@@ -40,7 +39,7 @@ public class SecurityInterceptor implements HandlerInterceptor {
         
         // Si no hay sesión o no hay usuario logueado, redirigir a login
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
-            response.sendRedirect("/login");
+            response.sendRedirect(request.getContextPath() + "/login");
             return false;
         }
 

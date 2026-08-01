@@ -31,9 +31,12 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")  // Aplicar a todas las rutas
                 .excludePathPatterns(    // Excepto estas
                     "/login",
+                    "/logout",
                     "/assets/**",
                     "/img/**",
                     "/images/**",
+                    "/css/**",
+                    "/js/**",
                     "/error",
                     "/h2-console/**"     // Si usas H2 console
                 );

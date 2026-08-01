@@ -3,6 +3,7 @@ package com.gas.sistema_gas.controller;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
@@ -72,5 +73,12 @@ class EvidenciaControllerTest {
                 .andExpect(jsonPath("$.pago[0].urlImagen").value("/images/pago.jpg"))
                 .andExpect(jsonPath("$.pago[0].numOperacion").value("123456"))
                 .andExpect(jsonPath("$.vuelto[0].tipoEvidencia").value("VUELTO"));
+    }
+
+    @Test
+    void shouldRedirectToLoginWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/api/evidencias/7"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/login"));
     }
 }
