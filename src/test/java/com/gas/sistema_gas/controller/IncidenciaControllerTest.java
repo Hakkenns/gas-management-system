@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -303,6 +304,324 @@ class IncidenciaControllerTest {
         verify(pedidoRepository, never()).findByIdForUpdate(any());
     }
 
+    // ========== PRUEBAS DE REASIGNAR PEDIDO ==========
+    
+    // PRUEBA 11: reasignarPedido válido - CLIENTE_AUSENTE/PENDIENTE a PENDIENTE con nuevo repartidor
+    
+    @Test
+    void reasignarPedido_valido_CLIENTE_AUSENTE() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+        producto.setStockReservado(BigDecimal.ZERO);
+        producto.setStockLlenos(BigDecimal.valueOf(15));
+        
+        DetallePedido detalle = new DetallePedido();
+        detalle.setProducto(producto);
+        detalle.setCantidad(5);
+        
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setCodigo("PED-001");
+        Empleado empleadoAnterior = new Empleado();
+        empleadoAnterior.setId(1L);
+        empleadoAnterior.setNombre("Motorizado Anterior");
+        pedido.setEmpleado(empleadoAnterior);
+        
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(empleadoAnterior);
+        
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(15));
+        
+        Empleado nuevoRepartidor = new Empleado();
+        nuevoRepartidor.setId(2L);
+        nuevoRepartidor.setNombre("Nuevo Motorizado");
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(respuestaIncidenciaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("PENDIENTE", pedido.getEstadoPedido());
+        assertEquals(nuevoRepartidor, pedido.getEmpleado());
+        assertEquals("ATENDIDO", incidencia.getEstado());
+        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
+        assertEquals(BigDecimal.valueOf(20), producto.getStockLlenos());
+        assertEquals(BigDecimal.valueOf(5), producto.getStockReservado());
+        
+        verify(incidenciaRepository).findByIdForUpdate(10L);
+        verify(pedidoRepository).findByIdForUpdate(1L);
+        verify(incidenciaRepository, never()).findById(any());
+        verify(pedidoRepository, never()).findById(any());
+        verify(respuestaIncidenciaRepository).save(any(RespuestaIncidencia.class));
+    }
+    
+    // PRUEBA 12: reasignarPedido sobre incidencia ATENDIDO retorna 409
+    
+    @Test
+    void reasignarPedido_sobreATENDIDO_retorna409() {
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "ATENDIDO", pedido);
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("La incidencia ya fue atendida", body.get("message"));
+        verify(pedidoRepository, never()).findByIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(productoRepository, never()).save(any());
+        verify(pedidoRepository, never()).save(any());
+        verify(respuestaIncidenciaRepository, never()).save(any());
+    }
+    
+    // PRUEBA 13: reasignarPedido sobre tipo RECHAZO_POST_LLEGADA retorna 400
+    
+    @Test
+    void reasignarPedido_sobreRECHAZO_POST_LLEGADA_retorna400() {
+        Pedido pedido = pedido(1L, "EN_REVISION");
+        Incidencia incidencia = incidencia(10L, "RECHAZO_POST_LLEGADA", "PENDIENTE", pedido);
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("Solo se pueden reasignar incidencias de Cliente Ausente", body.get("message"));
+        verify(pedidoRepository, never()).findByIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+    }
+    
+    // PRUEBA 14: reasignarPedido sobre pedido EN_REVISION retorna 409
+    
+    @Test
+    void reasignarPedido_cuandoPedidoNoEsCLIENTE_AUSENTE_retorna409() {
+        Pedido pedido = pedido(1L, "EN_REVISION");
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("El pedido no está en estado CLIENTE_AUSENTE", body.get("message"));
+        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(productoRepository, never()).save(any());
+        verify(pedidoRepository, never()).save(any());
+        verify(respuestaIncidenciaRepository, never()).save(any());
+    }
+    
+    // PRUEBA 15: reasignarPedido sin pedido asociado retorna 400
+    
+    @Test
+    void reasignarPedido_sinPedidoAsociado_retorna400() {
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", null);
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("La incidencia no tiene un pedido asociado", body.get("message"));
+        verify(pedidoRepository, never()).findByIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+    }
+    
+    // PRUEBA 16: reasignarPedido con stock proyectado insuficiente retorna 409
+    
+    @Test
+    void reasignarPedido_stockProyectadoInsuficiente_retorna409() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+        producto.setStockReservado(BigDecimal.valueOf(3));
+        producto.setStockLlenos(BigDecimal.valueOf(2));
+        
+        DetallePedido detalle = new DetallePedido();
+        detalle.setProducto(producto);
+        detalle.setCantidad(5);
+        
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setCodigo("PED-001");
+        Empleado empleado = new Empleado();
+        empleado.setId(1L);
+        empleado.setNombre("Motorizado");
+        pedido.setEmpleado(empleado);
+        
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(empleado);
+        
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(2));
+        
+        Empleado nuevoRepartidor = new Empleado();
+        nuevoRepartidor.setId(2L);
+        nuevoRepartidor.setNombre("Nuevo Motorizado");
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        
+        ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> incidenciaController.reasignarPedido(10L, Map.of("idNuevoRepartidor", 2L), session())
+        );
+        
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Stock insuficiente para reasignar el pedido: Gas 10kg", exception.getReason());
+        
+        verify(inventarioLoteRepository, never()).save(any());
+        verify(productoRepository, never()).save(any());
+        verify(pedidoRepository, never()).save(any());
+        verify(incidenciaRepository, never()).save(any());
+        verify(respuestaIncidenciaRepository, never()).save(any());
+    }
+    
+    // PRUEBA 17: reasignarPedido usa findByIdForUpdate y nunca findById
+    
+    @Test
+    void reasignarPedido_usaFindByIdForUpdate() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+        producto.setStockReservado(BigDecimal.ZERO);
+        producto.setStockLlenos(BigDecimal.valueOf(15));
+        
+        DetallePedido detalle = new DetallePedido();
+        detalle.setProducto(producto);
+        detalle.setCantidad(5);
+        
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setCodigo("PED-001");
+        Empleado empleado = new Empleado();
+        empleado.setId(1L);
+        empleado.setNombre("Motorizado");
+        pedido.setEmpleado(empleado);
+        
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(empleado);
+        
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(15));
+        
+        Empleado nuevoRepartidor = new Empleado();
+        nuevoRepartidor.setId(2L);
+        nuevoRepartidor.setNombre("Nuevo Motorizado");
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(respuestaIncidenciaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        
+        ResponseEntity<?> response = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(incidenciaRepository).findByIdForUpdate(10L);
+        verify(pedidoRepository).findByIdForUpdate(1L);
+        verify(incidenciaRepository, never()).findById(10L);
+        verify(pedidoRepository, never()).findById(1L);
+    }
+    
+    // PRUEBA 18: Doble ejecución - segunda ejecución retorna 409
+    
+    @Test
+    void reasignarPedido_dobleEjecucion_segundaRetorna409() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+        producto.setStockReservado(BigDecimal.ZERO);
+        producto.setStockLlenos(BigDecimal.valueOf(15));
+        
+        DetallePedido detalle = new DetallePedido();
+        detalle.setProducto(producto);
+        detalle.setCantidad(5);
+        
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setCodigo("PED-001");
+        Empleado empleado = new Empleado();
+        empleado.setId(1L);
+        empleado.setNombre("Motorizado");
+        pedido.setEmpleado(empleado);
+        
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(empleado);
+        
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(15));
+        
+        Empleado nuevoRepartidor = new Empleado();
+        nuevoRepartidor.setId(2L);
+        nuevoRepartidor.setNombre("Nuevo Motorizado");
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(respuestaIncidenciaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        
+        // Primera ejecución
+        ResponseEntity<?> response1 = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.OK, response1.getStatusCode());
+        assertEquals("ATENDIDO", incidencia.getEstado());
+        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
+        
+        // Segunda ejecución
+        ResponseEntity<?> response2 = incidenciaController.reasignarPedido(10L, 
+            Map.of("idNuevoRepartidor", 2L), session());
+        
+        assertEquals(HttpStatus.CONFLICT, response2.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response2.getBody();
+        assertEquals("La incidencia ya fue atendida", body.get("message"));
+        
+        // Verificar que el stock solo se devolvió una vez
+        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
+        assertEquals(BigDecimal.valueOf(5), producto.getStockReservado());
+        
+        // Verificar que solo se creó una RespuestaIncidencia
+        verify(respuestaIncidenciaRepository, times(1)).save(any());
+    }
+    
     // PRUEBA 10: marcarComoRevisado cuando el pedido no está CLIENTE_AUSENTE
 
     @Test

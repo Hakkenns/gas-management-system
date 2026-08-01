@@ -782,13 +782,62 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "No autenticado"));
         }
 
-        var incidenciaOpt = incidenciaRepository.findById(id);
+        // OBJETIVO 1: Cargar incidencia con bloqueo
+        var incidenciaOpt = incidenciaRepository.findByIdForUpdate(id);
         if (incidenciaOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Incidencia no encontrada"));
         }
 
         Incidencia incidencia = incidenciaOpt.get();
+        
+        // OBJETIVO 2: Validaciones antes de modificar inventario o estados
+        
+        // 1. Validar tipo de incidencia
+        String tipoIncidencia = incidencia.getTipoIncidencia();
+        if (tipoIncidencia == null || !"CLIENTE_AUSENTE".equalsIgnoreCase(tipoIncidencia)) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Solo se pueden reasignar incidencias de Cliente Ausente"));
+        }
+        
+        // 2. Validar que la incidencia no esté ATENDIDO
+        String estadoIncidencia = incidencia.getEstado();
+        if ("ATENDIDO".equalsIgnoreCase(estadoIncidencia)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
+        }
+        
+        // 3. Validar que la incidencia esté PENDIENTE
+        if (!"PENDIENTE".equalsIgnoreCase(estadoIncidencia)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
+        }
+        
+        // 4. Validar que tenga pedido asociado
+        Pedido pedido = incidencia.getPedido();
+        if (pedido == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
+        }
+        
+        // OBJETIVO 1: Cargar pedido con bloqueo
+        Long pedidoId = pedido.getId();
+        var pedidoOpt = pedidoRepository.findByIdForUpdate(pedidoId);
+        if (pedidoOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Pedido no encontrado"));
+        }
+        
+        pedido = pedidoOpt.get();
+        
+        // 5. Validar estado del pedido
+        String estadoPedido = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "";
+        if (!"CLIENTE_AUSENTE".equals(estadoPedido)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
+        }
+        
+        // 6. Validar idNuevoRepartidor y existencia del empleado
         Long idNuevoRepartidor = body.get("idNuevoRepartidor") != null 
                 ? ((Number) body.get("idNuevoRepartidor")).longValue() 
                 : null;
@@ -805,31 +854,66 @@ public class IncidenciaController {
         }
 
         Empleado nuevoRepartidor = nuevoRepartidorOpt.get();
-        Pedido pedido = incidencia.getPedido();
-
-        if (pedido == null) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
+        
+        // OBJETIVO 3: Validar inventario proyectado antes de modificar
+        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(pedidoId);
+        for (DetallePedido detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            Integer cantidadPedido = detalle.getCantidad();
+            
+            // Calcular stock real actual (suma de cantidadActual de los lotes)
+            List<com.gas.sistema_gas.Model.InventarioLote> lotes = 
+                inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
+            BigDecimal stockRealActual = lotes.stream()
+                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            // Calcular stock reservado actual
+            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
+                ? producto.getStockReservado() 
+                : BigDecimal.ZERO;
+            
+            // Calcular stock real después de devolución
+            BigDecimal stockRealDespuesDevolucion = stockRealActual.add(BigDecimal.valueOf(cantidadPedido));
+            
+            // Calcular stock disponible proyectado
+            BigDecimal stockDisponibleProyectado = stockRealDespuesDevolucion.subtract(stockReservadoActual);
+            
+            // Validar si hay stock suficiente
+            if (stockDisponibleProyectado.compareTo(BigDecimal.valueOf(cantidadPedido)) < 0) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Stock insuficiente para reasignar el pedido: " + producto.getNombre()
+                );
+            }
         }
-
-        // Reasignar el pedido al nuevo repartidor
+        
+        // OBJETIVO 4: Devolver y reservar stock
+        // 1. Ejecutar retornarStockPedido exactamente una vez
+        retornarStockPedido(pedido);
+        
+        // 2. Reservar nuevamente las cantidades del pedido
+        reservarStockParaReasignacion(pedido);
+        
+        // OBJETIVO 5: Finalizar reasignación
+        // Asignar nuevo repartidor y cambiar estado a PENDIENTE
         pedido.setEmpleado(nuevoRepartidor);
         pedido.setEstadoPedido("PENDIENTE");
         pedidoRepository.save(pedido);
-
-        // Marcar incidencia como atendida
+        
+        // Marcar incidencia como ATENDIDO
         incidencia.setEstado("ATENDIDO");
         incidencia.setUpdatedAt(LocalDateTime.now());
         incidenciaRepository.save(incidencia);
-
-        // Guardar respuesta de la incidencia
+        
+        // Crear exactamente una RespuestaIncidencia
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
         respuesta.setIncidencia(incidencia);
         respuesta.setMotoReemplazo("Reasignado a: " + nuevoRepartidor.getNombre());
         respuesta.setCreatedAt(LocalDateTime.now());
         respuesta.setUpdatedAt(LocalDateTime.now());
         respuestaIncidenciaRepository.save(respuesta);
-
+        
         // Notificar al nuevo repartidor por WebSocket
         messagingTemplate.convertAndSend("/topic/pedidos/" + nuevoRepartidor.getId(), 
             Map.of(
@@ -838,11 +922,11 @@ public class IncidenciaController {
                 "codigo", pedido.getCodigo()
             )
         );
-
+        
         // Actualizar contador de incidencias pendientes
         long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
         messagingTemplate.convertAndSend("/topic/admin/incidencias", contadorPendientes);
-
+        
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Pedido " + pedido.getCodigo() + " reasignado a " + nuevoRepartidor.getNombre() + " correctamente."
@@ -875,6 +959,27 @@ public class IncidenciaController {
             return "/imagenes-sistema/" + fileName;
         } catch (IOException e) {
             throw new RuntimeException("Error al guardar la evidencia: " + e.getMessage());
+        }
+    }
+
+    // OBJETIVO 4: Método privado para reservar stock durante reasignación
+    private void reservarStockParaReasignacion(Pedido pedido) {
+        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(pedido.getId());
+        for (DetallePedido detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
+            
+            // Obtener stockReservado actual, usando cero si es null
+            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
+                ? producto.getStockReservado() 
+                : BigDecimal.ZERO;
+            
+            // Sumar la cantidad del detalle
+            stockReservadoActual = stockReservadoActual.add(cantidadAReservar);
+            
+            // Guardar Producto
+            producto.setStockReservado(stockReservadoActual);
+            productoRepository.save(producto);
         }
     }
 
