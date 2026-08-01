@@ -17,8 +17,11 @@ import com.gas.sistema_gas.Model.Evidencia;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
+import com.gas.sistema_gas.Repository.IncidenciaRepository;
+import com.gas.sistema_gas.Repository.RespuestaIncidenciaRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 
-@WebMvcTest(VentaController.class)
+@WebMvcTest(EvidenciaController.class)
 class EvidenciaControllerTest {
 
     @Autowired
@@ -26,6 +29,15 @@ class EvidenciaControllerTest {
 
     @MockBean
     private EvidenciaRepository evidenciaRepository;
+
+    @MockBean
+    private IncidenciaRepository incidenciaRepository;
+
+    @MockBean
+    private RespuestaIncidenciaRepository respuestaIncidenciaRepository;
+
+    @MockBean
+    private UsuarioRepository usuarioRepository;
 
     @Test
     void shouldReturnEvidenceGroupedByType() throws Exception {
@@ -51,7 +63,10 @@ class EvidenciaControllerTest {
 
         when(evidenciaRepository.findByPedidoPago_Id(7L)).thenReturn(List.of(evidenciaPago, evidenciaVuelto));
 
-        mockMvc.perform(get("/api/evidencias/7"))
+        mockMvc.perform(
+                get("/api/evidencias/7")
+                        .sessionAttr("usuarioLogueado", true)
+        )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pedidoId").value(7))
                 .andExpect(jsonPath("$.pago[0].urlImagen").value("/images/pago.jpg"))
