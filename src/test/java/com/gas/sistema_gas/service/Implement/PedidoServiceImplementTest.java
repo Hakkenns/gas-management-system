@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -396,5 +397,181 @@ class PedidoServiceImplementTest {
         verify(pedidoRepository).findByIdForUpdate(16L);
         // findById nunca debe ser llamado para deleteOrder
         verify(pedidoRepository, never()).findById(any());
+    }
+
+    // ---------- PRUEBA 8: CLIENTE_AUSENTE → ACEPTADO con stock disponible ----------
+
+    @Test
+    void updateEstadoPedido_CLIENTE_AUSENTE_a_ACEPTADO_conStock_disponible_reservaStock() {
+        Pedido pedido = pedido(20L, "CLIENTE_AUSENTE");
+        Producto producto = producto(1L, new BigDecimal("3.00")); // stockReservado inicial 3
+        DetallePedido detalle = detalle(producto, 5); // cantidad 5
+
+        // Simular lote con cantidadActual 20
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(new BigDecimal("20.00"));
+
+        when(pedidoRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(20L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(20L, "ACEPTADO"));
+
+        pedidoService.updateEstadoPedido(20L, "ACEPTADO");
+
+        // Verificar estado final
+        assertEquals("ACEPTADO", pedido.getEstadoPedido());
+
+        // Verificar stockReservado final = 3 + 5 = 8
+        assertEquals(0, new BigDecimal("8.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe ser 8");
+
+        // Verificar que se guardó Producto y Pedido
+        verify(productoRepository).save(any(Producto.class));
+        verify(pedidoRepository).save(any(Pedido.class));
+
+        // NUNCA modificar InventarioLote
+        verify(inventarioLoteRepository, never()).save(any());
+        // NUNCA llamar descontarStockPorPEPS
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(), any());
+    }
+
+    // ---------- PRUEBA 9: CLIENTE_AUSENTE → ACEPTADO sin stock suficiente ----------
+
+    @Test
+    void updateEstadoPedido_CLIENTE_AUSENTE_a_ACEPTADO_sinStock_suficiente_lanzaConflict() {
+        Pedido pedido = pedido(21L, "CLIENTE_AUSENTE");
+        Producto producto = producto(1L, new BigDecimal("3.00")); // stockReservado 3
+        DetallePedido detalle = detalle(producto, 5); // cantidad 5
+
+        // Simular lote con cantidadActual 6
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(new BigDecimal("6.00"));
+
+        when(pedidoRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(21L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(21L, "ACEPTADO"));
+
+        assertEquals(HttpStatus.CONFLICT.value(), ex.getStatusCode().value());
+        assertEquals("Stock insuficiente para reactivar el pedido: " + producto.getNombre(), ex.getReason());
+
+        // Estado permanece CLIENTE_AUSENTE
+        assertEquals("CLIENTE_AUSENTE", pedido.getEstadoPedido());
+
+        // NUNCA guardar Pedido
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        // NUNCA modificar InventarioLote
+        verify(inventarioLoteRepository, never()).save(any());
+        // NUNCA llamar descontarStockPorPEPS
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(), any());
+    }
+
+    // ---------- PRUEBA 10: Producto con stockReservado null ----------
+
+    @Test
+    void updateEstadoPedido_CLIENTE_AUSENTE_a_ACEPTado_productoStockReservadoNull_reservaCorrectamente() {
+        Pedido pedido = pedido(22L, "CLIENTE_AUSENTE");
+        Producto producto = producto(1L, null); // stockReservado null
+        DetallePedido detalle = detalle(producto, 5);
+
+        // Simular lote con cantidadActual 20
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(new BigDecimal("20.00"));
+
+        when(pedidoRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(22L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(22L, "ACEPTADO"));
+
+        pedidoService.updateEstadoPedido(22L, "ACEPTADO");
+
+        // Verificar estado final
+        assertEquals("ACEPTADO", pedido.getEstadoPedido());
+
+        // Verificar stockReservado final = 0 + 5 = 5 (tratando null como cero)
+        assertEquals(0, new BigDecimal("5.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe ser 5");
+
+        verify(productoRepository).save(any(Producto.class));
+        verify(pedidoRepository).save(any(Pedido.class));
+    }
+
+    // ---------- PRUEBA 11: PENDIENTE → ACEPTADO no ejecuta lógica de reactivación ----------
+
+    @Test
+    void updateEstadoPedido_PENDIENTE_a_ACEPTADO_noEjecutaReservarStock() {
+        Pedido pedido = pedido(23L, "PENDIENTE");
+        Producto producto = producto(1L, new BigDecimal("10.00"));
+        DetallePedido detalle = detalle(producto, 5);
+
+        when(pedidoRepository.findByIdForUpdate(23L)).thenReturn(Optional.of(pedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(23L, "ACEPTADO"));
+
+        pedidoService.updateEstadoPedido(23L, "ACEPTADO");
+
+        // Verificar estado final
+        assertEquals("ACEPTADO", pedido.getEstadoPedido());
+
+        // Verificar que NO se modificó stockReservado (no debe ejecutar reservarStockParaReactivacion)
+        assertEquals(0, new BigDecimal("10.00").compareTo(producto.getStockReservado()),
+                "stockReservado no debe modificarse en transición PENDIENTE → ACEPTADO");
+
+        // NUNCA debe llamar a inventarioLoteRepository en esta transición
+        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        // NUNCA debe guardar Producto en esta transición
+        verify(productoRepository, never()).save(any(Producto.class));
+        // Solo se guarda el Pedido
+        verify(pedidoRepository).save(any(Pedido.class));
+    }
+
+    // ---------- PRUEBA 12: ACEPTADO → CARGADO mantiene comportamiento actual ----------
+
+    @Test
+    void updateEstadoPedido_ACEPTADO_a_CARGADO_descuentaPorPEPS_yLiberaReserva() {
+        Pedido pedido = pedido(24L, "ACEPTADO");
+        Producto producto = producto(1L, new BigDecimal("10.00")); // stockReservado 10
+        DetallePedido detalle = detalle(producto, 5);
+
+        // Simular lote con cantidadActual 20
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(new BigDecimal("20.00"));
+
+        when(pedidoRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(24L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(24L, "CARGADO"));
+
+        pedidoService.updateEstadoPedido(24L, "CARGADO");
+
+        // Verificar estado final
+        assertEquals("CARGADO", pedido.getEstadoPedido());
+
+        // Verificar que se llamó descontarStockPorPEPS con BigDecimal.valueOf(5)
+        verify(inventarioLoteService).descontarStockPorPEPS(eq(1L), eq(BigDecimal.valueOf(5)));
+
+        // Verificar que se liberó la reserva: 10 - 5 = 5
+        assertEquals(0, new BigDecimal("5.00").compareTo(producto.getStockReservado()),
+                "stockReservado debe liberarse a 5");
+
+        // Verificar que se guardó Producto
+        verify(productoRepository).save(any(Producto.class));
+        verify(pedidoRepository).save(any(Pedido.class));
     }
 }

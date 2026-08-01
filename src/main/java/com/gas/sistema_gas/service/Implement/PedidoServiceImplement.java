@@ -584,7 +584,8 @@ public class PedidoServiceImplement implements PedidoService {
             }
         } else if ("CLIENTE_AUSENTE".equals(estadoActual) && "ACEPTADO".equals(estadoNormalizado)) {
             // Permitir reinicio del flujo desde CLIENTE_AUSENTE hacia ACEPTADO
-            // No se requiere validación adicional
+            // Reservar stock antes de cambiar el estado
+            reservarStockParaReactivacion(pedido);
         } else if (indiceActual == -1 || indiceNuevo == -1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de pedido no permitido para este flujo");
         } else if (indiceNuevo != indiceActual + 1) {
@@ -676,6 +677,43 @@ public class PedidoServiceImplement implements PedidoService {
 
         pedido.setEstadoPedido("ANULADO");
         pedidoRepository.save(pedido);
+    }
+
+    /**
+     * Reserva stock para reactivar un pedido desde CLIENTE_AUSENTE hacia ACEPTADO.
+     * Verifica que el stock disponible (stock real de lotes - stock reservado) sea suficiente.
+     * No modifica InventarioLote, no modifica stockLlenos, no llama descontarStockPorPEPS.
+     * Lanza CONFLICT si no hay stock disponible suficiente.
+     */
+    private void reservarStockParaReactivacion(Pedido pedido) {
+        List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+        for (DetallePedido detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
+
+            // Obtener la suma real de InventarioLote.cantidadActual del producto
+            BigDecimal stockRealLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
+                    .stream()
+                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Obtener Producto.stockReservado, usando cero si es null
+            BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+
+            // Calcular stock disponible
+            BigDecimal stockDisponible = stockRealLotes.subtract(stockReservado);
+
+            // Si stockDisponible es menor que la cantidad del detalle, lanzar excepción
+            if (stockDisponible.compareTo(cantidadAReservar) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Stock insuficiente para reactivar el pedido: " + producto.getNombre());
+            }
+
+            // Si existe stock, sumar la cantidad a Producto.stockReservado
+            BigDecimal nuevoReservado = stockReservado.add(cantidadAReservar);
+            producto.setStockReservado(nuevoReservado);
+            productoRepository.save(producto);
+        }
     }
 
     /**
