@@ -158,6 +158,14 @@ public class PedidoServiceImplement implements PedidoService {
     @Override
     @Transactional
     public PedidoDTO.SimpleResponse createOrder(PedidoDTO.Create createDto, Long idUsuarioLogueado) {
+        // FASE 2B: La edición de pedidos existentes está temporalmente deshabilitada
+        if (createDto.idPedido() != null) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "La edición de pedidos existentes está temporalmente deshabilitada"
+            );
+        }
+
         boolean hayDetallesGas = createDto.detalles() != null && !createDto.detalles().isEmpty();
         boolean hayEnvaseVenta = createDto.envaseMovimientos() != null 
             && "VENTA".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
@@ -167,46 +175,10 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe agregar al menos un detalle de venta");
         }
 
-        Pedido pedido;
-        if (createDto.idPedido() != null) {
-            // Lógica de Actualización
-            pedido = pedidoRepository.findById(createDto.idPedido())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El pedido a editar no fue encontrado"));
-
-            // Revertir stock de productos
-            List<DetallePedido> detallesAnteriores = detalleRepository.findByPedido_Id(pedido.getId());
-            for (DetallePedido detalle : detallesAnteriores) {
-                Producto producto = detalle.getProducto();
-                BigDecimal cantidadDevolver = BigDecimal.valueOf(detalle.getCantidad());
-                
-                // Devolver stock al último lote de este producto
-                List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
-                if (!lotes.isEmpty()) {
-                    com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
-                    ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadDevolver));
-                    inventarioLoteRepository.save(ultimoLote);
-                }
-
-                // Sincronizar el campo estático stock_llenos
-                BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                        .stream()
-                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-                producto.setStockLlenos(stockDisponible);
-                productoRepository.save(producto);
-            }
-
-            // Eliminar detalles, pagos y control de envases anteriores
-            detalleRepository.deleteAll(detallesAnteriores);
-            pedidoPagoRepository.deleteAll(pedidoPagoRepository.findByPedido_Id(pedido.getId()));
-            controlEnvaseRepository.deleteByPedido_Id(pedido.getId());
-
-        } else {
-            // Lógica de Creación
-            pedido = pedidoMapper.toEntity(createDto);
-            pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
-            pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
-        }
+        // Lógica de Creación
+        Pedido pedido = pedidoMapper.toEntity(createDto);
+        pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
+        pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
 
         // Lógica de fecha límite de pago para créditos
         if (createDto.fechaLimitePago() != null) {
@@ -339,9 +311,21 @@ public class PedidoServiceImplement implements PedidoService {
 
                 // Si es venta LOCAL (ENTREGADO directo): descontar stock real y NO reservar
                 // Si es DOMICILIO (PENDIENTE): solo reservar stock
+                DetallePedido detalle = new DetallePedido();
+                detalle.setPedido(pedidoGuardado);
+                detalle.setProducto(producto);
+                detalle.setCantidad(item.cantidad());
+                detalle.setPrecioUnitario(precioUnitario);
+
+                BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
+                montoAcumulado = montoAcumulado.add(importeLinea);
+
+                // Guardar detalle primero para obtener idDetalle
+                DetallePedido detalleGuardado = detalleRepository.save(detalle);
+
                 if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
-                    // Descontar stock real por PEPS
-                    inventarioLoteService.descontarStockPorPEPS(producto.getId(), cantidadSolicitada);
+                    // Descontar stock real por PEPS con trazabilidad
+                    inventarioLoteService.descontarStockPorPEPS(detalleGuardado);
                     // Sincronizar stock_llenos desde lotes
                     BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
                         .stream()
@@ -354,17 +338,6 @@ public class PedidoServiceImplement implements PedidoService {
                     producto.setStockReservado(nuevoReservado);
                 }
                 productoRepository.save(producto);
-
-                DetallePedido detalle = new DetallePedido();
-                detalle.setPedido(pedidoGuardado);
-                detalle.setProducto(producto);
-                detalle.setCantidad(item.cantidad());
-                detalle.setPrecioUnitario(precioUnitario);
-
-                BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
-                montoAcumulado = montoAcumulado.add(importeLinea);
-
-                detalleRepository.save(detalle);
 
                 // Registrar préstamo de envases si corresponde
                 if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
@@ -584,6 +557,8 @@ public class PedidoServiceImplement implements PedidoService {
             }
         } else if ("CLIENTE_AUSENTE".equals(estadoActual) && "ACEPTADO".equals(estadoNormalizado)) {
             // Permitir reinicio del flujo desde CLIENTE_AUSENTE hacia ACEPTADO
+            // FASE 2B: Validar que el stock del pedido fue devuelto exactamente antes de reservar
+            inventarioLoteService.validarStockDevueltoParaReactivacion(pedido.getId());
             // Reservar stock antes de cambiar el estado
             reservarStockParaReactivacion(pedido);
         } else if (indiceActual == -1 || indiceNuevo == -1) {
@@ -601,7 +576,7 @@ public class PedidoServiceImplement implements PedidoService {
         } else {
             pedido.setEstadoPedido(estadoNormalizado);
 
-            // Si pasa a CARGADO: descuenta stock real y libera reserva (idempotente)
+                // Si pasa a CARGADO: descuenta stock real y libera reserva (idempotente)
             if ("CARGADO".equals(estadoNormalizado) && !"CARGADO".equals(estadoActual)
                     && !"EN_CAMINO".equals(estadoActual) && !"EN_DOMICILIO".equals(estadoActual)
                     && !"ENTREGADO".equals(estadoActual)) {
@@ -611,8 +586,8 @@ public class PedidoServiceImplement implements PedidoService {
                     Producto producto = detalle.getProducto();
                     BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
 
-                    // Descontar stock real por PEPS
-                    inventarioLoteService.descontarStockPorPEPS(producto.getId(), cant);
+                    // Descontar stock real por PEPS con trazabilidad
+                    inventarioLoteService.descontarStockPorPEPS(detalle);
 
                     // Sincronizar stock_llenos desde lotes
                     BigDecimal stockActualLotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())

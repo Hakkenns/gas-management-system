@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +19,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -40,6 +43,7 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.RespuestaIncidenciaRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.Model.DetallePedido;
+import com.gas.sistema_gas.service.InventarioLoteService;
 
 import jakarta.servlet.http.HttpSession;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -74,6 +78,9 @@ class IncidenciaControllerTest {
 
     @Mock
     private ProductoRepository productoRepository;
+
+    @Mock
+    private InventarioLoteService inventarioLoteService;
 
     @InjectMocks
     private IncidenciaController incidenciaController;
@@ -145,7 +152,7 @@ class IncidenciaControllerTest {
         verify(pedidoRepository, never()).findById(1L);
     }
 
-    // PRUEBA 2: confirmarRechazo válido
+    // PRUEBA 2: confirmarRechazo válido - llama devolverStockDePedido antes de guardar
 
     @Test
     void confirmarRechazo_valido_estadoEN_REVISION_a_RECHAZADO() {
@@ -171,6 +178,12 @@ class IncidenciaControllerTest {
         assertEquals("CANCELADO", pedido.getEstadoPago());
         assertEquals("CONFIRMADO", incidencia.getEstado());
         verify(pedidoRepository).findByIdForUpdate(1L);
+        verify(inventarioLoteService, times(1)).devolverStockDePedido(1L);
+
+        // La devolución ocurre antes de guardar el pedido
+        InOrder inOrder = inOrder(inventarioLoteService, pedidoRepository);
+        inOrder.verify(inventarioLoteService).devolverStockDePedido(1L);
+        inOrder.verify(pedidoRepository).save(pedido);
     }
 
     // PRUEBA 3: confirmarRechazo sobre pedido RECHAZADO
@@ -187,7 +200,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("El rechazo ya fue confirmado", body.get("message"));
         verify(pedidoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
         verify(productoRepository, never()).save(any());
         verify(respuestaIncidenciaRepository, never()).save(any());
     }
@@ -206,6 +219,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("El pedido debe estar en EN_REVISION para confirmar el rechazo", body.get("message"));
         verify(pedidoRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
 
     // PRUEBA 5: confirmarRechazo sin incidencia pendiente
@@ -224,6 +238,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("No existe un rechazo pendiente para confirmar", body.get("message"));
         verify(pedidoRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
 
     // PRUEBA 6: confirmarRechazo no marca incidencias diferentes
@@ -245,6 +260,45 @@ class IncidenciaControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("CONFIRMADO", rechazo.getEstado());
         assertEquals("PENDIENTE", otra.getEstado());
+        verify(inventarioLoteService, times(1)).devolverStockDePedido(1L);
+    }
+
+    // PRUEBA: confirmarRechazo cuando devolverStockDePedido falla
+
+    @Test
+    void confirmarRechazo_cuandoDevolverStockFalla_noGuardaNada() {
+        Pedido pedido = pedido(1L, "EN_REVISION");
+        Empleado empleado = new Empleado();
+        empleado.setId(1L);
+        empleado.setNombre("Motorizado");
+        pedido.setEmpleado(empleado);
+        pedido.setCodigo("PED-001");
+
+        Incidencia incidencia = incidencia(10L, "RECHAZO_POST_LLEGADA", "PENDIENTE", pedido);
+
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(incidenciaRepository.findByPedidoId(1L)).thenReturn(List.of(incidencia));
+
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "La trazabilidad de lotes del pedido es inconsistente"))
+            .when(inventarioLoteService).devolverStockDePedido(1L);
+
+        ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> incidenciaController.confirmarRechazo(Map.of("idPedido", 1L), session())
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        // El pedido conserva EN_REVISION
+        assertEquals("EN_REVISION", pedido.getEstadoPedido());
+        // No guarda pedido
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        // No guarda incidencia
+        verify(incidenciaRepository, never()).save(any(Incidencia.class));
+        // No crea RespuestaIncidencia
+        verify(respuestaIncidenciaRepository, never()).save(any());
+        // No envía notificaciones posteriores
+        verify(messagingTemplate, never()).convertAndSend(org.mockito.ArgumentMatchers.eq("/topic/admin/incidencias"), any(Object.class));
+        verify(messagingTemplate, never()).convertAndSend(org.mockito.ArgumentMatchers.startsWith("/topic/repartidor/respuestas/"), any(Object.class));
     }
 
     // PRUEBA 7: marcarComoRevisado válido
@@ -266,7 +320,43 @@ class IncidenciaControllerTest {
         assertEquals("ATENDIDO", incidencia.getEstado());
         verify(incidenciaRepository).findByIdForUpdate(10L);
         verify(pedidoRepository).findByIdForUpdate(1L);
-        verify(respuestaIncidenciaRepository).save(any(RespuestaIncidencia.class));
+        verify(inventarioLoteService, times(1)).devolverStockDePedido(1L);
+        verify(respuestaIncidenciaRepository, times(1)).save(any(RespuestaIncidencia.class));
+
+        // La devolución ocurre antes de marcar ATENDIDO
+        InOrder inOrder = inOrder(inventarioLoteService, incidenciaRepository);
+        inOrder.verify(inventarioLoteService).devolverStockDePedido(1L);
+        inOrder.verify(incidenciaRepository).save(incidencia);
+    }
+
+    // PRUEBA: marcarComoRevisado cuando devolverStockDePedido falla
+
+    @Test
+    void marcarComoRevisado_cuandoDevolverStockFalla_noGuardaNada() {
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(new Empleado() {{ setId(1L); setNombre("Motorizado"); }});
+
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "La trazabilidad de lotes del pedido es inconsistente"))
+            .when(inventarioLoteService).devolverStockDePedido(1L);
+
+        ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> incidenciaController.marcarComoRevisado(10L, session())
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        // La incidencia continua PENDIENTE
+        assertEquals("PENDIENTE", incidencia.getEstado());
+        // No guarda incidencia
+        verify(incidenciaRepository, never()).save(any(Incidencia.class));
+        // No crea respuesta
+        verify(respuestaIncidenciaRepository, never()).save(any());
+        // No notifica
+        verify(messagingTemplate, never()).convertAndSend(org.mockito.ArgumentMatchers.startsWith("/topic/repartidor/respuestas/"), any(Object.class));
     }
 
     // PRUEBA 8: marcarComoRevisado sobre ATENDIDO
@@ -285,6 +375,7 @@ class IncidenciaControllerTest {
         assertEquals("La incidencia ya fue atendida", body.get("message"));
         verify(pedidoRepository, never()).findByIdForUpdate(any());
         verify(respuestaIncidenciaRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
 
     // PRUEBA 9: marcarComoRevisado sobre tipo RECHAZO_POST_LLEGADA
@@ -302,6 +393,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("Esta acción solo corresponde a Cliente Ausente", body.get("message"));
         verify(pedidoRepository, never()).findByIdForUpdate(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
 
     // ========== PRUEBAS DE REASIGNAR PEDIDO ==========
@@ -356,8 +448,6 @@ class IncidenciaControllerTest {
         assertEquals("PENDIENTE", pedido.getEstadoPedido());
         assertEquals(nuevoRepartidor, pedido.getEmpleado());
         assertEquals("ATENDIDO", incidencia.getEstado());
-        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
-        assertEquals(BigDecimal.valueOf(20), producto.getStockLlenos());
         assertEquals(BigDecimal.valueOf(5), producto.getStockReservado());
         
         verify(incidenciaRepository).findByIdForUpdate(10L);
@@ -365,6 +455,78 @@ class IncidenciaControllerTest {
         verify(incidenciaRepository, never()).findById(any());
         verify(pedidoRepository, never()).findById(any());
         verify(respuestaIncidenciaRepository).save(any(RespuestaIncidencia.class));
+        
+        // devolverStockDePedido se llama exactamente una vez
+        verify(inventarioLoteService, times(1)).devolverStockDePedido(1L);
+        
+        // La devolución ocurre antes de reservar stock
+        InOrder inOrder = inOrder(inventarioLoteService, productoRepository);
+        inOrder.verify(inventarioLoteService).devolverStockDePedido(1L);
+        inOrder.verify(productoRepository).save(producto);
+    }
+    
+    // PRUEBA: reasignarPedido cuando devolverStockDePedido falla
+
+    @Test
+    void reasignarPedido_cuandoDevolverStockFalla_noGuardaNada() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+        producto.setStockReservado(BigDecimal.ZERO);
+        producto.setStockLlenos(BigDecimal.valueOf(15));
+        
+        DetallePedido detalle = new DetallePedido();
+        detalle.setProducto(producto);
+        detalle.setCantidad(5);
+        
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setCodigo("PED-001");
+        Empleado empleadoAnterior = new Empleado();
+        empleadoAnterior.setId(1L);
+        empleadoAnterior.setNombre("Motorizado Anterior");
+        pedido.setEmpleado(empleadoAnterior);
+        
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+        incidencia.setEmpleado(empleadoAnterior);
+        
+        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(15));
+        
+        Empleado nuevoRepartidor = new Empleado();
+        nuevoRepartidor.setId(2L);
+        nuevoRepartidor.setNombre("Nuevo Motorizado");
+        
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
+        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "La trazabilidad de lotes del pedido es inconsistente"))
+            .when(inventarioLoteService).devolverStockDePedido(1L);
+        
+        ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> incidenciaController.reasignarPedido(10L, Map.of("idNuevoRepartidor", 2L), session())
+        );
+        
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        // El pedido continúa CLIENTE_AUSENTE
+        assertEquals("CLIENTE_AUSENTE", pedido.getEstadoPedido());
+        // La incidencia continúa PENDIENTE
+        assertEquals("PENDIENTE", incidencia.getEstado());
+        // No guarda Producto
+        verify(productoRepository, never()).save(any(Producto.class));
+        // No guarda Pedido
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        // No guarda Incidencia
+        verify(incidenciaRepository, never()).save(any(Incidencia.class));
+        // No crea RespuestaIncidencia
+        verify(respuestaIncidenciaRepository, never()).save(any());
+        // No notifica
+        verify(messagingTemplate, never()).convertAndSend(org.mockito.ArgumentMatchers.startsWith("/topic/pedidos/"), any(Object.class));
     }
     
     // PRUEBA 12: reasignarPedido sobre incidencia ATENDIDO retorna 409
@@ -383,10 +545,10 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("La incidencia ya fue atendida", body.get("message"));
         verify(pedidoRepository, never()).findByIdForUpdate(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
         verify(productoRepository, never()).save(any());
         verify(pedidoRepository, never()).save(any());
         verify(respuestaIncidenciaRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
     
     // PRUEBA 13: reasignarPedido sobre tipo RECHAZO_POST_LLEGADA retorna 400
@@ -405,7 +567,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("Solo se pueden reasignar incidencias de Cliente Ausente", body.get("message"));
         verify(pedidoRepository, never()).findByIdForUpdate(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
     
     // PRUEBA 14: reasignarPedido sobre pedido EN_REVISION retorna 409
@@ -424,10 +586,10 @@ class IncidenciaControllerTest {
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("El pedido no está en estado CLIENTE_AUSENTE", body.get("message"));
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
         verify(productoRepository, never()).save(any());
         verify(pedidoRepository, never()).save(any());
         verify(respuestaIncidenciaRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
     
     // PRUEBA 15: reasignarPedido sin pedido asociado retorna 400
@@ -445,7 +607,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("La incidencia no tiene un pedido asociado", body.get("message"));
         verify(pedidoRepository, never()).findByIdForUpdate(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
     }
     
     // PRUEBA 16: reasignarPedido con stock proyectado insuficiente retorna 409
@@ -495,7 +657,7 @@ class IncidenciaControllerTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals("Stock insuficiente para reasignar el pedido: Gas 10kg", exception.getReason());
         
-        verify(inventarioLoteRepository, never()).save(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
         verify(productoRepository, never()).save(any());
         verify(pedidoRepository, never()).save(any());
         verify(incidenciaRepository, never()).save(any());
@@ -604,7 +766,6 @@ class IncidenciaControllerTest {
         
         assertEquals(HttpStatus.OK, response1.getStatusCode());
         assertEquals("ATENDIDO", incidencia.getEstado());
-        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
         
         // Segunda ejecución
         ResponseEntity<?> response2 = incidenciaController.reasignarPedido(10L, 
@@ -614,9 +775,8 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response2.getBody();
         assertEquals("La incidencia ya fue atendida", body.get("message"));
         
-        // Verificar que el stock solo se devolvió una vez
-        assertEquals(BigDecimal.valueOf(20), lote.getCantidadActual());
-        assertEquals(BigDecimal.valueOf(5), producto.getStockReservado());
+        // Verificar que la devolución se llamó exactamente una vez
+        verify(inventarioLoteService, times(1)).devolverStockDePedido(1L);
         
         // Verificar que solo se creó una RespuestaIncidencia
         verify(respuestaIncidenciaRepository, times(1)).save(any());
@@ -638,7 +798,7 @@ class IncidenciaControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("El pedido no está en estado CLIENTE_AUSENTE", body.get("message"));
         verify(pedidoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
         verify(productoRepository, never()).save(any());
     }
 }

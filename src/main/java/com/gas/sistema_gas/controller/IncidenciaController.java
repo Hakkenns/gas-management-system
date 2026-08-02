@@ -17,6 +17,7 @@ import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.service.InventarioLoteService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +54,7 @@ public class IncidenciaController {
     private final DetallePedidoRepository detallePedidoRepository;
     private final InventarioLoteRepository inventarioLoteRepository;
     private final ProductoRepository productoRepository;
+    private final InventarioLoteService inventarioLoteService;
 
     public IncidenciaController(IncidenciaRepository incidenciaRepository,
                                 RespuestaIncidenciaRepository respuestaIncidenciaRepository,
@@ -64,7 +66,8 @@ public class IncidenciaController {
                                 SimpMessagingTemplate messagingTemplate,
                                 DetallePedidoRepository detallePedidoRepository,
                                 InventarioLoteRepository inventarioLoteRepository,
-                                ProductoRepository productoRepository) {
+                                ProductoRepository productoRepository,
+                                InventarioLoteService inventarioLoteService) {
         this.incidenciaRepository = incidenciaRepository;
         this.respuestaIncidenciaRepository = respuestaIncidenciaRepository;
         this.empleadoRepository = empleadoRepository;
@@ -76,6 +79,7 @@ public class IncidenciaController {
         this.detallePedidoRepository = detallePedidoRepository;
         this.inventarioLoteRepository = inventarioLoteRepository;
         this.productoRepository = productoRepository;
+        this.inventarioLoteService = inventarioLoteService;
     }
 
     // POST /api/incidencias/reportar - Repartidor reporta incidencia con foto (RECHAZO_POST_LLEGADA o CLIENTE_AUSENTE)
@@ -264,13 +268,14 @@ public class IncidenciaController {
         Empleado empleadoAnterior = pedido.getEmpleado();
         String codigoPedido = pedido.getCodigo();
 
+        // Devolver stock antes de cambiar estados
+        inventarioLoteService.devolverStockDePedido(pedido.getId());
+
+        // Cambiar estados del pedido
         pedido.setEstadoPedido("RECHAZADO");
         pedido.setEstadoPago("CANCELADO");
         pedido.setEmpleado(null);
         pedidoRepository.save(pedido);
-
-        // Retornar stock exactamente una vez
-        retornarStockPedido(pedido);
 
         // Marcar solo las incidencias pendientes de tipo RECHAZO_POST_LLEGADA
         for (Incidencia inc : incidencias) {
@@ -731,13 +736,13 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
         }
 
+        // Devolver stock antes de marcar como atendido
+        inventarioLoteService.devolverStockDePedido(pedido.getId());
+
         // Marcar incidencia como ATENDIDO
         incidencia.setEstado("ATENDIDO");
         incidencia.setUpdatedAt(LocalDateTime.now());
         incidenciaRepository.save(incidencia);
-
-        // Retornar stock exactamente una vez
-        retornarStockPedido(pedido);
 
         // Guardar respuesta en BD para que aparezca en la bandeja del repartidor
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
@@ -889,11 +894,22 @@ public class IncidenciaController {
         }
         
         // OBJETIVO 4: Devolver y reservar stock
-        // 1. Ejecutar retornarStockPedido exactamente una vez
-        retornarStockPedido(pedido);
+        // 1. Ejecutar devolverStockDePedido exactamente una vez
+        inventarioLoteService.devolverStockDePedido(pedido.getId());
         
         // 2. Reservar nuevamente las cantidades del pedido
-        reservarStockParaReasignacion(pedido);
+        for (DetallePedido detalle : detalles) {
+            Producto producto = detalle.getProducto();
+            BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
+            
+            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
+                ? producto.getStockReservado() 
+                : BigDecimal.ZERO;
+            
+            stockReservadoActual = stockReservadoActual.add(cantidadAReservar);
+            producto.setStockReservado(stockReservadoActual);
+            productoRepository.save(producto);
+        }
         
         // OBJETIVO 5: Finalizar reasignación
         // Asignar nuevo repartidor y cambiar estado a PENDIENTE
@@ -962,48 +978,4 @@ public class IncidenciaController {
         }
     }
 
-    // OBJETIVO 4: Método privado para reservar stock durante reasignación
-    private void reservarStockParaReasignacion(Pedido pedido) {
-        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(pedido.getId());
-        for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
-            
-            // Obtener stockReservado actual, usando cero si es null
-            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
-                ? producto.getStockReservado() 
-                : BigDecimal.ZERO;
-            
-            // Sumar la cantidad del detalle
-            stockReservadoActual = stockReservadoActual.add(cantidadAReservar);
-            
-            // Guardar Producto
-            producto.setStockReservado(stockReservadoActual);
-            productoRepository.save(producto);
-        }
-    }
-
-    private void retornarStockPedido(Pedido pedido) {
-        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(pedido.getId());
-        for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            BigDecimal cantidadADevolver = BigDecimal.valueOf(detalle.getCantidad());
-
-            // Devolver stock al último lote de este producto
-            List<com.gas.sistema_gas.Model.InventarioLote> lotes = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
-            if (!lotes.isEmpty()) {
-                com.gas.sistema_gas.Model.InventarioLote ultimoLote = lotes.get(0);
-                ultimoLote.setCantidadActual(ultimoLote.getCantidadActual().add(cantidadADevolver));
-                inventarioLoteRepository.save(ultimoLote);
-            }
-
-            // Sincronizar el campo estático stock_llenos
-            BigDecimal stockDisponible = inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                    .stream()
-                    .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            producto.setStockLlenos(stockDisponible);
-            productoRepository.save(producto);
-        }
-    }
 }

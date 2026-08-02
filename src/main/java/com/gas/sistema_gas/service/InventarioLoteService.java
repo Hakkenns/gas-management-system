@@ -4,6 +4,7 @@ package com.gas.sistema_gas.service;
 
 import java.util.List;
 import com.gas.sistema_gas.dto.InventarioLoteDTO;
+import com.gas.sistema_gas.Model.DetallePedido;
 
 public interface InventarioLoteService {
 
@@ -17,8 +18,14 @@ public interface InventarioLoteService {
     List<InventarioLoteDTO.SimpleResponse> listarLotesPorProducto(Long idProducto);
 
     // 4. 🧠 EL MOTOR PEPS (Interno): Descuenta las unidades de los lotes más antiguos al vender
-    void descontarStockPorPEPS(Long idProducto, java.math.BigDecimal cantidadAVender);
+    void descontarStockPorPEPS(DetallePedido detallePedido);
 
     // 5. Para cuando se anula una compra y hay lotes asociados a esa factura
     void anularLotesCompra(Long idCompra);
+
+    // 6. FASE 2A: Devolución exacta de stock de un pedido
+    void devolverStockDePedido(Long idPedido);
+
+    // 7. FASE 2A: Validar que el stock fue devuelto para reactivar pedido
+    void validarStockDevueltoParaReactivacion(Long idPedido);
 }

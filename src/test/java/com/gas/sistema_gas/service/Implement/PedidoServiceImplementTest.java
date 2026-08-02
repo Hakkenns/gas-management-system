@@ -5,9 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import org.mockito.InOrder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,6 +39,8 @@ import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
+import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
+import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,6 +72,12 @@ class PedidoServiceImplementTest {
 
     @Mock
     private com.gas.sistema_gas.service.InventarioLoteService inventarioLoteService;
+
+    @Mock
+    private CorrelativoService correlativoService;
+
+    @Mock
+    private ControlEnvaseRepository controlEnvaseRepository;
 
     @InjectMocks
     private PedidoServiceImplement pedidoService;
@@ -372,7 +385,7 @@ class PedidoServiceImplementTest {
         verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
         verify(inventarioLoteRepository, never()).save(any());
         // NUNCA llamar descontarStockPorPEPS
-        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(), any());
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
         // No guardar Pedido (la excepción ocurre antes)
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
@@ -399,7 +412,7 @@ class PedidoServiceImplementTest {
         verify(pedidoRepository, never()).findById(any());
     }
 
-    // ---------- PRUEBA 8: CLIENTE_AUSENTE → ACEPTADO con stock disponible ----------
+    // ---------- PRUEBA 8: CLIENTE_AUSENTE → ACEPTADO con devolución confirmada ----------
 
     @Test
     void updateEstadoPedido_CLIENTE_AUSENTE_a_ACEPTADO_conStock_disponible_reservaStock() {
@@ -429,6 +442,14 @@ class PedidoServiceImplementTest {
         assertEquals(0, new BigDecimal("8.00").compareTo(producto.getStockReservado()),
                 "stockReservado final debe ser 8");
 
+        // FASE 2B: validarStockDevueltoParaReactivacion se llama exactamente una vez
+        verify(inventarioLoteService, times(1)).validarStockDevueltoParaReactivacion(20L);
+
+        // La validación ocurre antes de guardar Producto con la nueva reserva
+        InOrder inOrder = inOrder(inventarioLoteService, productoRepository);
+        inOrder.verify(inventarioLoteService).validarStockDevueltoParaReactivacion(20L);
+        inOrder.verify(productoRepository).save(producto);
+
         // Verificar que se guardó Producto y Pedido
         verify(productoRepository).save(any(Producto.class));
         verify(pedidoRepository).save(any(Pedido.class));
@@ -436,7 +457,37 @@ class PedidoServiceImplementTest {
         // NUNCA modificar InventarioLote
         verify(inventarioLoteRepository, never()).save(any());
         // NUNCA llamar descontarStockPorPEPS
-        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(), any());
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
+    }
+
+    // ---------- PRUEBA 8B: CLIENTE_AUSENTE → ACEPTADO cuando validación lanza CONFLICT ----------
+
+    @Test
+    void updateEstadoPedido_CLIENTE_AUSENTE_a_ACEPTADO_cuandoValidacionFalla_lanzaConflict_noGuardaNada() {
+        Pedido pedido = pedido(25L, "CLIENTE_AUSENTE");
+        Producto producto = producto(1L, new BigDecimal("3.00"));
+        DetallePedido detalle = detalle(producto, 5);
+
+        when(pedidoRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(pedido));
+
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "El stock del pedido aún no ha sido devuelto"))
+            .when(inventarioLoteService).validarStockDevueltoParaReactivacion(25L);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(25L, "ACEPTADO"));
+
+        assertEquals(HttpStatus.CONFLICT.value(), ex.getStatusCode().value());
+        assertEquals("El stock del pedido aún no ha sido devuelto", ex.getReason());
+
+        // El estado continúa CLIENTE_AUSENTE
+        assertEquals("CLIENTE_AUSENTE", pedido.getEstadoPedido());
+
+        // productoRepository.save nunca se ejecuta
+        verify(productoRepository, never()).save(any(Producto.class));
+        // pedidoRepository.save nunca se ejecuta
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        // descontarStockPorPEPS nunca se ejecuta
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
     }
 
     // ---------- PRUEBA 9: CLIENTE_AUSENTE → ACEPTADO sin stock suficiente ----------
@@ -471,7 +522,7 @@ class PedidoServiceImplementTest {
         // NUNCA modificar InventarioLote
         verify(inventarioLoteRepository, never()).save(any());
         // NUNCA llamar descontarStockPorPEPS
-        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(), any());
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
     }
 
     // ---------- PRUEBA 10: Producto con stockReservado null ----------
@@ -529,6 +580,9 @@ class PedidoServiceImplementTest {
         assertEquals(0, new BigDecimal("10.00").compareTo(producto.getStockReservado()),
                 "stockReservado no debe modificarse en transición PENDIENTE → ACEPTADO");
 
+        // FASE 2B: NO debe llamar validarStockDevueltoParaReactivacion en PENDIENTE → ACEPTADO
+        verify(inventarioLoteService, never()).validarStockDevueltoParaReactivacion(any());
+
         // NUNCA debe llamar a inventarioLoteRepository en esta transición
         verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
         // NUNCA debe guardar Producto en esta transición
@@ -563,8 +617,11 @@ class PedidoServiceImplementTest {
         // Verificar estado final
         assertEquals("CARGADO", pedido.getEstadoPedido());
 
-        // Verificar que se llamó descontarStockPorPEPS con BigDecimal.valueOf(5)
-        verify(inventarioLoteService).descontarStockPorPEPS(eq(1L), eq(BigDecimal.valueOf(5)));
+        // FASE 2B: NO debe llamar validarStockDevueltoParaReactivacion en ACEPTADO → CARGADO
+        verify(inventarioLoteService, never()).validarStockDevueltoParaReactivacion(any());
+
+        // Verificar que se llamó descontarStockPorPEPS con el detalle correcto
+        verify(inventarioLoteService).descontarStockPorPEPS(any(DetallePedido.class));
 
         // Verificar que se liberó la reserva: 10 - 5 = 5
         assertEquals(0, new BigDecimal("5.00").compareTo(producto.getStockReservado()),
@@ -573,5 +630,38 @@ class PedidoServiceImplementTest {
         // Verificar que se guardó Producto
         verify(productoRepository).save(any(Producto.class));
         verify(pedidoRepository).save(any(Pedido.class));
+    }
+
+    // ---------- PRUEBA 13: createOrder con idPedido rechaza edición ----------
+
+    @Test
+    void createOrder_conIdPedido_rechazaEdicionAntesDeModificarDatos() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+            99L, // idPedido no nulo
+            1L, "Juan", "999999999", "Av. Test 123", "referencia",
+            "12345678", 1L, 1L, 1L, "OP123", "obs",
+            "PENDIENTE", "DOMICILIO", null,
+            List.of(), List.of(), "NINGUNO", List.of()
+        );
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.CONFLICT.value(), exception.getStatusCode().value());
+        assertEquals("La edición de pedidos existentes está temporalmente deshabilitada", exception.getReason());
+
+        // No debe consultar ni modificar nada
+        verify(pedidoRepository, never()).findById(any());
+        verify(pedidoRepository, never()).findByIdForUpdate(any());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(detalleRepository, never()).findByPedido_Id(any());
+        verify(detalleRepository, never()).deleteAll(any());
+        verify(pedidoPagoRepository, never()).deleteAll(any());
+        verify(controlEnvaseRepository, never()).deleteByPedido_Id(any());
+        verify(inventarioLoteRepository, never()).save(any());
+        verify(productoRepository, never()).save(any());
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
+        verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
     }
 }

@@ -3,6 +3,7 @@ package com.gas.sistema_gas.service.Implement;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
@@ -10,10 +11,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.InventarioLoteMapper;
+import com.gas.sistema_gas.Model.AsignacionLotePedido;
 import com.gas.sistema_gas.Model.Compra;
+import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.InventarioLote;
+import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.Proveedor;
+import com.gas.sistema_gas.Repository.AsignacionLotePedidoRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.ProveedorRepository;
@@ -31,6 +36,7 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
     private final ProductoRepository productoRepository;
     private final ProveedorRepository proveedorRepository;
     private final InventarioLoteMapper inventarioLoteMapper;
+    private final AsignacionLotePedidoRepository asignacionLotePedidoRepository;
 
     @Override
     @Transactional
@@ -105,37 +111,99 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
 
     /**
      * Desconta el stock de los lotes disponibles según el método PEPS (Primero en Entrar, Primero en Salir)
-     * @param idProducto El ID del producto del que se desea descontar stock
-     * @param cantidadAVender La cantidad a vender
+     * y registra la trazabilidad de qué lotes se consumieron.
+     * @param detallePedido El detalle del pedido con producto, cantidad y pedido asociado
      */
     @Override
     @Transactional
-    public void descontarStockPorPEPS(Long idProducto, BigDecimal cantidadAVender) {
+    public void descontarStockPorPEPS(DetallePedido detallePedido) {
+        // Validaciones de entrada
+        if (detallePedido == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El detalle del pedido no puede ser nulo");
+        }
         
-        List<InventarioLote> lotesDisponibles = inventarioLoteRepository.findLotesDisponiblesPEPS(idProducto);
+        Long idDetalle = detallePedido.getIdDetalle();
+        if (idDetalle == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El detalle del pedido debe estar guardado antes de descontar stock");
+        }
+        
+        Pedido pedido = detallePedido.getPedido();
+        if (pedido == null || pedido.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido del detalle no es válido");
+        }
+        
+        Producto producto = detallePedido.getProducto();
+        if (producto == null || producto.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El producto del detalle no es válido");
+        }
+        
+        Integer cantidad = detallePedido.getCantidad();
+        if (cantidad == null || cantidad <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad del detalle debe ser mayor a cero");
+        }
+        
+        BigDecimal cantidadAVender = BigDecimal.valueOf(cantidad);
+        
+        // Verificar idempotencia: si ya existe una asignación activa para este detalle, no procesar
+        if (asignacionLotePedidoRepository.existsByIdDetallePedidoAndEstado(
+            idDetalle, 
+            AsignacionLotePedido.EstadoAsignacion.DESCONTADA
+        )) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "El detalle del pedido ya tiene una asignación de lotes activa");
+        }
+        
+        // Obtener lotes disponibles con bloqueo pesimista
+        List<InventarioLote> lotesDisponibles = inventarioLoteRepository.findLotesDisponiblesPEPS(producto.getId());
+
+        // Validar stock total disponible antes de modificar
+        BigDecimal stockTotalDisponible = lotesDisponibles.stream()
+            .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        if (stockTotalDisponible.compareTo(cantidadAVender) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Stock insuficiente en los lotes para cubrir la venta.");
+        }
 
         BigDecimal cantidadRestante = cantidadAVender;
 
         for (InventarioLote lote : lotesDisponibles) {
-            if (cantidadRestante.compareTo(BigDecimal.ZERO) <= 0) break; // Si ya descontamos todo, terminamos
+            if (cantidadRestante.compareTo(BigDecimal.ZERO) <= 0) break;
 
             BigDecimal stockDisponibleLote = lote.getCantidadActual();
+            BigDecimal cantidadDescontadaDelLote = BigDecimal.ZERO;
 
             if (stockDisponibleLote.compareTo(cantidadRestante) >= 0) {
-                // Caso A: El lote antiguo tiene suficiente stock para cubrir toda la venta
+                // Caso A: El lote tiene suficiente stock
+                cantidadDescontadaDelLote = cantidadRestante;
                 lote.setCantidadActual(stockDisponibleLote.subtract(cantidadRestante));
                 cantidadRestante = BigDecimal.ZERO;
             } else {
-                // Caso B: El lote antiguo no abastece todo. Lo vaciamos a 0 y el saldo pasa al siguiente lote caro
+                // Caso B: El lote no alcanza, lo vaciamos
+                cantidadDescontadaDelLote = stockDisponibleLote;
                 cantidadRestante = cantidadRestante.subtract(stockDisponibleLote);
                 lote.setCantidadActual(BigDecimal.ZERO);
             }
-            inventarioLoteRepository.save(lote); // Sincroniza el nuevo stock del lote en phpMyAdmin
+            
+            inventarioLoteRepository.save(lote);
+            
+            // Crear asignación de trazabilidad
+            AsignacionLotePedido asignacion = new AsignacionLotePedido();
+            asignacion.setPedido(pedido);
+            asignacion.setProducto(producto);
+            asignacion.setLote(lote);
+            asignacion.setIdDetallePedido(idDetalle);
+            asignacion.setCantidadDescontada(cantidadDescontadaDelLote);
+            asignacion.setCantidadDevuelta(BigDecimal.ZERO);
+            asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+            asignacionLotePedidoRepository.save(asignacion);
         }
 
-        // Validación final de seguridad: Si recorrió todo y aún falta stock, hubo una inconsistencia
+        // Validación final de seguridad
         if (cantidadRestante.compareTo(BigDecimal.ZERO) > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock insuficiente en los lotes para cubrir la venta.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Stock insuficiente en los lotes para cubrir la venta.");
         }
     }
 
@@ -144,6 +212,160 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
     public void anularLotesCompra(Long idCompra) {
         List<InventarioLote> lotes = inventarioLoteRepository.findByCompraId(idCompra);
         inventarioLoteRepository.deleteAll(lotes);
+    }
+
+    @Override
+    @Transactional
+    public void devolverStockDePedido(Long idPedido) {
+        // 1. Validar ID de pedido
+        if (idPedido == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del pedido es obligatorio");
+        }
+
+        // 2. Buscar asignaciones DESCONTADA con bloqueo pesimista
+        List<AsignacionLotePedido> asignacionesDescontadas = 
+            asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(
+                idPedido, 
+                AsignacionLotePedido.EstadoAsignacion.DESCONTADA
+            );
+
+        // 3. Verificar si hay asignaciones DEVUELTA (ya devueltas)
+        boolean existeDevuelta = asignacionLotePedidoRepository.existsByPedido_IdAndEstado(
+            idPedido, 
+            AsignacionLotePedido.EstadoAsignacion.DEVUELTA
+        );
+
+        // 4. Validar estados del pedido
+        if (asignacionesDescontadas.isEmpty() && existeDevuelta) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "El stock de este pedido ya fue devuelto");
+        }
+
+        if (asignacionesDescontadas.isEmpty() && !existeDevuelta) {
+            // Verificar si existe alguna asignación en cualquier estado
+            boolean existeAsignacion = asignacionLotePedidoRepository.existsByPedido_Id(idPedido);
+            if (!existeAsignacion) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "El pedido no tiene trazabilidad de lotes; requiere ajuste manual de inventario");
+            }
+            // Si existe pero no hay DESCONTADA ni DEVUELTA, hay inconsistencia
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "La trazabilidad de lotes del pedido es inconsistente");
+        }
+
+        // 5. Validar todas las asignaciones antes de modificar (trazabilidad consistente)
+        for (AsignacionLotePedido asignacion : asignacionesDescontadas) {
+            if (asignacion.getLote() == null || asignacion.getLote().getId() == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "La trazabilidad de lotes del pedido es inconsistente");
+            }
+            if (asignacion.getProducto() == null || asignacion.getProducto().getId() == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "La trazabilidad de lotes del pedido es inconsistente");
+            }
+            if (asignacion.getCantidadDescontada() == null || 
+                asignacion.getCantidadDevuelta() == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "La trazabilidad de lotes del pedido es inconsistente");
+            }
+            if (asignacion.getCantidadDescontada().compareTo(asignacion.getCantidadDevuelta()) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "La trazabilidad de lotes del pedido es inconsistente");
+            }
+        }
+
+        // 6. Obtener IDs únicos de lotes y productos, ordenados
+        List<Long> idsLotes = asignacionesDescontadas.stream()
+            .map(a -> a.getLote().getId())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        List<Long> idsProductos = asignacionesDescontadas.stream()
+            .map(a -> a.getProducto().getId())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        // 7. Bloquear lotes con PESSIMISTIC_WRITE
+        List<InventarioLote> lotes = inventarioLoteRepository.findAllByIdInForUpdate(idsLotes);
+
+        // 8. Bloquear productos con PESSIMISTIC_WRITE
+        List<Producto> productos = productoRepository.findAllByIdInForUpdate(idsProductos);
+
+        // 9. Crear mapa de lotes para actualización
+        Map<Long, InventarioLote> mapaLotes = lotes.stream()
+            .collect(Collectors.toMap(InventarioLote::getId, l -> l));
+
+        // 10. Devolver stock a los lotes (agrupado por lote)
+        for (AsignacionLotePedido asignacion : asignacionesDescontadas) {
+            InventarioLote lote = mapaLotes.get(asignacion.getLote().getId());
+            if (lote == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                    "La trazabilidad de lotes del pedido es inconsistente");
+            }
+
+            // Calcular cantidad a devolver: cantidadDescontada - cantidadDevuelta
+            BigDecimal cantidadADevolver = asignacion.getCantidadDescontada()
+                .subtract(asignacion.getCantidadDevuelta());
+
+            // Sumar al stock actual del lote
+            BigDecimal stockActual = lote.getCantidadActual() != null ? lote.getCantidadActual() : BigDecimal.ZERO;
+            lote.setCantidadActual(stockActual.add(cantidadADevolver));
+
+            // Marcar asignación como DEVUELTA
+            asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DEVUELTA);
+            asignacion.setCantidadDevuelta(asignacion.getCantidadDescontada());
+        }
+
+        // 11. Guardar cada lote una sola vez
+        inventarioLoteRepository.saveAll(lotes);
+
+        // 12. Flush para asegurar que los cambios se reflejen antes del recálculo
+        inventarioLoteRepository.flush();
+
+        // 13. Recalcular stockLlenos para cada producto
+        Map<Long, Producto> mapaProductos = productos.stream()
+            .collect(Collectors.toMap(Producto::getId, p -> p));
+
+        for (Producto producto : productos) {
+            BigDecimal stockTotal = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
+            producto.setStockLlenos(stockTotal);
+        }
+
+        // 14. Guardar cada producto una sola vez
+        productoRepository.saveAll(productos);
+    }
+
+    @Override
+    @Transactional
+    public void validarStockDevueltoParaReactivacion(Long idPedido) {
+        // 1. Validar ID de pedido
+        if (idPedido == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "El ID del pedido es obligatorio");
+        }
+
+        // 2. Verificar si hay asignaciones DESCONTADA (stock no devuelto)
+        boolean existeDescontada = asignacionLotePedidoRepository.existsByPedido_IdAndEstado(
+            idPedido, 
+            AsignacionLotePedido.EstadoAsignacion.DESCONTADA
+        );
+
+        if (existeDescontada) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "El stock del pedido aún no ha sido devuelto");
+        }
+
+        // 3. Verificar si existe alguna asignación
+        boolean existeAsignacion = asignacionLotePedidoRepository.existsByPedido_Id(idPedido);
+        if (!existeAsignacion) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "El pedido no tiene trazabilidad de lotes; requiere ajuste manual de inventario");
+        }
+
+        // 4. Si todas están DEVUELTA, finalizar correctamente (no modificar datos)
+        // No hay necesidad de hacer nada más, el método simplemente valida
     }
 
     // =========================================================================
