@@ -2,7 +2,13 @@ package com.gas.sistema_gas.service.Implement;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -72,6 +78,60 @@ public class PedidoServiceImplement implements PedidoService {
     private com.gas.sistema_gas.Repository.InventarioLoteRepository inventarioLoteRepository;
     @Autowired
     private com.gas.sistema_gas.service.InventarioLoteService inventarioLoteService;
+
+    /**
+     * Helper central de bloqueo pesimista de Productos.
+     * Ordena IDs ASC, elimina duplicados, bloquea en una sola llamada y
+     * verifica que todos los productos existan.
+     */
+    private Map<Long, Producto> bloquearProductosPorIds(Collection<Long> idsProductos) {
+        if (idsProductos == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La lista de productos no puede ser nula");
+        }
+
+        // Rechazar explicitamente cualquier ID null antes de continuar
+        for (Long id : idsProductos) {
+            if (id == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La lista de productos contiene un ID nulo");
+            }
+        }
+
+        Set<Long> idsUnicos = new LinkedHashSet<>(idsProductos);
+
+        if (idsUnicos.isEmpty()) {
+            return new java.util.HashMap<>();
+        }
+
+        List<Long> idsOrdenados = idsUnicos.stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.toList());
+
+        List<Producto> productosBloqueados = productoRepository.findAllByIdInForUpdate(idsOrdenados);
+
+        Map<Long, Producto> mapa = productosBloqueados.stream()
+                .collect(Collectors.toMap(Producto::getId, p -> p));
+
+        if (mapa.size() != idsOrdenados.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Uno o más productos no fueron encontrados");
+        }
+
+        return mapa;
+    }
+
+    private Set<Long> extraerIdsDeDetallesCreate(List<PedidoDTO.DetalleCreate> detalles) {
+        return detalles.stream()
+                .filter(d -> d != null && d.idProducto() != null)
+                .map(PedidoDTO.DetalleCreate::idProducto)
+                .collect(Collectors.toSet());
+    }
+
+    private Set<Long> extraerIdsDeDetallesPedido(List<DetallePedido> detalles) {
+        return detalles.stream()
+                .filter(d -> d != null && d.getProducto() != null && d.getProducto().getId() != null)
+                .map(d -> d.getProducto().getId())
+                .collect(Collectors.toSet());
+    }
 
     @Override
     @Transactional
@@ -278,17 +338,26 @@ public class PedidoServiceImplement implements PedidoService {
         BigDecimal montoAcumulado = BigDecimal.ZERO;
 
         if (createDto.detalles() != null) {
+            // FASE 4B-2A: Validar todos los detalles antes de procesar
             for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
+                if (item == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle de venta inválido");
+                }
                 if (item.idProducto() == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del producto no puede ser nulo");
                 }
-                Producto producto = productoRepository.findById(item.idProducto())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
-
                 if (item.cantidad() == null || item.cantidad() < 1) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "La cantidad debe ser mayor a cero");
                 }
+            }
+
+            // FASE 4B-2A: Bloquear todos los productos únicos en una sola llamada ordenada por ID
+            Set<Long> idsProductos = extraerIdsDeDetallesCreate(createDto.detalles());
+            Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductos);
+
+            for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
+                Producto producto = productosBloqueados.get(item.idProducto());
 
                 BigDecimal precioUnitario = item.precioUnitario() != null && item.precioUnitario().compareTo(BigDecimal.ZERO) > 0
                         ? item.precioUnitario()
@@ -575,22 +644,37 @@ public class PedidoServiceImplement implements PedidoService {
                     && !"EN_CAMINO".equals(estadoActual) && !"EN_DOMICILIO".equals(estadoActual)
                     && !"ENTREGADO".equals(estadoActual)) {
 
+                // FASE 4B-2A: Orden de bloqueo: Pedido (ya bloqueado) → Productos → Lotes PEPS
                 List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+                Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detalles);
+                Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsDetalles);
+
                 for (DetallePedido detalle : detalles) {
-                    Producto producto = detalle.getProducto();
+                    Long idProd = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
+                    if (idProd == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
+                    }
+                    Producto producto = productosBloqueados.get(idProd);
+                    if (producto == null) {
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+                    }
                     BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
 
                     // Descontar stock real por PEPS con trazabilidad
                     inventarioLoteService.descontarStockPorPEPS(detalle);
 
-                    // Sincronizar stock_llenos desde lotes
+                    // Sincronizar stock_llenos desde lotes (usando el Producto bloqueado)
                     BigDecimal stockActualLotes = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
                     producto.setStockLlenos(stockActualLotes);
 
                     // Restar la reserva (libera el stock_reservado)
                     BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
-                    BigDecimal nuevaReserva = reservadoActual.subtract(cant);
-                    producto.setStockReservado(nuevaReserva.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : nuevaReserva);
+                    if (reservadoActual.compareTo(cant) < 0) {
+                        // FASE 4B-2A: No ocultar inconsistencias. Lanzar CONFLICT para que el rollback revierta el descuento PEPS.
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                                "La reserva del producto es menor que la cantidad a cargar: " + producto.getNombre());
+                    }
+                    producto.setStockReservado(reservadoActual.subtract(cant));
 
                     productoRepository.save(producto);
                 }
@@ -653,8 +737,20 @@ public class PedidoServiceImplement implements PedidoService {
      */
     private void reservarStockParaReactivacion(Pedido pedido) {
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+
+        // FASE 4B-2A: Bloquear todos los productos únicos en una sola llamada
+        Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detalles);
+        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsDetalles);
+
         for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
+            Long idProd = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
+            if (idProd == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
+            }
+            Producto producto = productosBloqueados.get(idProd);
+            if (producto == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+            }
             BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
 
             // Obtener la suma real de InventarioLote.cantidadActual del producto
@@ -686,18 +782,42 @@ public class PedidoServiceImplement implements PedidoService {
      */
     private void liberarReservaPedido(Pedido pedido) {
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
-        for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
 
+        // FASE 4B-2A: Bloquear todos los productos únicos en una sola llamada
+        Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detalles);
+        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsDetalles);
+
+        // FASE 4B-2A: Fase de validación completa primero
+        Map<Long, BigDecimal> cantidadesPorProducto = new java.util.HashMap<>();
+        for (DetallePedido detalle : detalles) {
+            Long idProd = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
+            if (idProd == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
+            }
+            BigDecimal cant = BigDecimal.valueOf(detalle.getCantidad());
+            cantidadesPorProducto.merge(idProd, cant, BigDecimal::add);
+        }
+
+        for (Map.Entry<Long, BigDecimal> entry : cantidadesPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(entry.getKey());
+            if (producto == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+            }
+            BigDecimal totalALiberar = entry.getValue();
             BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
 
-            if (reservadoActual.compareTo(cant) < 0) {
+            if (reservadoActual.compareTo(totalALiberar) < 0) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "La reserva del producto es menor que la cantidad del pedido");
             }
+        }
 
-            producto.setStockReservado(reservadoActual.subtract(cant));
+        // FASE 4B-2A: Fase de escritura (solo cuando todos los productos son válidos)
+        for (Map.Entry<Long, BigDecimal> entry : cantidadesPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(entry.getKey());
+            BigDecimal totalALiberar = entry.getValue();
+            BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+            producto.setStockReservado(reservadoActual.subtract(totalALiberar));
             productoRepository.save(producto);
         }
     }

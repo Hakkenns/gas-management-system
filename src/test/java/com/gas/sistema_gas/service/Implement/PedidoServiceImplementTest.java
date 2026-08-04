@@ -27,19 +27,26 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.gas.sistema_gas.Mapper.ClienteMapper;
 import com.gas.sistema_gas.Mapper.PedidoMapper;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.DetallePedido;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Model.Usuario;
+import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
+import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
+import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
@@ -79,6 +86,21 @@ class PedidoServiceImplementTest {
     @Mock
     private ControlEnvaseRepository controlEnvaseRepository;
 
+    @Mock
+    private ClienteRepository clienteRepository;
+
+    @Mock
+    private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private EmpleadoRepository empleadoRepository;
+
+    @Mock
+    private MetodoPagoRepository metodoPagoRepository;
+
+    @Mock
+    private ClienteMapper clienteMapper;
+
     @InjectMocks
     private PedidoServiceImplement pedidoService;
 
@@ -94,7 +116,10 @@ class PedidoServiceImplementTest {
     private Producto producto(Long id, BigDecimal stockReservado) {
         Producto producto = new Producto();
         producto.setId(id);
+        producto.setNombre("Producto " + id);
         producto.setStockReservado(stockReservado);
+        producto.setPrecioVenta(new BigDecimal("100.00"));
+        producto.setStockLlenos(BigDecimal.ZERO);
         return producto;
     }
 
@@ -109,6 +134,22 @@ class PedidoServiceImplementTest {
         return new PedidoDTO.SimpleResponse(
             id, "NV001", LocalDateTime.now(), null, null, null, null, null,
             estado, "PENDIENTE", BigDecimal.ZERO, BigDecimal.ZERO, null, "DOMICILIO", null, List.of()
+        );
+    }
+
+    private PedidoDTO.Create createDtoDomicilio(List<PedidoDTO.DetalleCreate> detalles) {
+        return new PedidoDTO.Create(
+            null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
+            10L, 1L, null, null, "obs", "PENDIENTE", "DOMICILIO", null,
+            List.of(), detalles, "NINGUNO", List.of()
+        );
+    }
+
+    private PedidoDTO.Create createDtoLocal(List<PedidoDTO.DetalleCreate> detalles) {
+        return new PedidoDTO.Create(
+            null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
+            null, 1L, null, null, "obs", null, "LOCAL", null,
+            List.of(), detalles, "NINGUNO", List.of()
         );
     }
 
@@ -256,6 +297,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(10L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -271,7 +313,6 @@ class PedidoServiceImplementTest {
         verify(pedidoRepository).save(any(Pedido.class));
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
     }
 
@@ -291,8 +332,6 @@ class PedidoServiceImplementTest {
 
         // No modificar Producto
         verify(productoRepository, never()).save(any());
-        // No consultar lotes
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         // No guardar Pedido
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
@@ -312,7 +351,6 @@ class PedidoServiceImplementTest {
         assertEquals("Solo se puede anular un pedido en estado PENDIENTE", ex.getReason());
 
         verify(productoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
 
@@ -331,7 +369,6 @@ class PedidoServiceImplementTest {
         assertEquals("El pedido ya está anulado", ex.getReason());
 
         verify(productoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
 
@@ -345,6 +382,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(14L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoMapper.toSimpleResponse(pedido)).thenReturn(simpleResponse(14L, "ANULADO"));
@@ -357,7 +395,6 @@ class PedidoServiceImplementTest {
         assertEquals("ANULADO", pedido.getEstadoPedido());
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
     }
 
@@ -371,6 +408,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(15L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(15L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> pedidoService.deleteOrder(15L));
@@ -382,7 +420,6 @@ class PedidoServiceImplementTest {
         assertEquals("PENDIENTE", pedido.getEstadoPedido());
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
         // NUNCA llamar descontarStockPorPEPS
         verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
@@ -394,10 +431,6 @@ class PedidoServiceImplementTest {
 
     @Test
     void updateEstadoPedido_yDeleteOrder_usanFindByIdForUpdate_noFindById() {
-        // Esta prueba verifica indirectamente que el método usa findByIdForUpdate
-        // Si usara findById, el stub de findByIdForUpdate no se invocaría y Mockito
-        // lanzaría UnnecessaryStubbingException o el test fallaría al no encontrar el pedido.
-
         Pedido pedido = pedido(16L, "PENDIENTE");
 
         when(pedidoRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(pedido));
@@ -420,14 +453,9 @@ class PedidoServiceImplementTest {
         Producto producto = producto(1L, new BigDecimal("3.00")); // stockReservado inicial 3
         DetallePedido detalle = detalle(producto, 5); // cantidad 5
 
-        // Simular lote con cantidadActual 20
-        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
-        lote.setId(1L);
-        lote.setProducto(producto);
-        lote.setCantidadActual(new BigDecimal("20.00"));
-
         when(pedidoRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(20L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -498,14 +526,9 @@ class PedidoServiceImplementTest {
         Producto producto = producto(1L, new BigDecimal("3.00")); // stockReservado 3
         DetallePedido detalle = detalle(producto, 5); // cantidad 5
 
-        // Simular lote con cantidadActual 6
-        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
-        lote.setId(1L);
-        lote.setProducto(producto);
-        lote.setCantidadActual(new BigDecimal("6.00"));
-
         when(pedidoRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(21L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("6.00"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
@@ -533,14 +556,9 @@ class PedidoServiceImplementTest {
         Producto producto = producto(1L, null); // stockReservado null
         DetallePedido detalle = detalle(producto, 5);
 
-        // Simular lote con cantidadActual 20
-        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
-        lote.setId(1L);
-        lote.setProducto(producto);
-        lote.setCantidadActual(new BigDecimal("20.00"));
-
         when(pedidoRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(22L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -599,14 +617,9 @@ class PedidoServiceImplementTest {
         Producto producto = producto(1L, new BigDecimal("10.00")); // stockReservado 10
         DetallePedido detalle = detalle(producto, 5);
 
-        // Simular lote con cantidadActual 20
-        com.gas.sistema_gas.Model.InventarioLote lote = new com.gas.sistema_gas.Model.InventarioLote();
-        lote.setId(1L);
-        lote.setProducto(producto);
-        lote.setCantidadActual(new BigDecimal("20.00"));
-
         when(pedidoRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(24L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
         when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -663,5 +676,293 @@ class PedidoServiceImplementTest {
         verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
         verify(inventarioLoteService, never()).devolverStockDePedido(any());
         verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
+    }
+
+    // =========================================================================
+    // FASE 4B-2A: PRUEBAS NUEVAS — BLOQUEOS ATÓMICOS DE PRODUCTOS
+    // =========================================================================
+
+    @Test
+    void createOrder_DOMICILIO_bloqueaProductoAntesDeReservar() {
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        PedidoDTO.Create createDto = createDtoDomicilio(
+                List.of(new PedidoDTO.DetalleCreate(1L, 3, null, null))
+        );
+
+        Pedido pedido = new Pedido();
+        pedido.setTipoVenta("DOMICILIO");
+
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+        Empleado empleado = new Empleado();
+        empleado.setId(10L);
+
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001")).thenReturn("NV001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(empleadoRepository.findById(10L)).thenReturn(Optional.of(empleado));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
+            DetallePedido d = invocation.getArgument(0);
+            d.setIdDetalle(1L);
+            return d;
+        });
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "PENDIENTE"));
+
+        pedidoService.createOrder(createDto, 1L);
+
+        // FASE 4B-2A: se bloquea con findAllByIdInForUpdate con IDs ordenados
+        verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        // se usa el Producto bloqueado: stockReservado aumenta correctamente
+        assertEquals(0, new BigDecimal("3.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe ser 3");
+        // createOrder ya no usa productoRepository.findById para los detalles
+        verify(productoRepository, never()).findById(eq(1L));
+    }
+
+    @Test
+    void createOrder_DOMICILIO_variosDetallesMismoProducto_bloqueaUnaVezYAcumula() {
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        PedidoDTO.Create createDto = createDtoDomicilio(
+                List.of(
+                        new PedidoDTO.DetalleCreate(1L, 3, null, null),
+                        new PedidoDTO.DetalleCreate(1L, 4, null, null)
+                )
+        );
+
+        Pedido pedido = new Pedido();
+        pedido.setTipoVenta("DOMICILIO");
+
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+        Empleado empleado = new Empleado();
+        empleado.setId(10L);
+
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001")).thenReturn("NV001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(empleadoRepository.findById(10L)).thenReturn(Optional.of(empleado));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
+            DetallePedido d = invocation.getArgument(0);
+            d.setIdDetalle(1L);
+            return d;
+        });
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "PENDIENTE"));
+
+        pedidoService.createOrder(createDto, 1L);
+
+        // FASE 4B-2A: se bloquea una sola fila de Producto (una sola llamada)
+        verify(productoRepository, times(1)).findAllByIdInForUpdate(List.of(1L));
+        // stockReservado final = 3 + 4 = 7
+        assertEquals(0, new BigDecimal("7.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe acumular 7");
+    }
+
+    @Test
+    void createOrder_LOCAL_bloqueaProductoAntesDeDescontarPeps() {
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        PedidoDTO.Create createDto = createDtoLocal(
+                List.of(new PedidoDTO.DetalleCreate(1L, 2, null, null))
+        );
+
+        Pedido pedido = new Pedido();
+        pedido.setTipoVenta("LOCAL");
+
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001")).thenReturn("NV001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
+            DetallePedido d = invocation.getArgument(0);
+            d.setIdDetalle(1L);
+            return d;
+        });
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "ENTREGADO"));
+
+        pedidoService.createOrder(createDto, 1L);
+
+        // FASE 4B-2A: InOrder verifica que el bloqueo ocurre ANTES del descuento PEPS
+        InOrder inOrder = inOrder(productoRepository, inventarioLoteService);
+        inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        inOrder.verify(inventarioLoteService).descontarStockPorPEPS(any(DetallePedido.class));
+    }
+
+    @Test
+    void updateEstadoPedido_CARGADO_bloqueaProductosAntesDePeps() {
+        Pedido pedido = pedido(30L, "ACEPTADO");
+        Producto producto = producto(1L, new BigDecimal("10.00"));
+        DetallePedido detalle = detalle(producto, 5);
+
+        when(pedidoRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(30L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(30L)).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(30L, "CARGADO"));
+
+        pedidoService.updateEstadoPedido(30L, "CARGADO");
+
+        // FASE 4B-2A: Orden Pedido → Productos → Lotes PEPS
+        InOrder inOrder = inOrder(pedidoRepository, productoRepository, inventarioLoteService);
+        inOrder.verify(pedidoRepository).findByIdForUpdate(30L);
+        inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        inOrder.verify(inventarioLoteService).descontarStockPorPEPS(any(DetallePedido.class));
+    }
+
+    @Test
+    void updateEstadoPedido_CARGADO_reservaInsuficiente_lanzaConflictYNoGuarda() {
+        Pedido pedido = pedido(31L, "ACEPTADO");
+        Producto producto = producto(1L, new BigDecimal("2.00")); // reserva 2 < cantidad 5
+        DetallePedido detalle = detalle(producto, 5);
+
+        when(pedidoRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(31L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(31L, "CARGADO"));
+
+        // Lanza HTTP 409 CONFLICT
+        assertEquals(HttpStatus.CONFLICT.value(), ex.getStatusCode().value());
+
+        // No guarda Producto
+        verify(productoRepository, never()).save(any(Producto.class));
+        // No guarda el nuevo estado del Pedido
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+
+        // Nota: descontarStockPorPEPS puede haber sido invocado antes del CONFLICT;
+        // el rollback real se probará en integración en FASE 4B-4.
+    }
+
+    @Test
+    void deleteOrder_variosDetallesMismoProducto_liberaTotalAgrupado() {
+        Pedido pedido = pedido(32L, "PENDIENTE");
+        Producto producto = producto(1L, new BigDecimal("10.00"));
+        DetallePedido detalle1 = detalle(producto, 3);
+        DetallePedido detalle2 = detalle(producto, 4);
+
+        when(pedidoRepository.findByIdForUpdate(32L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(32L)).thenReturn(List.of(detalle1, detalle2));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        pedidoService.deleteOrder(32L);
+
+        // FASE 4B-2A: se agrupan cantidades (3 + 4 = 7) y se libera la suma exacta
+        verify(productoRepository, times(1)).findAllByIdInForUpdate(List.of(1L));
+        // stockReservado final = 10 - 7 = 3
+        assertEquals(0, new BigDecimal("3.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe liberar la suma agrupada (7)");
+        verify(productoRepository, times(1)).save(producto);
+        assertEquals("ANULADO", pedido.getEstadoPedido());
+    }
+
+    @Test
+    void reactivacion_bloqueaProductoYReserva() {
+        Pedido pedido = pedido(33L, "CLIENTE_AUSENTE");
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        DetallePedido detalle = detalle(producto, 5);
+
+        when(pedidoRepository.findByIdForUpdate(33L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(33L)).thenReturn(List.of(detalle));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(33L)).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(33L, "ACEPTADO"));
+
+        pedidoService.updateEstadoPedido(33L, "ACEPTADO");
+
+        // FASE 4B-2A: CLIENTE_AUSENTE → ACEPTADO usa el Producto bloqueado
+        verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        // stockReservado final = 0 + 5 = 5
+        assertEquals(0, new BigDecimal("5.00").compareTo(producto.getStockReservado()),
+                "stockReservado final debe ser 5");
+        // No modifica lotes, no descuenta PEPS
+        verify(inventarioLoteRepository, never()).save(any());
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
+    }
+
+    @Test
+    void createOrder_DOMICILIO_productosDistintos_bloqueaIdsOrdenados() {
+        Producto producto1 = producto(1L, BigDecimal.ZERO);
+        Producto producto2 = producto(2L, BigDecimal.ZERO);
+
+        // Detalles en orden inverso: producto 2 primero, luego producto 1
+        PedidoDTO.Create createDto = createDtoDomicilio(
+                List.of(
+                        new PedidoDTO.DetalleCreate(2L, 3, null, null),
+                        new PedidoDTO.DetalleCreate(1L, 4, null, null)
+                )
+        );
+
+        Pedido pedido = new Pedido();
+        pedido.setTipoVenta("DOMICILIO");
+
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+        Empleado empleado = new Empleado();
+        empleado.setId(10L);
+
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001")).thenReturn("NV001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(empleadoRepository.findById(10L)).thenReturn(Optional.of(empleado));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // Los IDs deben llegar ordenados ASC: List.of(1L, 2L)
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L))).thenReturn(List.of(producto1, producto2));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(2L)).thenReturn(new BigDecimal("50.00"));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
+            DetallePedido d = invocation.getArgument(0);
+            d.setIdDetalle(1L);
+            return d;
+        });
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "PENDIENTE"));
+
+        pedidoService.createOrder(createDto, 1L);
+
+        // FASE 4B-2A: se invoca exactamente una vez con IDs ordenados ASC
+        verify(productoRepository, times(1)).findAllByIdInForUpdate(List.of(1L, 2L));
+        // Ambos productos reservaron correctamente
+        assertEquals(0, new BigDecimal("4.00").compareTo(producto1.getStockReservado()),
+                "stockReservado del producto 1 debe ser 4");
+        assertEquals(0, new BigDecimal("3.00").compareTo(producto2.getStockReservado()),
+                "stockReservado del producto 2 debe ser 3");
     }
 }
