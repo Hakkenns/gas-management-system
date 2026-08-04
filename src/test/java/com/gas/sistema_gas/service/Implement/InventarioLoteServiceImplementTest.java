@@ -3,6 +3,7 @@ package com.gas.sistema_gas.service.Implement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -645,6 +647,8 @@ class InventarioLoteServiceImplementTest {
             .thenReturn(List.of(asignacion));
         when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
             .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
         when(inventarioLoteRepository.findAllByIdInForUpdate(List.of(1L)))
             .thenReturn(List.of()); // Lote no encontrado
 
@@ -656,6 +660,326 @@ class InventarioLoteServiceImplementTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals("La trazabilidad de lotes del pedido es inconsistente", exception.getReason());
         verify(inventarioLoteRepository, never()).saveAll(any());
+    }
+
+    // =========================================================================
+    // PRUEBAS FASE 4B-2B: devolverStockDePedido - orden y validaciones
+    // =========================================================================
+
+    // PRUEBA: devolverStockDePedido bloquea asignaciones, productos y lotes en orden
+
+    @Test
+    void devolverStockDePedido_bloqueaAsignacionesProductosYLotesEnOrden() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(6));
+
+        AsignacionLotePedido asignacion = new AsignacionLotePedido();
+        asignacion.setIdAsignacion(1L);
+        asignacion.setPedido(pedido);
+        asignacion.setProducto(producto);
+        asignacion.setLote(lote);
+        asignacion.setCantidadDescontada(BigDecimal.valueOf(4));
+        asignacion.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion));
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(lote));
+        when(inventarioLoteRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(asignacionLotePedidoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L))
+            .thenReturn(BigDecimal.valueOf(10));
+
+        inventarioLoteService.devolverStockDePedido(1L);
+
+        // Verificar orden: asignaciones → productos → lotes → saveAll productos
+        InOrder inOrder = inOrder(asignacionLotePedidoRepository, productoRepository, inventarioLoteRepository);
+        inOrder.verify(asignacionLotePedidoRepository).findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+        inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        inOrder.verify(inventarioLoteRepository).findAllByIdInForUpdate(List.of(1L));
+        inOrder.verify(productoRepository).saveAll(any());
+    }
+
+    // PRUEBA: devolverStockDePedido ordena IDs múltiples de forma ASC
+
+    @Test
+    void devolverStockDePedido_idsMultiplesSeOrdenanAsc() {
+        Producto producto1 = new Producto();
+        producto1.setId(1L);
+        producto1.setNombre("Gas 10kg");
+
+        Producto producto2 = new Producto();
+        producto2.setId(2L);
+        producto2.setNombre("Gas 11kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote1 = new InventarioLote();
+        lote1.setId(10L);
+        lote1.setProducto(producto1);
+        lote1.setCantidadActual(BigDecimal.valueOf(5));
+
+        InventarioLote lote2 = new InventarioLote();
+        lote2.setId(20L);
+        lote2.setProducto(producto2);
+        lote2.setCantidadActual(BigDecimal.valueOf(5));
+
+        AsignacionLotePedido asignacion1 = new AsignacionLotePedido();
+        asignacion1.setIdAsignacion(1L);
+        asignacion1.setPedido(pedido);
+        asignacion1.setProducto(producto1);
+        asignacion1.setLote(lote1);
+        asignacion1.setCantidadDescontada(BigDecimal.valueOf(3));
+        asignacion1.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion1.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        AsignacionLotePedido asignacion2 = new AsignacionLotePedido();
+        asignacion2.setIdAsignacion(2L);
+        asignacion2.setPedido(pedido);
+        asignacion2.setProducto(producto2);
+        asignacion2.setLote(lote2);
+        asignacion2.setCantidadDescontada(BigDecimal.valueOf(2));
+        asignacion2.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion2.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion2, asignacion1)); // Orden inverso intencional
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L)))
+            .thenReturn(List.of(producto1, producto2));
+        when(inventarioLoteRepository.findAllByIdInForUpdate(List.of(10L, 20L)))
+            .thenReturn(List.of(lote1, lote2));
+        when(inventarioLoteRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(asignacionLotePedidoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(any(Long.class)))
+            .thenReturn(BigDecimal.valueOf(10));
+
+        inventarioLoteService.devolverStockDePedido(1L);
+
+        // Verificar que los IDs se pasaron ordenados ASC
+        verify(productoRepository).findAllByIdInForUpdate(List.of(1L, 2L));
+        verify(inventarioLoteRepository).findAllByIdInForUpdate(List.of(10L, 20L));
+    }
+
+    // PRUEBA: devolverStockDePedido producto faltante no modifica nada
+
+    @Test
+    void devolverStockDePedido_productoFaltante_noModificaNada() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(5));
+
+        AsignacionLotePedido asignacion = new AsignacionLotePedido();
+        asignacion.setIdAsignacion(1L);
+        asignacion.setPedido(pedido);
+        asignacion.setProducto(producto);
+        asignacion.setLote(lote);
+        asignacion.setCantidadDescontada(BigDecimal.valueOf(4));
+        asignacion.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion));
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of()); // Producto no encontrado
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.devolverStockDePedido(1L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("La trazabilidad de lotes del pedido es inconsistente", exception.getReason());
+        verify(inventarioLoteRepository, never()).findAllByIdInForUpdate(any());
+        verify(inventarioLoteRepository, never()).saveAll(any());
+        verify(productoRepository, never()).saveAll(any());
+        verify(asignacionLotePedidoRepository, never()).saveAll(any());
+    }
+
+    // PRUEBA: devolverStockDePedido lote faltante no modifica nada
+
+    @Test
+    void devolverStockDePedido_loteFaltante_noModificaNada() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(5));
+
+        AsignacionLotePedido asignacion = new AsignacionLotePedido();
+        asignacion.setIdAsignacion(1L);
+        asignacion.setPedido(pedido);
+        asignacion.setProducto(producto);
+        asignacion.setLote(lote);
+        asignacion.setCantidadDescontada(BigDecimal.valueOf(4));
+        asignacion.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion));
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of()); // Lote no encontrado
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.devolverStockDePedido(1L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("La trazabilidad de lotes del pedido es inconsistente", exception.getReason());
+        verify(inventarioLoteRepository, never()).saveAll(any());
+        verify(productoRepository, never()).saveAll(any());
+        verify(asignacionLotePedidoRepository, never()).saveAll(any());
+    }
+
+    // PRUEBA: devolverStockDePedido varias asignaciones mismo lote agrupa devolución
+
+    @Test
+    void devolverStockDePedido_variasAsignacionesMismoLote_agrupaDevolucion() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(5));
+
+        AsignacionLotePedido asignacion1 = new AsignacionLotePedido();
+        asignacion1.setIdAsignacion(1L);
+        asignacion1.setPedido(pedido);
+        asignacion1.setProducto(producto);
+        asignacion1.setLote(lote);
+        asignacion1.setCantidadDescontada(BigDecimal.valueOf(3));
+        asignacion1.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion1.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        AsignacionLotePedido asignacion2 = new AsignacionLotePedido();
+        asignacion2.setIdAsignacion(2L);
+        asignacion2.setPedido(pedido);
+        asignacion2.setProducto(producto);
+        asignacion2.setLote(lote);
+        asignacion2.setCantidadDescontada(BigDecimal.valueOf(2));
+        asignacion2.setCantidadDevuelta(BigDecimal.ZERO);
+        asignacion2.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion1, asignacion2));
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(lote));
+        when(inventarioLoteRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(asignacionLotePedidoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L))
+            .thenReturn(BigDecimal.valueOf(10));
+
+        inventarioLoteService.devolverStockDePedido(1L);
+
+        // El lote debe recibir 3 + 2 = 5 unidades (agrupado por lote)
+        assertEquals(BigDecimal.valueOf(10), lote.getCantidadActual());
+        assertEquals(AsignacionLotePedido.EstadoAsignacion.DEVUELTA, asignacion1.getEstado());
+        assertEquals(AsignacionLotePedido.EstadoAsignacion.DEVUELTA, asignacion2.getEstado());
+        // Verificar que saveAll se llama una sola vez por repositorio
+        verify(inventarioLoteRepository, times(1)).saveAll(any());
+        verify(asignacionLotePedidoRepository, times(1)).saveAll(any());
+        verify(productoRepository, times(1)).saveAll(any());
+    }
+
+    // PRUEBA: devolverStockDePedido cantidadDevuelta negativa no modifica nada
+
+    @Test
+    void devolverStockDePedido_cantidadDevueltaNegativa_noModificaNada() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Pedido pedido = new Pedido();
+        pedido.setId(1L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCantidadActual(BigDecimal.valueOf(5));
+
+        AsignacionLotePedido asignacion = new AsignacionLotePedido();
+        asignacion.setIdAsignacion(1L);
+        asignacion.setPedido(pedido);
+        asignacion.setProducto(producto);
+        asignacion.setLote(lote);
+        asignacion.setCantidadDescontada(BigDecimal.valueOf(4));
+        asignacion.setCantidadDevuelta(BigDecimal.valueOf(-1)); // Negativa
+        asignacion.setEstado(AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
+
+        when(asignacionLotePedidoRepository.findByPedidoIdAndEstadoForUpdate(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA))
+            .thenReturn(List.of(asignacion));
+        when(asignacionLotePedidoRepository.existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DEVUELTA))
+            .thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.devolverStockDePedido(1L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("La trazabilidad de lotes del pedido es inconsistente", exception.getReason());
+        // No debe bloquear Productos ni Lotes
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(inventarioLoteRepository, never()).findAllByIdInForUpdate(any());
+        // No debe llamar saveAll en ningún repositorio
+        verify(inventarioLoteRepository, never()).saveAll(any());
+        verify(productoRepository, never()).saveAll(any());
+        verify(asignacionLotePedidoRepository, never()).saveAll(any());
+        // El lote conserva cantidadActual
+        assertEquals(BigDecimal.valueOf(5), lote.getCantidadActual());
+        // La asignación conserva estado DESCONTADA
+        assertEquals(AsignacionLotePedido.EstadoAsignacion.DESCONTADA, asignacion.getEstado());
+        // cantidadDevuelta continúa en -1
+        assertEquals(BigDecimal.valueOf(-1), asignacion.getCantidadDevuelta());
     }
 
     // =========================================================================

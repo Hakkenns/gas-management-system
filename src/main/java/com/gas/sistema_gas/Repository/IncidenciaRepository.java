@@ -20,4 +20,8 @@ public interface IncidenciaRepository extends JpaRepository<Incidencia, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Incidencia i WHERE i.id = :id")
     Optional<Incidencia> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Incidencia i WHERE i.pedido.id = :pedidoId ORDER BY i.id ASC")
+    List<Incidencia> findByPedidoIdForUpdate(@Param("pedidoId") Long pedidoId);
 }

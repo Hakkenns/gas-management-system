@@ -254,13 +254,17 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "El pedido debe estar en EN_REVISION para confirmar el rechazo"));
         }
 
-        // Buscar incidencia pendiente de tipo RECHAZO_POST_LLEGADA
-        List<Incidencia> incidencias = incidenciaRepository.findByPedidoId(idPedido);
-        boolean existeRechazoPendiente = incidencias.stream()
-                .anyMatch(inc -> "RECHAZO_POST_LLEGADA".equalsIgnoreCase(inc.getTipoIncidencia())
-                        && "PENDIENTE".equalsIgnoreCase(inc.getEstado()));
+        // Buscar incidencias del pedido con bloqueo pesimista
+        List<Incidencia> incidencias = incidenciaRepository.findByPedidoIdForUpdate(idPedido);
 
-        if (!existeRechazoPendiente) {
+        // Localizar la incidencia pendiente exacta de tipo RECHAZO_POST_LLEGADA
+        Incidencia incidenciaRechazo = incidencias.stream()
+                .filter(inc -> "RECHAZO_POST_LLEGADA".equalsIgnoreCase(inc.getTipoIncidencia())
+                        && "PENDIENTE".equalsIgnoreCase(inc.getEstado()))
+                .findFirst()
+                .orElse(null);
+
+        if (incidenciaRechazo == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "No existe un rechazo pendiente para confirmar"));
         }
@@ -277,15 +281,10 @@ public class IncidenciaController {
         pedido.setEmpleado(null);
         pedidoRepository.save(pedido);
 
-        // Marcar solo las incidencias pendientes de tipo RECHAZO_POST_LLEGADA
-        for (Incidencia inc : incidencias) {
-            if ("RECHAZO_POST_LLEGADA".equalsIgnoreCase(inc.getTipoIncidencia())
-                    && "PENDIENTE".equalsIgnoreCase(inc.getEstado())) {
-                inc.setEstado("CONFIRMADO");
-                inc.setUpdatedAt(LocalDateTime.now());
-                incidenciaRepository.save(inc);
-            }
-        }
+        // Marcar la incidencia de rechazo como CONFIRMADO
+        incidenciaRechazo.setEstado("CONFIRMADO");
+        incidenciaRechazo.setUpdatedAt(LocalDateTime.now());
+        incidenciaRepository.save(incidenciaRechazo);
 
         // Actualizar contador
         long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
@@ -299,7 +298,7 @@ public class IncidenciaController {
             respuesta.setMotoReemplazo("");
             respuesta.setCreatedAt(LocalDateTime.now());
             respuesta.setUpdatedAt(LocalDateTime.now());
-            respuesta.setIncidencia(incidencias.get(0));
+            respuesta.setIncidencia(incidenciaRechazo);
             respuestaIncidenciaRepository.save(respuesta);
 
             messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + empleadoAnterior.getId(),
@@ -693,7 +692,8 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "No autenticado"));
         }
 
-        var incidenciaOpt = incidenciaRepository.findByIdForUpdate(id);
+        // 1. Lectura inicial sin bloqueo de Incidencia para descubrir pedido
+        var incidenciaOpt = incidenciaRepository.findById(id);
         if (incidenciaOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Incidencia no encontrada"));
@@ -701,66 +701,86 @@ public class IncidenciaController {
 
         Incidencia incidencia = incidenciaOpt.get();
 
-        // Validar tipo de incidencia
-        if (!"CLIENTE_AUSENTE".equalsIgnoreCase(incidencia.getTipoIncidencia())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("success", false, "message", "Esta acción solo corresponde a Cliente Ausente"));
-        }
-
-        // Idempotencia: si ya está ATENDIDO, no procesar
-        if ("ATENDIDO".equalsIgnoreCase(incidencia.getEstado())) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
-        }
-
-        // Validar que esté PENDIENTE
-        if (!"PENDIENTE".equalsIgnoreCase(incidencia.getEstado())) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
-        }
-
         // Validar que tenga pedido asociado
         if (incidencia.getPedido() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
         }
 
-        // Cargar pedido con bloqueo
-        Pedido pedido = pedidoRepository.findByIdForUpdate(incidencia.getPedido().getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        Long pedidoId = incidencia.getPedido().getId();
 
-        // Validar estado del pedido
+        // 2. Pedido bloqueado
+        var pedidoOpt = pedidoRepository.findByIdForUpdate(pedidoId);
+        if (pedidoOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Pedido no encontrado"));
+        }
+
+        Pedido pedido = pedidoOpt.get();
+
+        // 3. Incidencia bloqueada (re-leer con bloqueo)
+        var incidenciaBloqueadaOpt = incidenciaRepository.findByIdForUpdate(id);
+        if (incidenciaBloqueadaOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Incidencia no encontrada"));
+        }
+
+        Incidencia incidenciaBloqueada = incidenciaBloqueadaOpt.get();
+
+        // 4. Volver a validar todo
+        // - asociación con el mismo Pedido
+        if (incidenciaBloqueada.getPedido() == null
+                || !incidenciaBloqueada.getPedido().getId().equals(pedidoId)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está asociada al pedido bloqueado"));
+        }
+        // - tipo CLIENTE_AUSENTE
+        if (!"CLIENTE_AUSENTE".equalsIgnoreCase(incidenciaBloqueada.getTipoIncidencia())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "Esta acción solo corresponde a Cliente Ausente"));
+        }
+        // - Incidencia PENDIENTE
+        if ("ATENDIDO".equalsIgnoreCase(incidenciaBloqueada.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
+        }
+        if (!"PENDIENTE".equalsIgnoreCase(incidenciaBloqueada.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
+        }
+        // - Pedido CLIENTE_AUSENTE
         String estadoPedido = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "";
         if (!"CLIENTE_AUSENTE".equals(estadoPedido)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
         }
 
-        // Devolver stock antes de marcar como atendido
+        // 5. devolverStockDePedido
         inventarioLoteService.devolverStockDePedido(pedido.getId());
 
+        // 6. Escritura
         // Marcar incidencia como ATENDIDO
-        incidencia.setEstado("ATENDIDO");
-        incidencia.setUpdatedAt(LocalDateTime.now());
-        incidenciaRepository.save(incidencia);
+        incidenciaBloqueada.setEstado("ATENDIDO");
+        incidenciaBloqueada.setUpdatedAt(LocalDateTime.now());
+        incidenciaRepository.save(incidenciaBloqueada);
 
         // Guardar respuesta en BD para que aparezca en la bandeja del repartidor
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
-        respuesta.setIncidencia(incidencia);
+        respuesta.setIncidencia(incidenciaBloqueada);
         respuesta.setMotoReemplazo("");
         respuesta.setCreatedAt(LocalDateTime.now());
         respuesta.setUpdatedAt(LocalDateTime.now());
         respuestaIncidenciaRepository.save(respuesta);
 
         // Enviar notificación WebSocket al repartidor
-        if (incidencia.getEmpleado() != null) {
+        if (incidenciaBloqueada.getEmpleado() != null) {
             String codigoPedido = pedido.getCodigo() != null ? pedido.getCodigo() : "N/A";
             String mensajeNotificacion = "El administrador ha revisado y aceptado el rechazo del pedido " + codigoPedido;
-            messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + incidencia.getEmpleado().getId(),
+            messagingTemplate.convertAndSend("/topic/repartidor/respuestas/" + incidenciaBloqueada.getEmpleado().getId(),
                 Map.of(
                     "mensaje", mensajeNotificacion,
                     "fecha", LocalDateTime.now().toString(),
-                    "tipoIncidencia", incidencia.getTipoIncidencia(),
+                    "tipoIncidencia", incidenciaBloqueada.getTipoIncidencia(),
                     "motoReemplazo", ""
                 )
             );
@@ -787,64 +807,89 @@ public class IncidenciaController {
                     .body(Map.of("success", false, "message", "No autenticado"));
         }
 
-        // OBJETIVO 1: Cargar incidencia con bloqueo
-        var incidenciaOpt = incidenciaRepository.findByIdForUpdate(id);
+        // 1. Lectura inicial sin bloqueo de Incidencia
+        var incidenciaOpt = incidenciaRepository.findById(id);
         if (incidenciaOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Incidencia no encontrada"));
         }
 
         Incidencia incidencia = incidenciaOpt.get();
-        
-        // OBJETIVO 2: Validaciones antes de modificar inventario o estados
-        
-        // 1. Validar tipo de incidencia
+
+        // 2. Validaciones iniciales
+        // - tipo CLIENTE_AUSENTE
         String tipoIncidencia = incidencia.getTipoIncidencia();
         if (tipoIncidencia == null || !"CLIENTE_AUSENTE".equalsIgnoreCase(tipoIncidencia)) {
             return ResponseEntity.badRequest()
                     .body(Map.of("success", false, "message", "Solo se pueden reasignar incidencias de Cliente Ausente"));
         }
-        
-        // 2. Validar que la incidencia no esté ATENDIDO
-        String estadoIncidencia = incidencia.getEstado();
-        if ("ATENDIDO".equalsIgnoreCase(estadoIncidencia)) {
+        // - Incidencia PENDIENTE
+        if ("ATENDIDO".equalsIgnoreCase(incidencia.getEstado())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
         }
-        
-        // 3. Validar que la incidencia esté PENDIENTE
-        if (!"PENDIENTE".equalsIgnoreCase(estadoIncidencia)) {
+        if (!"PENDIENTE".equalsIgnoreCase(incidencia.getEstado())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
         }
-        
-        // 4. Validar que tenga pedido asociado
+        // - Pedido asociado
         Pedido pedido = incidencia.getPedido();
         if (pedido == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("success", false, "message", "La incidencia no tiene un pedido asociado"));
         }
-        
-        // OBJETIVO 1: Cargar pedido con bloqueo
+
         Long pedidoId = pedido.getId();
+
+        // 3. Pedido bloqueado
         var pedidoOpt = pedidoRepository.findByIdForUpdate(pedidoId);
         if (pedidoOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", "Pedido no encontrado"));
         }
-        
+
         pedido = pedidoOpt.get();
-        
-        // 5. Validar estado del pedido
+
+        // 4. Incidencia bloqueada (re-leer con bloqueo)
+        var incidenciaBloqueadaOpt = incidenciaRepository.findByIdForUpdate(id);
+        if (incidenciaBloqueadaOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", "Incidencia no encontrada"));
+        }
+
+        Incidencia incidenciaBloqueada = incidenciaBloqueadaOpt.get();
+
+        // 5. Validaciones (re-validar todo después de bloquear)
+        // - asociación con el mismo Pedido
+        if (incidenciaBloqueada.getPedido() == null
+                || !incidenciaBloqueada.getPedido().getId().equals(pedidoId)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está asociada al pedido bloqueado"));
+        }
+        // - tipo CLIENTE_AUSENTE
+        if (!"CLIENTE_AUSENTE".equalsIgnoreCase(incidenciaBloqueada.getTipoIncidencia())) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Solo se pueden reasignar incidencias de Cliente Ausente"));
+        }
+        // - Incidencia PENDIENTE
+        if ("ATENDIDO".equalsIgnoreCase(incidenciaBloqueada.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia ya fue atendida"));
+        }
+        if (!"PENDIENTE".equalsIgnoreCase(incidenciaBloqueada.getEstado())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "La incidencia no está pendiente"));
+        }
+        // - Pedido CLIENTE_AUSENTE
         String estadoPedido = pedido.getEstadoPedido() != null ? pedido.getEstadoPedido().trim().toUpperCase() : "";
         if (!"CLIENTE_AUSENTE".equals(estadoPedido)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
         }
-        
+
         // 6. Validar idNuevoRepartidor y existencia del empleado
-        Long idNuevoRepartidor = body.get("idNuevoRepartidor") != null 
-                ? ((Number) body.get("idNuevoRepartidor")).longValue() 
+        Long idNuevoRepartidor = body.get("idNuevoRepartidor") != null
+                ? ((Number) body.get("idNuevoRepartidor")).longValue()
                 : null;
 
         if (idNuevoRepartidor == null) {
@@ -859,86 +904,117 @@ public class IncidenciaController {
         }
 
         Empleado nuevoRepartidor = nuevoRepartidorOpt.get();
-        
-        // OBJETIVO 3: Validar inventario proyectado antes de modificar
+
+        // 7. Cargar detalles una vez
         List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(pedidoId);
+
+        // 8. Validar detalle, producto, ID y cantidad
         for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            Integer cantidadPedido = detalle.getCantidad();
-            
-            // Calcular stock real actual (suma de cantidadActual de los lotes)
-            BigDecimal stockRealActual = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
-            
-            // Calcular stock reservado actual
-            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
-                ? producto.getStockReservado() 
-                : BigDecimal.ZERO;
-            
-            // Calcular stock real después de devolución
-            BigDecimal stockRealDespuesDevolucion = stockRealActual.add(BigDecimal.valueOf(cantidadPedido));
-            
-            // Calcular stock disponible proyectado
-            BigDecimal stockDisponibleProyectado = stockRealDespuesDevolucion.subtract(stockReservadoActual);
-            
-            // Validar si hay stock suficiente
-            if (stockDisponibleProyectado.compareTo(BigDecimal.valueOf(cantidadPedido)) < 0) {
-                throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Stock insuficiente para reasignar el pedido: " + producto.getNombre()
-                );
+            if (detalle.getProducto() == null || detalle.getProducto().getId() == null) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("success", false, "message", "El detalle no tiene producto válido"));
+            }
+            if (detalle.getCantidad() == null || detalle.getCantidad() <= 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("success", false, "message", "La cantidad del detalle no es válida"));
             }
         }
-        
-        // OBJETIVO 4: Devolver y reservar stock
-        // 1. Ejecutar devolverStockDePedido exactamente una vez
-        inventarioLoteService.devolverStockDePedido(pedido.getId());
-        
-        // 2. Reservar nuevamente las cantidades del pedido
+
+        // 9. Agrupar cantidad total por producto
+        Map<Long, BigDecimal> cantidadPorProducto = new java.util.HashMap<>();
         for (DetallePedido detalle : detalles) {
-            Producto producto = detalle.getProducto();
-            BigDecimal cantidadAReservar = BigDecimal.valueOf(detalle.getCantidad());
-            
-            BigDecimal stockReservadoActual = producto.getStockReservado() != null 
-                ? producto.getStockReservado() 
-                : BigDecimal.ZERO;
-            
-            stockReservadoActual = stockReservadoActual.add(cantidadAReservar);
-            producto.setStockReservado(stockReservadoActual);
-            productoRepository.save(producto);
+            Long idProducto = detalle.getProducto().getId();
+            BigDecimal cantidad = BigDecimal.valueOf(detalle.getCantidad());
+            cantidadPorProducto.merge(idProducto, cantidad, BigDecimal::add);
         }
-        
-        // OBJETIVO 5: Finalizar reasignación
-        // Asignar nuevo repartidor y cambiar estado a PENDIENTE
+
+        // 10. devolverStockDePedido exactamente una vez
+        inventarioLoteService.devolverStockDePedido(pedido.getId());
+
+        // 11. Productos ordenados bloqueados
+        List<Long> idsProductos = cantidadPorProducto.keySet().stream()
+                .sorted()
+                .collect(Collectors.toList());
+        List<Producto> productos = productoRepository.findAllByIdInForUpdate(idsProductos);
+
+        // 12. Comprobar que todos los Productos existen
+        if (productos.size() != idsProductos.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Stock insuficiente para reasignar el pedido");
+        }
+
+        // 13. Calcular stockReal - stockReservado y validar todos antes de escribir
+        Map<Long, Producto> mapaProductos = productos.stream()
+                .collect(Collectors.toMap(Producto::getId, p -> p));
+
+        for (Map.Entry<Long, BigDecimal> entry : cantidadPorProducto.entrySet()) {
+            Long idProducto = entry.getKey();
+            BigDecimal cantidadTotal = entry.getValue();
+
+            Producto productoBloqueado = mapaProductos.get(idProducto);
+            if (productoBloqueado == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Stock insuficiente para reasignar el pedido");
+            }
+
+            // Calcular stockReal - stockReservado
+            BigDecimal stockReal = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+            BigDecimal stockReservado = productoBloqueado.getStockReservado() != null
+                    ? productoBloqueado.getStockReservado()
+                    : BigDecimal.ZERO;
+            BigDecimal stockDisponible = stockReal.subtract(stockReservado);
+
+            // Validar antes de escribir
+            if (stockDisponible.compareTo(cantidadTotal) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Stock insuficiente para reasignar el pedido: " + productoBloqueado.getNombre());
+            }
+        }
+
+        // 14. Reserva agrupada - reservar una sola vez por producto
+        for (Map.Entry<Long, BigDecimal> entry : cantidadPorProducto.entrySet()) {
+            Long idProducto = entry.getKey();
+            BigDecimal cantidadTotal = entry.getValue();
+
+            Producto productoBloqueado = mapaProductos.get(idProducto);
+            BigDecimal stockReservadoActual = productoBloqueado.getStockReservado() != null
+                    ? productoBloqueado.getStockReservado()
+                    : BigDecimal.ZERO;
+            productoBloqueado.setStockReservado(stockReservadoActual.add(cantidadTotal));
+        }
+
+        // 15. Guardar cada Producto una sola vez
+        productoRepository.saveAll(productos);
+
+        // 16. Luego actualizar Pedido, Incidencia y RespuestaIncidencia
         pedido.setEmpleado(nuevoRepartidor);
         pedido.setEstadoPedido("PENDIENTE");
         pedidoRepository.save(pedido);
-        
-        // Marcar incidencia como ATENDIDO
-        incidencia.setEstado("ATENDIDO");
-        incidencia.setUpdatedAt(LocalDateTime.now());
-        incidenciaRepository.save(incidencia);
-        
-        // Crear exactamente una RespuestaIncidencia
+
+        incidenciaBloqueada.setEstado("ATENDIDO");
+        incidenciaBloqueada.setUpdatedAt(LocalDateTime.now());
+        incidenciaRepository.save(incidenciaBloqueada);
+
         RespuestaIncidencia respuesta = new RespuestaIncidencia();
-        respuesta.setIncidencia(incidencia);
+        respuesta.setIncidencia(incidenciaBloqueada);
         respuesta.setMotoReemplazo("Reasignado a: " + nuevoRepartidor.getNombre());
         respuesta.setCreatedAt(LocalDateTime.now());
         respuesta.setUpdatedAt(LocalDateTime.now());
         respuestaIncidenciaRepository.save(respuesta);
-        
+
         // Notificar al nuevo repartidor por WebSocket
-        messagingTemplate.convertAndSend("/topic/pedidos/" + nuevoRepartidor.getId(), 
+        messagingTemplate.convertAndSend("/topic/pedidos/" + nuevoRepartidor.getId(),
             Map.of(
                 "mensaje", "Se te ha asignado un nuevo pedido",
                 "idPedido", pedido.getId(),
                 "codigo", pedido.getCodigo()
             )
         );
-        
+
         // Actualizar contador de incidencias pendientes
         long contadorPendientes = incidenciaRepository.countByEstado("PENDIENTE");
         messagingTemplate.convertAndSend("/topic/admin/incidencias", contadorPendientes);
-        
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Pedido " + pedido.getCodigo() + " reasignado a " + nuevoRepartidor.getNombre() + " correctamente."
