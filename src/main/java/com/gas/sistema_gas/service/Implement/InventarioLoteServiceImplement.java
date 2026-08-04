@@ -69,10 +69,7 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
         // de todos los lotes activos de este producto.
         // ================================================================
         BigDecimal stockTotalLotes = inventarioLoteRepository
-                .findByProductoIdOrderByCreatedAtDesc(producto.getId())
-                .stream()
-                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .sumCantidadActualByProductoId(producto.getId());
 
         // Si el stock cambió respecto al valor actual del producto, actualizamos
         if (stockTotalLotes.compareTo(producto.getStockLlenos() != null ? producto.getStockLlenos() : BigDecimal.ZERO) != 0) {
@@ -104,7 +101,8 @@ public class InventarioLoteServiceImplement implements InventarioLoteService {
     @Transactional
     public List<InventarioLoteDTO.SimpleResponse> listarLotesPorProducto(Long idProducto) {
         // Estilo exacto de tus Streams de Categorías para mapear la lista completa del modal
-        return inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(idProducto).stream()
+        // Usa el historial completo DESC que incluye lotes agotados y muestra los más recientes primero
+        return inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto).stream()
                 .map(this::mapearASimpleResponseConNombres)
                 .collect(Collectors.toList());
     }

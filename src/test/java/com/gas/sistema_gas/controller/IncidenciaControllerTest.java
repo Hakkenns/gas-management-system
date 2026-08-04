@@ -435,7 +435,7 @@ class IncidenciaControllerTest {
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(BigDecimal.valueOf(15));
         when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
         when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -502,7 +502,7 @@ class IncidenciaControllerTest {
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(BigDecimal.valueOf(15));
         
         doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "La trazabilidad de lotes del pedido es inconsistente"))
             .when(inventarioLoteService).devolverStockDePedido(1L);
@@ -647,7 +647,7 @@ class IncidenciaControllerTest {
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(BigDecimal.valueOf(2));
         
         ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
             ResponseStatusException.class,
@@ -701,7 +701,7 @@ class IncidenciaControllerTest {
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(BigDecimal.valueOf(15));
         when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
         when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -754,7 +754,7 @@ class IncidenciaControllerTest {
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(empleadoRepository.findById(2L)).thenReturn(Optional.of(nuevoRepartidor));
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(BigDecimal.valueOf(15));
         when(incidenciaRepository.save(any(Incidencia.class))).thenAnswer(inv -> inv.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
         when(productoRepository.save(any(Producto.class))).thenAnswer(inv -> inv.getArgument(0));

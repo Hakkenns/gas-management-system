@@ -22,6 +22,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.gas.sistema_gas.Mapper.InventarioLoteMapper;
 import com.gas.sistema_gas.Model.AsignacionLotePedido;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.InventarioLote;
@@ -50,6 +51,9 @@ class InventarioLoteServiceImplementTest {
 
     @Mock
     private AsignacionLotePedidoRepository asignacionLotePedidoRepository;
+
+    @Mock
+    private InventarioLoteMapper inventarioLoteMapper;
 
     @InjectMocks
     private InventarioLoteServiceImplement inventarioLoteService;
@@ -652,6 +656,59 @@ class InventarioLoteServiceImplementTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals("La trazabilidad de lotes del pedido es inconsistente", exception.getReason());
         verify(inventarioLoteRepository, never()).saveAll(any());
+    }
+
+    // =========================================================================
+    // PRUEBAS FASE 4B-1: listarLotesPorProducto
+    // =========================================================================
+
+    @Test
+    void listarLotesPorProducto_usaHistorialCompleto_incluyeAgotados() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Gas 10kg");
+
+        Proveedor proveedor = new Proveedor();
+        proveedor.setId(1L);
+        proveedor.setNombre("Proveedor");
+
+        InventarioLote loteAgotado = new InventarioLote();
+        loteAgotado.setId(1L);
+        loteAgotado.setProducto(producto);
+        loteAgotado.setProveedor(proveedor);
+        loteAgotado.setCantidadActual(BigDecimal.ZERO);
+        loteAgotado.setCantidadInicial(BigDecimal.valueOf(10));
+        loteAgotado.setPrecioCompra(BigDecimal.valueOf(40));
+        loteAgotado.setPrecioVenta(BigDecimal.valueOf(50));
+
+        InventarioLote loteActivo = new InventarioLote();
+        loteActivo.setId(2L);
+        loteActivo.setProducto(producto);
+        loteActivo.setProveedor(proveedor);
+        loteActivo.setCantidadActual(BigDecimal.valueOf(5));
+        loteActivo.setCantidadInicial(BigDecimal.valueOf(10));
+        loteActivo.setPrecioCompra(BigDecimal.valueOf(40));
+        loteActivo.setPrecioVenta(BigDecimal.valueOf(50));
+
+        when(inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(1L))
+            .thenReturn(List.of(loteActivo, loteAgotado));
+        when(inventarioLoteMapper.toSimpleResponse(any(InventarioLote.class)))
+            .thenAnswer(inv -> {
+                InventarioLote l = inv.getArgument(0);
+                return new com.gas.sistema_gas.dto.InventarioLoteDTO.SimpleResponse(
+                    l.getId(), l.getProducto().getId(), l.getProducto().getNombre(),
+                    l.getProveedor().getId(), l.getProveedor().getNombre(),
+                    l.getCantidadInicial(), l.getCantidadActual(),
+                    l.getPrecioCompra(), l.getPrecioVenta(), l.getMetrosPorRollo(),
+                    l.getCreatedAt(), l.getUpdatedAt()
+                );
+            });
+
+        var resultado = inventarioLoteService.listarLotesPorProducto(1L);
+
+        assertEquals(2, resultado.size());
+        assertEquals(BigDecimal.ZERO, resultado.get(1).cantidadActual());
+        verify(inventarioLoteRepository).findHistorialCompletoByProductoIdOrderByCreatedAtDesc(1L);
     }
 
     // =========================================================================

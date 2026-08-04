@@ -271,7 +271,7 @@ class PedidoServiceImplementTest {
         verify(pedidoRepository).save(any(Pedido.class));
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
     }
 
@@ -292,7 +292,7 @@ class PedidoServiceImplementTest {
         // No modificar Producto
         verify(productoRepository, never()).save(any());
         // No consultar lotes
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         // No guardar Pedido
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
@@ -312,7 +312,7 @@ class PedidoServiceImplementTest {
         assertEquals("Solo se puede anular un pedido en estado PENDIENTE", ex.getReason());
 
         verify(productoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
 
@@ -331,7 +331,7 @@ class PedidoServiceImplementTest {
         assertEquals("El pedido ya está anulado", ex.getReason());
 
         verify(productoRepository, never()).save(any());
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(pedidoRepository, never()).save(any(Pedido.class));
     }
 
@@ -357,7 +357,7 @@ class PedidoServiceImplementTest {
         assertEquals("ANULADO", pedido.getEstadoPedido());
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
     }
 
@@ -382,7 +382,7 @@ class PedidoServiceImplementTest {
         assertEquals("PENDIENTE", pedido.getEstadoPedido());
 
         // NUNCA consultar ni guardar InventarioLote
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         verify(inventarioLoteRepository, never()).save(any());
         // NUNCA llamar descontarStockPorPEPS
         verify(inventarioLoteService, never()).descontarStockPorPEPS(any(DetallePedido.class));
@@ -428,7 +428,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(20L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(20L, "ACEPTADO"));
@@ -506,7 +506,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(21L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("6.00"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> pedidoService.updateEstadoPedido(21L, "ACEPTADO"));
@@ -541,7 +541,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(22L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(22L, "ACEPTADO"));
@@ -584,7 +584,7 @@ class PedidoServiceImplementTest {
         verify(inventarioLoteService, never()).validarStockDevueltoParaReactivacion(any());
 
         // NUNCA debe llamar a inventarioLoteRepository en esta transición
-        verify(inventarioLoteRepository, never()).findByProductoIdOrderByCreatedAtDesc(any());
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(any());
         // NUNCA debe guardar Producto en esta transición
         verify(productoRepository, never()).save(any(Producto.class));
         // Solo se guarda el Pedido
@@ -607,7 +607,7 @@ class PedidoServiceImplementTest {
 
         when(pedidoRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(pedido));
         when(detalleRepository.findByPedido_Id(24L)).thenReturn(List.of(detalle));
-        when(inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(lote));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("20.00"));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(24L, "CARGADO"));

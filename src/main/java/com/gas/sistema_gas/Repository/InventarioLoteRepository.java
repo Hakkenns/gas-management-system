@@ -1,4 +1,3 @@
-
 package com.gas.sistema_gas.Repository;
 
 import java.math.BigDecimal;
@@ -15,6 +14,7 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
 
     // LA CONSULTA CRÍTICA PEPS: Busca los lotes de un producto que tengan stock vivo (cantidadActual > 0)
     // y los ordena de forma estricta desde el más antiguo hasta el más nuevo (createdAt ASC)
+    // CON PESSIMISTIC_WRITE: exclusivamente para descuento físico de stock.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT il FROM InventarioLote il " +
            "WHERE il.producto.id = :idProducto " +
@@ -22,14 +22,28 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
            "ORDER BY il.createdAt ASC")
     List<InventarioLote> findLotesDisponiblesPEPS(@Param("idProducto") Long idProducto);
 
-    // CONSULTA PARA EL NUEVO BOTÓN: Trae absolutamente todos los lotes de un producto
-    // (incluso los agotados con cantidadActual = 0) para mostrarlos en el historial del modal
-    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.cantidadActual > 0 ORDER BY il.createdAt ASC")
-    List<InventarioLote> findByProductoIdOrderByCreatedAtDesc(@Param("idProducto") Long idProducto);
+    // CONSULTA DE SOLO LECTURA PEPS: Misma lógica que findLotesDisponiblesPEPS pero SIN bloqueo.
+    // Para operaciones de lectura (precios PEPS, visualización) que no modifican lotes.
+    @Query("SELECT il FROM InventarioLote il " +
+           "WHERE il.producto.id = :idProducto " +
+           "AND il.cantidadActual > 0 " +
+           "ORDER BY il.createdAt ASC")
+    List<InventarioLote> findLotesDisponiblesPEPSLectura(@Param("idProducto") Long idProducto);
 
-    // Preparación del algoritmo de despacho por metros: lotes activos ordenados cronológicamente
-    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.cantidadActual > 0 ORDER BY il.createdAt ASC")
+    @Query("SELECT il FROM InventarioLote il " +
+           "WHERE il.producto.id = :idProducto " +
+           "AND il.cantidadActual > 0 " +
+           "ORDER BY il.createdAt ASC")
     List<InventarioLote> findLotesParaDespachoMetros(@Param("idProducto") Long idProducto);
+
+    // CONSULTA DE HISTORIAL COMPLETO: Trae absolutamente todos los lotes de un producto
+    // (incluso los agotados con cantidadActual = 0) ordenados del más reciente al más antiguo.
+    // Para el modal de historial y para obtener el último lote histórico.
+    @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto ORDER BY il.createdAt DESC")
+    List<InventarioLote> findHistorialCompletoByProductoIdOrderByCreatedAtDesc(@Param("idProducto") Long idProducto);
+
+    // Método derivado: verifica si existe al menos un lote para el producto.
+    boolean existsByProducto_Id(Long idProducto);
 
     // Buscar lotes asociados a una compra para poder deshacer su inventario si se anula la factura
     List<InventarioLote> findByCompraId(Long idCompra);
@@ -57,4 +71,3 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
         @Param("idProducto") Long idProducto
     );
 }
-

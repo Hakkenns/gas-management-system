@@ -867,11 +867,7 @@ public class IncidenciaController {
             Integer cantidadPedido = detalle.getCantidad();
             
             // Calcular stock real actual (suma de cantidadActual de los lotes)
-            List<com.gas.sistema_gas.Model.InventarioLote> lotes = 
-                inventarioLoteRepository.findByProductoIdOrderByCreatedAtDesc(producto.getId());
-            BigDecimal stockRealActual = lotes.stream()
-                .map(l -> l.getCantidadActual() != null ? l.getCantidadActual() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal stockRealActual = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
             
             // Calcular stock reservado actual
             BigDecimal stockReservadoActual = producto.getStockReservado() != null 

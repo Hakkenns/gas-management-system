@@ -50,21 +50,16 @@ public class ProductoServiceImplement implements ProductoService {
                                 .map(p -> {
                                         // Calcular stockLlenos en caliente sumando cantidadActual de los lotes
                                         java.math.BigDecimal suma = inventarioLoteRepository
-                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                        .stream()
-                                                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual()
-                                                                        : java.math.BigDecimal.ZERO)
-                                                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                                                        .sumCantidadActualByProductoId(p.getId());
 
-                                        boolean tieneHistorialLotes = !inventarioLoteRepository
-                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                        .isEmpty();
+                                        boolean tieneHistorialLotes = inventarioLoteRepository
+                                                        .existsByProducto_Id(p.getId());
 
-                                        // Obtener lote PEPS (más antiguo con cantidadActual > 0)
+                                        // Obtener lote PEPS (más antiguo con cantidadActual > 0) SIN bloqueo
                                         java.math.BigDecimal precioCompraPeps = java.math.BigDecimal.ZERO;
                                         java.math.BigDecimal precioVentaPeps = java.math.BigDecimal.ZERO;
                                         java.util.List<com.gas.sistema_gas.Model.InventarioLote> peps = inventarioLoteRepository
-                                                        .findLotesDisponiblesPEPS(p.getId());
+                                                        .findLotesDisponiblesPEPSLectura(p.getId());
                                         if (peps != null && !peps.isEmpty()) {
                                                 com.gas.sistema_gas.Model.InventarioLote lote = peps.get(0);
                                                 precioCompraPeps = lote.getPrecioCompra() != null ? lote.getPrecioCompra()
@@ -73,7 +68,7 @@ public class ProductoServiceImplement implements ProductoService {
                                                                 : java.math.BigDecimal.ZERO;
                                         } else {
                                                 java.util.List<com.gas.sistema_gas.Model.InventarioLote> historial = inventarioLoteRepository
-                                                                .findByProductoIdOrderByCreatedAtDesc(p.getId());
+                                                                .findHistorialCompletoByProductoIdOrderByCreatedAtDesc(p.getId());
                                                 if (historial != null && !historial.isEmpty()) {
                                                         com.gas.sistema_gas.Model.InventarioLote lote = historial.get(0);
                                                         precioCompraPeps = lote.getPrecioCompra() != null ? lote.getPrecioCompra()
@@ -340,9 +335,8 @@ public class ProductoServiceImplement implements ProductoService {
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "El producto no existe"));
 
-                boolean tieneHistorialLotes = !inventarioLoteRepository
-                                .findByProductoIdOrderByCreatedAtDesc(id)
-                                .isEmpty();
+                boolean tieneHistorialLotes = inventarioLoteRepository
+                                .existsByProducto_Id(id);
 
                 if (tieneHistorialLotes) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -372,16 +366,12 @@ public class ProductoServiceImplement implements ProductoService {
                 return productoRepository.findById(id)
                                 .map(p -> {
                                         java.math.BigDecimal suma = inventarioLoteRepository
-                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                        .stream()
-                                                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual()
-                                                                        : java.math.BigDecimal.ZERO)
-                                                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                                                        .sumCantidadActualByProductoId(p.getId());
 
                                         java.math.BigDecimal precioCompraPeps = java.math.BigDecimal.ZERO;
                                         java.math.BigDecimal precioVentaPeps = java.math.BigDecimal.ZERO;
                                         java.util.List<com.gas.sistema_gas.Model.InventarioLote> peps = inventarioLoteRepository
-                                                        .findLotesDisponiblesPEPS(p.getId());
+                                                        .findLotesDisponiblesPEPSLectura(p.getId());
                                         if (peps != null && !peps.isEmpty()) {
                                                 com.gas.sistema_gas.Model.InventarioLote lote = peps.get(0);
                                                 precioCompraPeps = lote.getPrecioCompra() != null ? lote.getPrecioCompra()
@@ -391,9 +381,8 @@ public class ProductoServiceImplement implements ProductoService {
                                         }
 
                                         ProductoDTO.SimpleResponse base = productoMapper.toSimpleResponse(p);
-                                        boolean tieneHistorialLotes = !inventarioLoteRepository
-                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                        .isEmpty();
+                                        boolean tieneHistorialLotes = inventarioLoteRepository
+                                                        .existsByProducto_Id(p.getId());
                                         return new ProductoDTO.SimpleResponse(
                                                         base.id(),
                                                         base.nombre(),
@@ -426,48 +415,43 @@ public class ProductoServiceImplement implements ProductoService {
                 return productoRepository.findProductosSinStock().stream()
                                 .map(p -> {
                                         java.math.BigDecimal suma = inventarioLoteRepository
-                                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                                        .stream()
-                                                                        .map(l -> l.getCantidadActual() != null ? l.getCantidadActual()
-                                                                                                        : java.math.BigDecimal.ZERO)
-                                                                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                                                        .sumCantidadActualByProductoId(p.getId());
 
                                         java.math.BigDecimal precioCompraPeps = java.math.BigDecimal.ZERO;
                                         java.math.BigDecimal precioVentaPeps = java.math.BigDecimal.ZERO;
                                         java.util.List<com.gas.sistema_gas.Model.InventarioLote> peps = inventarioLoteRepository
-                                                                        .findLotesDisponiblesPEPS(p.getId());
+                                                        .findLotesDisponiblesPEPSLectura(p.getId());
                                         if (peps != null && !peps.isEmpty()) {
                                                 com.gas.sistema_gas.Model.InventarioLote lote = peps.get(0);
                                                 precioCompraPeps = lote.getPrecioCompra() != null ? lote.getPrecioCompra()
-                                                                                : java.math.BigDecimal.ZERO;
+                                                                : java.math.BigDecimal.ZERO;
                                                 precioVentaPeps = lote.getPrecioVenta() != null ? lote.getPrecioVenta()
-                                                                                : java.math.BigDecimal.ZERO;
+                                                                : java.math.BigDecimal.ZERO;
                                         }
 
                                         ProductoDTO.SimpleResponse base = productoMapper.toSimpleResponse(p);
-                                        boolean tieneHistorialLotes = !inventarioLoteRepository
-                                                                        .findByProductoIdOrderByCreatedAtDesc(p.getId())
-                                                                        .isEmpty();
+                                        boolean tieneHistorialLotes = inventarioLoteRepository
+                                                        .existsByProducto_Id(p.getId());
                                         return new ProductoDTO.SimpleResponse(
-                                                                        base.id(),
-                                                                        base.nombre(),
-                                                                        base.descripcion(),
-                                                                        base.urlImagen(),
-                                                                        base.idCategoria(),
-                                                                        base.nombreCategoria(),
-                                                                        base.capacidad(),
-                                                                        base.unidadMedida(),
-                                                                        precioCompraPeps,
-                                                                        base.gananciaProducto(),
-                                                                        precioVentaPeps,
-                                                                        base.requiereEnvase(),
-                                                                        suma,
-                                                                        base.stockVacios(),
-                                                                        base.stockMinimo(),
-                                                                        base.stockReservado(),
-                                                                        base.stockDisponible(),
-                                                                        tieneHistorialLotes,
-                                                                        base.estado());
+                                                        base.id(),
+                                                        base.nombre(),
+                                                        base.descripcion(),
+                                                        base.urlImagen(),
+                                                        base.idCategoria(),
+                                                        base.nombreCategoria(),
+                                                        base.capacidad(),
+                                                        base.unidadMedida(),
+                                                        precioCompraPeps,
+                                                        base.gananciaProducto(),
+                                                        precioVentaPeps,
+                                                        base.requiereEnvase(),
+                                                        suma,
+                                                        base.stockVacios(),
+                                                        base.stockMinimo(),
+                                                        base.stockReservado(),
+                                                        base.stockDisponible(),
+                                                        tieneHistorialLotes,
+                                                        base.estado());
                                 })
                                 .collect(Collectors.toList());
         }
