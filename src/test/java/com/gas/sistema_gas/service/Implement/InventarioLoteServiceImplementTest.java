@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Mapper.InventarioLoteMapper;
 import com.gas.sistema_gas.Model.AsignacionLotePedido;
+import com.gas.sistema_gas.Model.Compra;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.Pedido;
@@ -1102,5 +1103,393 @@ class InventarioLoteServiceImplementTest {
 
         verify(asignacionLotePedidoRepository).existsByPedido_IdAndEstado(1L, AsignacionLotePedido.EstadoAsignacion.DESCONTADA);
         verify(asignacionLotePedidoRepository).existsByPedido_Id(1L);
+    }
+
+    // =========================================================================
+    // PRUEBAS FASE 4B-3: anularLotesCompra
+    // =========================================================================
+
+    // PRUEBA: anularLotesCompra con ID nulo lanza BadRequest
+    @Test
+    void anularLotesCompra_idNulo_lanzaBadRequest() {
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(null)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("El ID de la compra es obligatorio", exception.getReason());
+        verify(inventarioLoteRepository, never()).findProductoIdsByCompraId(any());
+        verify(inventarioLoteRepository, never()).findByCompraIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+    }
+
+    // PRUEBA: anularLotesCompra bloquea Productos antes de Lotes
+    @Test
+    void anularLotesCompra_bloqueaProductosAntesDeLotes() {
+        Producto producto1 = new Producto();
+        producto1.setId(1L);
+        producto1.setStockLlenos(BigDecimal.valueOf(10));
+
+        Producto producto2 = new Producto();
+        producto2.setId(2L);
+        producto2.setStockLlenos(BigDecimal.valueOf(5));
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote1 = new InventarioLote();
+        lote1.setId(1L);
+        lote1.setProducto(producto1);
+        lote1.setCompra(compra);
+        lote1.setCantidadInicial(BigDecimal.valueOf(10));
+        lote1.setCantidadActual(BigDecimal.valueOf(10));
+
+        InventarioLote lote2 = new InventarioLote();
+        lote2.setId(2L);
+        lote2.setProducto(producto2);
+        lote2.setCompra(compra);
+        lote2.setCantidadInicial(BigDecimal.valueOf(5));
+        lote2.setCantidadActual(BigDecimal.valueOf(5));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(2L, 1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L)))
+            .thenReturn(List.of(producto1, producto2));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote1, lote2));
+        when(asignacionLotePedidoRepository.existsByLoteIdIn(any()))
+            .thenReturn(false);
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(any(Long.class)))
+            .thenReturn(BigDecimal.ZERO);
+        when(productoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        inventarioLoteService.anularLotesCompra(10L);
+
+        InOrder inOrder = inOrder(inventarioLoteRepository, productoRepository);
+        inOrder.verify(inventarioLoteRepository).findProductoIdsByCompraId(10L);
+        inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L, 2L));
+        inOrder.verify(inventarioLoteRepository).findByCompraIdForUpdate(10L);
+    }
+
+    // PRUEBA: anularLotesCompra lote consumido lanza Conflict
+    @Test
+    void anularLotesCompra_loteConsumido_lanzaConflict() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setStockLlenos(BigDecimal.valueOf(10));
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCompra(compra);
+        lote.setCantidadInicial(BigDecimal.valueOf(10));
+        lote.setCantidadActual(BigDecimal.valueOf(7));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(inventarioLoteRepository, never()).flush();
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), producto.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra cantidadActual mayor que inicial lanza Conflict
+    @Test
+    void anularLotesCompra_cantidadActualMayorQueInicial_lanzaConflict() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setStockLlenos(BigDecimal.valueOf(10));
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCompra(compra);
+        lote.setCantidadInicial(BigDecimal.valueOf(10));
+        lote.setCantidadActual(BigDecimal.valueOf(12));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(inventarioLoteRepository, never()).flush();
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), producto.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra lote con trazabilidad lanza Conflict
+    @Test
+    void anularLotesCompra_loteConTrazabilidad_lanzaConflict() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setStockLlenos(BigDecimal.valueOf(10));
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCompra(compra);
+        lote.setCantidadInicial(BigDecimal.valueOf(10));
+        lote.setCantidadActual(BigDecimal.valueOf(10));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote));
+        when(asignacionLotePedidoRepository.existsByLoteIdIn(List.of(1L)))
+            .thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), producto.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra producto faltante no bloquea Lotes ni modifica
+    @Test
+    void anularLotesCompra_productoFaltante_noBloqueaLotesNiModifica() {
+        Producto producto1 = new Producto();
+        producto1.setId(1L);
+        producto1.setStockLlenos(BigDecimal.valueOf(10));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L, 2L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L)))
+            .thenReturn(List.of(producto1));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).findByCompraIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(productoRepository, never()).saveAll(any());
+    }
+
+    // PRUEBA: anularLotesCompra producto incorrecto mismo tamano no bloquea Lotes ni modifica
+    @Test
+    void anularLotesCompra_productoIncorrectoMismoTamano_noBloqueaLotesNiModifica() {
+        Producto producto1 = new Producto();
+        producto1.setId(1L);
+        producto1.setStockLlenos(BigDecimal.valueOf(10));
+
+        Producto producto3 = new Producto();
+        producto3.setId(3L);
+        producto3.setStockLlenos(BigDecimal.valueOf(5));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L, 2L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L)))
+            .thenReturn(List.of(producto1, producto3));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).findByCompraIdForUpdate(any());
+        verify(asignacionLotePedidoRepository, never()).existsByLoteIdIn(any());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(inventarioLoteRepository, never()).flush();
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), producto1.getStockLlenos());
+        assertEquals(BigDecimal.valueOf(5), producto3.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra relacion compra inconsistente no modifica nada
+    @Test
+    void anularLotesCompra_relacionCompraInconsistente_noModificaNada() {
+        Producto producto = new Producto();
+        producto.setId(1L);
+        producto.setStockLlenos(BigDecimal.valueOf(10));
+
+        Compra compraIncorrecta = new Compra();
+        compraIncorrecta.setId(99L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(producto);
+        lote.setCompra(compraIncorrecta);
+        lote.setCantidadInicial(BigDecimal.valueOf(10));
+        lote.setCantidadActual(BigDecimal.valueOf(10));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(inventarioLoteRepository, never()).flush();
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), producto.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra relacion producto inconsistente no modifica nada
+    @Test
+    void anularLotesCompra_relacionProductoInconsistente_noModificaNada() {
+        Producto productoBloqueado = new Producto();
+        productoBloqueado.setId(1L);
+        productoBloqueado.setStockLlenos(BigDecimal.valueOf(10));
+
+        Producto productoLote = new Producto();
+        productoLote.setId(99L);
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(1L);
+        lote.setProducto(productoLote);
+        lote.setCompra(compra);
+        lote.setCantidadInicial(BigDecimal.valueOf(10));
+        lote.setCantidadActual(BigDecimal.valueOf(10));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L)))
+            .thenReturn(List.of(productoBloqueado));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote));
+
+        ResponseStatusException exception = assertThrows(
+            ResponseStatusException.class,
+            () -> inventarioLoteService.anularLotesCompra(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(inventarioLoteRepository, never()).flush();
+        verify(productoRepository, never()).saveAll(any());
+        assertEquals(BigDecimal.valueOf(10), productoBloqueado.getStockLlenos());
+    }
+
+    // PRUEBA: anularLotesCompra valida elimina y recalcula stock
+    @Test
+    void anularLotesCompra_valida_eliminaYRecalculaStock() {
+        Producto producto1 = new Producto();
+        producto1.setId(1L);
+        producto1.setStockLlenos(BigDecimal.valueOf(10));
+        producto1.setStockReservado(BigDecimal.valueOf(3));
+        producto1.setStockVacios(5);
+
+        Producto producto2 = new Producto();
+        producto2.setId(2L);
+        producto2.setStockLlenos(BigDecimal.valueOf(5));
+        producto2.setStockReservado(BigDecimal.valueOf(1));
+        producto2.setStockVacios(2);
+
+        Compra compra = new Compra();
+        compra.setId(10L);
+
+        InventarioLote lote1 = new InventarioLote();
+        lote1.setId(1L);
+        lote1.setProducto(producto1);
+        lote1.setCompra(compra);
+        lote1.setCantidadInicial(BigDecimal.valueOf(10));
+        lote1.setCantidadActual(BigDecimal.valueOf(10));
+
+        InventarioLote lote2 = new InventarioLote();
+        lote2.setId(2L);
+        lote2.setProducto(producto2);
+        lote2.setCompra(compra);
+        lote2.setCantidadInicial(BigDecimal.valueOf(5));
+        lote2.setCantidadActual(BigDecimal.valueOf(5));
+
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of(1L, 2L));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L)))
+            .thenReturn(List.of(producto1, producto2));
+        when(inventarioLoteRepository.findByCompraIdForUpdate(10L))
+            .thenReturn(List.of(lote1, lote2));
+        when(asignacionLotePedidoRepository.existsByLoteIdIn(List.of(1L, 2L)))
+            .thenReturn(false);
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L))
+            .thenReturn(BigDecimal.ZERO);
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(2L))
+            .thenReturn(BigDecimal.ZERO);
+        when(productoRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        inventarioLoteService.anularLotesCompra(10L);
+
+        InOrder inOrder = inOrder(inventarioLoteRepository, productoRepository, asignacionLotePedidoRepository);
+        inOrder.verify(inventarioLoteRepository).findProductoIdsByCompraId(10L);
+        inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L, 2L));
+        inOrder.verify(inventarioLoteRepository).findByCompraIdForUpdate(10L);
+        inOrder.verify(asignacionLotePedidoRepository).existsByLoteIdIn(List.of(1L, 2L));
+        inOrder.verify(inventarioLoteRepository).deleteAll(any());
+        inOrder.verify(inventarioLoteRepository).flush();
+        inOrder.verify(inventarioLoteRepository).sumCantidadActualByProductoId(1L);
+        inOrder.verify(inventarioLoteRepository).sumCantidadActualByProductoId(2L);
+        inOrder.verify(productoRepository).saveAll(any());
+
+        assertEquals(BigDecimal.ZERO, producto1.getStockLlenos());
+        assertEquals(BigDecimal.ZERO, producto2.getStockLlenos());
+        assertEquals(BigDecimal.valueOf(3), producto1.getStockReservado());
+        assertEquals(Integer.valueOf(5), producto1.getStockVacios());
+        assertEquals(BigDecimal.valueOf(1), producto2.getStockReservado());
+        assertEquals(Integer.valueOf(2), producto2.getStockVacios());
+        verify(inventarioLoteRepository, times(1)).deleteAll(any());
+        verify(productoRepository, times(1)).saveAll(any());
+    }
+
+    // PRUEBA: anularLotesCompra sin lotes finaliza sin escrituras
+    @Test
+    void anularLotesCompra_sinLotes_finalizaSinEscrituras() {
+        when(inventarioLoteRepository.findProductoIdsByCompraId(10L))
+            .thenReturn(List.of());
+
+        inventarioLoteService.anularLotesCompra(10L);
+
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(inventarioLoteRepository, never()).findByCompraIdForUpdate(any());
+        verify(inventarioLoteRepository, never()).deleteAll(any());
+        verify(productoRepository, never()).saveAll(any());
     }
 }

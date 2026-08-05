@@ -119,20 +119,24 @@ public class CompraServiceImplement implements CompraService {
     @Override
     @Transactional
     public CompraDTO.SimpleResponse anularCompra(Long idCompra) {
-        Compra compra = compraRepository.findById(idCompra)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compra no encontrada"));
-        if (compra.getSituacion() != null && compra.getSituacion() == 2) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La compra ya está anulada");
+        // 1. Validar idCompra
+        if (idCompra == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID de la compra es obligatorio");
         }
 
-        List<DetalleCompra> detalles = detalleCompraRepository.findByCompraId(idCompra);
+        // 2. Bloquear Compra mediante findByIdForUpdate
+        Compra compra = compraRepository.findByIdForUpdate(idCompra)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compra no encontrada"));
 
+        // 4. Verificar situacion
+        if (compra.getSituacion() != null && compra.getSituacion() == 2) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La compra ya está anulada");
+        }
+
+        // 5. Llamar exactamente una vez al servicio de inventario
         inventarioLoteService.anularLotesCompra(idCompra);
 
-        for (DetalleCompra detalle : detalles) {
-            detalleCompraRepository.delete(detalle);
-        }
-
+        // 6. Solo cuando el inventario termine correctamente, marcar como anulada
         compra.setSituacion(2);
         Compra compraActualizada = compraRepository.save(compra);
         return compraMapper.toSimpleResponse(compraActualizada);

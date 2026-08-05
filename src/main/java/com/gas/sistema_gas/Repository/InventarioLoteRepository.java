@@ -48,6 +48,24 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
     // Buscar lotes asociados a una compra para poder deshacer su inventario si se anula la factura
     List<InventarioLote> findByCompraId(Long idCompra);
 
+    // CONSULTA DE SOLO LECTURA: Descubre los IDs únicos de productos asociados
+    // a los lotes de una compra, ordenados ASC. Se ejecuta después de bloquear
+    // la Compra y antes de bloquear los Productos.
+    @Query("SELECT DISTINCT l.producto.id " +
+           "FROM InventarioLote l " +
+           "WHERE l.compra.id = :idCompra " +
+           "ORDER BY l.producto.id ASC")
+    List<Long> findProductoIdsByCompraId(@Param("idCompra") Long idCompra);
+
+    // CONSULTA PESIMISTA: Bloquea todos los lotes de una compra ordenados por ID ASC.
+    // Se ejecuta después de bloquear los Productos.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT l " +
+           "FROM InventarioLote l " +
+           "WHERE l.compra.id = :idCompra " +
+           "ORDER BY l.id ASC")
+    List<InventarioLote> findByCompraIdForUpdate(@Param("idCompra") Long idCompra);
+
     @Query("SELECT il FROM InventarioLote il WHERE il.producto.id = :idProducto AND il.proveedor.id = :idProveedor ORDER BY il.createdAt DESC")
     List<InventarioLote> findUltimoPrecioCosto(@Param("idProducto") Long idProducto, @Param("idProveedor") Long idProveedor);
 

@@ -36,4 +36,12 @@ public interface AsignacionLotePedidoRepository extends JpaRepository<Asignacion
         @Param("idPedido") Long idPedido,
         @Param("estado") AsignacionLotePedido.EstadoAsignacion estado
     );
+
+    // Verifica si existe cualquier trazabilidad (DESCONTADA o DEVUELTA)
+    // para una lista de IDs de lotes. No requiere bloqueo pesimista porque
+    // la anulacion ya mantiene bloqueados Productos y Lotes.
+    @Query("SELECT CASE WHEN COUNT(a) > 0 THEN TRUE ELSE FALSE END " +
+           "FROM AsignacionLotePedido a " +
+           "WHERE a.lote.id IN :idsLotes")
+    boolean existsByLoteIdIn(@Param("idsLotes") List<Long> idsLotes);
 }
