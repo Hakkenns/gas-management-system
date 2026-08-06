@@ -32,6 +32,7 @@ import com.gas.sistema_gas.Mapper.PedidoMapper;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
+import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
@@ -128,6 +129,18 @@ class PedidoServiceImplementTest {
         detalle.setProducto(producto);
         detalle.setCantidad(cantidad);
         return detalle;
+    }
+
+    private InventarioLote lote(
+            Long id,
+            Producto producto,
+            BigDecimal cantidadActual) {
+
+        InventarioLote lote = new InventarioLote();
+        lote.setId(id);
+        lote.setProducto(producto);
+        lote.setCantidadActual(cantidadActual);
+        return lote;
     }
 
     private PedidoDTO.SimpleResponse simpleResponse(Long id, String estado) {
@@ -706,7 +719,9 @@ class PedidoServiceImplementTest {
         when(empleadoRepository.findById(10L)).thenReturn(Optional.of(empleado));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
-        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L))).thenReturn(List.of(
+            lote(1L, producto, new BigDecimal("50.00"))
+        ));
         when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
             DetallePedido d = invocation.getArgument(0);
             d.setIdDetalle(1L);
@@ -720,6 +735,8 @@ class PedidoServiceImplementTest {
 
         // FASE 4B-2A: se bloquea con findAllByIdInForUpdate con IDs ordenados
         verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        // FASE 4B-2A: se bloquea inventario de lotes con findByProductoIdsForUpdate
+        verify(inventarioLoteRepository, times(1)).findByProductoIdsForUpdate(List.of(1L));
         // se usa el Producto bloqueado: stockReservado aumenta correctamente
         assertEquals(0, new BigDecimal("3.00").compareTo(producto.getStockReservado()),
                 "stockReservado final debe ser 3");
@@ -754,7 +771,9 @@ class PedidoServiceImplementTest {
         when(empleadoRepository.findById(10L)).thenReturn(Optional.of(empleado));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
-        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L))).thenReturn(List.of(
+            lote(1L, producto, new BigDecimal("50.00"))
+        ));
         when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
             DetallePedido d = invocation.getArgument(0);
             d.setIdDetalle(1L);
@@ -768,6 +787,8 @@ class PedidoServiceImplementTest {
 
         // FASE 4B-2A: se bloquea una sola fila de Producto (una sola llamada)
         verify(productoRepository, times(1)).findAllByIdInForUpdate(List.of(1L));
+        // FASE 4B-2A: se bloquea inventario de lotes con findByProductoIdsForUpdate
+        verify(inventarioLoteRepository, times(1)).findByProductoIdsForUpdate(List.of(1L));
         // stockReservado final = 3 + 4 = 7
         assertEquals(0, new BigDecimal("7.00").compareTo(producto.getStockReservado()),
                 "stockReservado final debe acumular 7");
@@ -794,7 +815,9 @@ class PedidoServiceImplementTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
-        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L))).thenReturn(List.of(
+            lote(1L, producto, new BigDecimal("50.00"))
+        ));
         when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
             DetallePedido d = invocation.getArgument(0);
             d.setIdDetalle(1L);
@@ -807,9 +830,12 @@ class PedidoServiceImplementTest {
         pedidoService.createOrder(createDto, 1L);
 
         // FASE 4B-2A: InOrder verifica que el bloqueo ocurre ANTES del descuento PEPS
-        InOrder inOrder = inOrder(productoRepository, inventarioLoteService);
+        InOrder inOrder = inOrder(productoRepository, inventarioLoteRepository, inventarioLoteService);
         inOrder.verify(productoRepository).findAllByIdInForUpdate(List.of(1L));
+        inOrder.verify(inventarioLoteRepository).findByProductoIdsForUpdate(List.of(1L));
         inOrder.verify(inventarioLoteService).descontarStockPorPEPS(any(DetallePedido.class));
+        // FASE 4B-2A: se bloquea inventario de lotes con findByProductoIdsForUpdate
+        verify(inventarioLoteRepository, times(1)).findByProductoIdsForUpdate(List.of(1L));
     }
 
     @Test
@@ -944,8 +970,10 @@ class PedidoServiceImplementTest {
         when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         // Los IDs deben llegar ordenados ASC: List.of(1L, 2L)
         when(productoRepository.findAllByIdInForUpdate(List.of(1L, 2L))).thenReturn(List.of(producto1, producto2));
-        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("50.00"));
-        when(inventarioLoteRepository.sumCantidadActualByProductoId(2L)).thenReturn(new BigDecimal("50.00"));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L, 2L))).thenReturn(List.of(
+            lote(1L, producto1, new BigDecimal("50.00")),
+            lote(2L, producto2, new BigDecimal("50.00"))
+        ));
         when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
             DetallePedido d = invocation.getArgument(0);
             d.setIdDetalle(1L);
@@ -959,6 +987,8 @@ class PedidoServiceImplementTest {
 
         // FASE 4B-2A: se invoca exactamente una vez con IDs ordenados ASC
         verify(productoRepository, times(1)).findAllByIdInForUpdate(List.of(1L, 2L));
+        // FASE 4B-2A: se bloquea inventario de lotes con findByProductoIdsForUpdate
+        verify(inventarioLoteRepository, times(1)).findByProductoIdsForUpdate(List.of(1L, 2L));
         // Ambos productos reservaron correctamente
         assertEquals(0, new BigDecimal("4.00").compareTo(producto1.getStockReservado()),
                 "stockReservado del producto 1 debe ser 4");

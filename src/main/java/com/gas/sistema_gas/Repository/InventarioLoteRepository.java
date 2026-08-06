@@ -80,6 +80,17 @@ public interface InventarioLoteRepository extends JpaRepository<InventarioLote, 
         @Param("ids") List<Long> ids
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT l
+        FROM InventarioLote l
+        WHERE l.producto.id IN :idsProductos
+        ORDER BY l.producto.id ASC, l.id ASC
+    """)
+    List<InventarioLote> findByProductoIdsForUpdate(
+        @Param("idsProductos") List<Long> idsProductos
+    );
+
     @Query("""
         SELECT COALESCE(SUM(l.cantidadActual), 0)
         FROM InventarioLote l

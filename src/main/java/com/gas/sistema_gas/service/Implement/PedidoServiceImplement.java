@@ -24,6 +24,7 @@ import com.gas.sistema_gas.Mapper.ClienteMapper;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
+import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
@@ -356,6 +357,20 @@ public class PedidoServiceImplement implements PedidoService {
             Set<Long> idsProductos = extraerIdsDeDetallesCreate(createDto.detalles());
             Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductos);
 
+            List<Long> idsProductosOrdenados = idsProductos.stream()
+                    .sorted(Comparator.naturalOrder())
+                    .collect(Collectors.toList());
+            List<InventarioLote> lotesBloqueados = inventarioLoteRepository
+                    .findByProductoIdsForUpdate(idsProductosOrdenados);
+            Map<Long, BigDecimal> stockActualPorProducto = new java.util.HashMap<>();
+            for (InventarioLote lote : lotesBloqueados) {
+                BigDecimal cantidadActual = lote.getCantidadActual() != null
+                        ? lote.getCantidadActual()
+                        : BigDecimal.ZERO;
+                stockActualPorProducto.merge(
+                        lote.getProducto().getId(), cantidadActual, BigDecimal::add);
+            }
+
             for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
                 Producto producto = productosBloqueados.get(item.idProducto());
 
@@ -365,8 +380,9 @@ public class PedidoServiceImplement implements PedidoService {
 
                 BigDecimal cantidadSolicitada = BigDecimal.valueOf(item.cantidad());
                 
-                // Calcular el stock disponible: suma real de cantidadActual de inventario_lotes - stock_reservado
-                BigDecimal stockRealLotes = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
+                // Calcular con los lotes bloqueados después de bloquear Productos.
+                BigDecimal stockRealLotes = stockActualPorProducto
+                        .getOrDefault(producto.getId(), BigDecimal.ZERO);
                 BigDecimal stockReservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
                 BigDecimal stockDisponible = stockRealLotes.subtract(stockReservado);
 
@@ -393,7 +409,8 @@ public class PedidoServiceImplement implements PedidoService {
                     // Descontar stock real por PEPS con trazabilidad
                     inventarioLoteService.descontarStockPorPEPS(detalleGuardado);
                     // Sincronizar stock_llenos desde lotes
-                    BigDecimal stockActualLotes = inventarioLoteRepository.sumCantidadActualByProductoId(producto.getId());
+                    BigDecimal stockActualLotes = stockRealLotes.subtract(cantidadSolicitada);
+                    stockActualPorProducto.put(producto.getId(), stockActualLotes);
                     producto.setStockLlenos(stockActualLotes);
                 } else {
                     // DOMICILIO: solo RESERVAR stock (sumar a stock_reservado)
