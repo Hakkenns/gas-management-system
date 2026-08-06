@@ -54,11 +54,14 @@ import com.gas.sistema_gas.Model.Proveedor;
 import com.gas.sistema_gas.Model.Rubro;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.AsignacionLotePedidoRepository;
+import com.gas.sistema_gas.Repository.CompraRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.service.CompraService;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.InventarioLoteService;
 import com.gas.sistema_gas.service.PedidoService;
 
 import jakarta.persistence.EntityManager;
@@ -187,6 +190,15 @@ public class InventarioConcurrenciaMySqlTest {
     private AsignacionLotePedidoRepository asignacionLotePedidoRepository;
 
     @Autowired
+    private CompraRepository compraRepository;
+
+    @Autowired
+    private CompraService compraService;
+
+    @Autowired
+    private InventarioLoteService inventarioLoteService;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -196,6 +208,7 @@ public class InventarioConcurrenciaMySqlTest {
     private EntityManager entityManager;
 
     private Long idProducto;
+    private Long idProducto2;
     private Long idUsuario;
     private Long idEmpleado;
     private Long idCompra;
@@ -279,6 +292,28 @@ public class InventarioConcurrenciaMySqlTest {
         });
     }
 
+    private Long ensureProducto2(BigDecimal stockLlenos, BigDecimal stockReservado) {
+        return transactionTemplate.execute(status -> {
+            Rubro rubro = entityManager.createQuery("FROM Rubro", Rubro.class).getResultList().get(0);
+            Categoria categoria = entityManager.createQuery("FROM Categoria", Categoria.class).getResultList().get(0);
+
+            Producto p = new Producto();
+            p.setNombre("Producto Test 2");
+            p.setPrecioCompra(new BigDecimal("10.00"));
+            p.setGananciaProducto(BigDecimal.ZERO);
+            p.setPrecioVenta(new BigDecimal("10.00"));
+            p.setStockLlenos(stockLlenos);
+            p.setStockMinimo(BigDecimal.ZERO);
+            p.setStockVacios(0);
+            p.setStockReservado(stockReservado);
+            p.setRequiereEnvase(false);
+            p.setEstado(1);
+            p.setCategoria(categoria);
+            entityManager.persist(p);
+            return p.getId();
+        });
+    }
+
     private Long ensureUsuario() {
         return transactionTemplate.execute(status -> {
             Perfil perfil = new Perfil();
@@ -329,6 +364,25 @@ public class InventarioConcurrenciaMySqlTest {
     private void ensureLote(BigDecimal cantidadInicial, BigDecimal cantidadActual) {
         transactionTemplate.execute(status -> {
             Producto producto = entityManager.find(Producto.class, idProducto);
+            Proveedor proveedor = entityManager.createQuery("FROM Proveedor", Proveedor.class).getResultList().get(0);
+            Compra compra = entityManager.find(Compra.class, idCompra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(cantidadInicial);
+            lote.setCantidadActual(cantidadActual);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+            return null;
+        });
+    }
+
+    private void ensureLoteParaProducto(Long idProductoDestino, BigDecimal cantidadInicial, BigDecimal cantidadActual) {
+        transactionTemplate.execute(status -> {
+            Producto producto = entityManager.find(Producto.class, idProductoDestino);
             Proveedor proveedor = entityManager.createQuery("FROM Proveedor", Proveedor.class).getResultList().get(0);
             Compra compra = entityManager.find(Compra.class, idCompra);
 
@@ -447,6 +501,21 @@ public class InventarioConcurrenciaMySqlTest {
         fail("La operación fallida debe contener ResponseStatusException en su cadena de causas", error);
     }
 
+    private void assertRechazoConflicto(Throwable error) {
+        assertNotNull(error, "Se esperaba un error en la operación fallida");
+        assertNoLockingError(error);
+        Throwable cur = error;
+        while (cur != null) {
+            if (cur instanceof ResponseStatusException rse) {
+                assertEquals(HttpStatus.CONFLICT, rse.getStatusCode(),
+                        "El rechazo debe ser CONFLICT, no " + rse.getStatusCode());
+                return;
+            }
+            cur = cur.getCause();
+        }
+        fail("La operación fallida debe contener ResponseStatusException en su cadena de causas", error);
+    }
+
     @BeforeEach
     void setUp() {
         truncateAll();
@@ -480,6 +549,30 @@ public class InventarioConcurrenciaMySqlTest {
                 null,
                 List.<PedidoDTO.PagoCreate>of(),
                 List.of(new PedidoDTO.DetalleCreate(idProducto, cantidad, new BigDecimal("10.00"), 0)),
+                "NINGUNO",
+                List.<PedidoDTO.EnvaseMovimientoCreate>of()
+        );
+    }
+
+    private PedidoDTO.Create buildPedidoConDetalles(String tipoVenta, List<PedidoDTO.DetalleCreate> detalles) {
+        return new PedidoDTO.Create(
+                null,
+                idCliente,
+                null,
+                "Cliente Concurrencia",
+                "Dirección de prueba",
+                "Referencia de prueba",
+                "999999999",
+                idEmpleado,
+                idUsuario,
+                null,
+                null,
+                null,
+                null,
+                tipoVenta,
+                null,
+                List.<PedidoDTO.PagoCreate>of(),
+                detalles,
                 "NINGUNO",
                 List.<PedidoDTO.EnvaseMovimientoCreate>of()
         );
@@ -597,5 +690,338 @@ public class InventarioConcurrenciaMySqlTest {
         } else {
             fail("Estado de pedido inesperado: " + estado);
         }
+    }
+
+    @Test
+    @Timeout(30)
+    void dosPedidosACargado_serializanConsumo() throws Exception {
+        PedidoDTO.SimpleResponse pedido1 = pedidoService.createOrder(buildPedido("DOMICILIO", 5), idUsuario);
+        PedidoDTO.SimpleResponse pedido2 = pedidoService.createOrder(buildPedido("DOMICILIO", 5), idUsuario);
+
+        assertNotNull(pedido1);
+        assertNotNull(pedido2);
+        assertEquals("PENDIENTE", pedido1.estadoPedido());
+        assertEquals("PENDIENTE", pedido2.estadoPedido());
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal reservadoInicial = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+        assertEquals(new BigDecimal("10.00"), reservadoInicial, "Deben estar reservados 10");
+
+        Long idPedido1 = pedido1.idPedido();
+        Long idPedido2 = pedido2.idPedido();
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { pedidoService.updateEstadoPedido(idPedido1, "ACEPTADO"); return null; },
+                () -> { pedidoService.updateEstadoPedido(idPedido2, "ACEPTADO"); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+
+        ParResultados<Void> parCarga = ejecutarConcurrente(
+                () -> { pedidoService.updateEstadoPedido(idPedido1, "CARGADO"); return null; },
+                () -> { pedidoService.updateEstadoPedido(idPedido2, "CARGADO"); return null; }
+        );
+
+        ResultadoConcurrente<Void> carga1 = parCarga.primero();
+        ResultadoConcurrente<Void> carga2 = parCarga.segundo();
+
+        int exitos = (carga1.exitoso() ? 1 : 0) + (carga2.exitoso() ? 1 : 0);
+        int errores = (carga1.exitoso() ? 0 : 1) + (carga2.exitoso() ? 0 : 1);
+
+        assertEquals(2, exitos, "Ambas transiciones a CARGADO deben triunfar");
+        assertEquals(0, errores, "No debe haber errores en la transición a CARGADO");
+
+        assertNoLockingError(carga1.error());
+        assertNoLockingError(carga2.error());
+
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal sumaFinal = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        BigDecimal reservadoFinal = productoFinal.getStockReservado() != null ? productoFinal.getStockReservado() : BigDecimal.ZERO;
+
+        assertEquals(new BigDecimal("0.00"), productoFinal.getStockLlenos(), "stockLlenos debe ser 0");
+        assertEquals(0, sumaFinal.compareTo(new BigDecimal("0.00")), "lote cantidadActual debe ser 0");
+        assertEquals(0, reservadoFinal.compareTo(BigDecimal.ZERO), "stockReservado debe ser 0");
+
+        List<AsignacionLotePedido> asignaciones = asignacionLotePedidoRepository.findAll();
+        assertEquals(2, asignaciones.size(), "Debe haber exactamente 2 asignaciones");
+
+        long descontadas = asignaciones.stream()
+                .filter(a -> AsignacionLotePedido.EstadoAsignacion.DESCONTADA.equals(a.getEstado()))
+                .count();
+        assertEquals(2, descontadas, "Ambas asignaciones deben estar DESCONTADA");
+
+        for (AsignacionLotePedido asignacion : asignaciones) {
+            assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("5.00")),
+                    "cantidadDescontada debe ser 5");
+            assertEquals(0, asignacion.getCantidadDevuelta().compareTo(BigDecimal.ZERO),
+                    "cantidadDevuelta debe ser 0");
+            assertTrue(asignacion.getCantidadDescontada().signum() >= 0, "cantidadDescontada no debe ser negativa");
+            assertTrue(asignacion.getCantidadDevuelta().signum() >= 0, "cantidadDevuelta no debe ser negativa");
+        }
+
+        Pedido p1 = pedidoRepository.findById(idPedido1).orElseThrow();
+        Pedido p2 = pedidoRepository.findById(idPedido2).orElseThrow();
+        assertEquals("CARGADO", p1.getEstadoPedido(), "Pedido 1 debe estar CARGADO");
+        assertEquals("CARGADO", p2.getEstadoPedido(), "Pedido 2 debe estar CARGADO");
+    }
+
+    @Test
+    @Timeout(30)
+    void devolucionYVentaSimultaneas_sinPerdidaDeStock() throws Exception {
+        PedidoDTO.SimpleResponse pedidoOriginal = pedidoService.createOrder(buildPedido("LOCAL", 6), idUsuario);
+        assertNotNull(pedidoOriginal);
+        assertEquals("ENTREGADO", pedidoOriginal.estadoPedido());
+
+        Long idPedidoOriginal = pedidoOriginal.idPedido();
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal suma = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        assertEquals(0, new BigDecimal("4.00").compareTo(suma), "Lote debe quedar en 4");
+        assertEquals(0, new BigDecimal("4.00").compareTo(producto.getStockLlenos()), "stockLlenos debe ser 4");
+
+        List<AsignacionLotePedido> asignacionesIniciales = asignacionLotePedidoRepository.findAll();
+        assertEquals(1, asignacionesIniciales.size(), "Debe haber exactamente una asignación inicial");
+        assertEquals(AsignacionLotePedido.EstadoAsignacion.DESCONTADA, asignacionesIniciales.get(0).getEstado());
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { inventarioLoteService.devolverStockDePedido(idPedidoOriginal); return null; },
+                () -> { pedidoService.createOrder(buildPedido("LOCAL", 6), idUsuario); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int errores = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal sumaFinal = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        BigDecimal reservadoFinal = productoFinal.getStockReservado() != null ? productoFinal.getStockReservado() : BigDecimal.ZERO;
+
+        assertEquals(0, reservadoFinal.compareTo(BigDecimal.ZERO), "stockReservado debe ser 0 en ambas ramas");
+
+        if (primero.exitoso() && segundo.exitoso()) {
+            assertEquals(2, exitos, "Rama A: ambas operaciones deben triunfar");
+            assertEquals(0, errores, "Rama A: no debe haber errores");
+
+            assertEquals(0, new BigDecimal("4.00").compareTo(sumaFinal), "Rama A: lote final debe ser 4");
+            assertEquals(0, new BigDecimal("4.00").compareTo(productoFinal.getStockLlenos()), "Rama A: stockLlenos final debe ser 4");
+
+            List<Pedido> todos = pedidoRepository.findAll();
+            long entregados = todos.stream()
+                    .filter(p -> "ENTREGADO".equalsIgnoreCase(p.getEstadoPedido()))
+                    .count();
+            assertEquals(2, entregados, "Rama A: debe haber 2 pedidos ENTREGADO");
+
+            List<AsignacionLotePedido> asignaciones = asignacionLotePedidoRepository.findAll();
+            assertEquals(2, asignaciones.size(), "Rama A: debe haber exactamente 2 asignaciones");
+
+            boolean encontroDevuelta = false;
+            boolean encontroDescontada = false;
+            for (AsignacionLotePedido asignacion : asignaciones) {
+                if (AsignacionLotePedido.EstadoAsignacion.DEVUELTA.equals(asignacion.getEstado())) {
+                    encontroDevuelta = true;
+                    assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("6.00")),
+                            "Rama A: asignación DEVUELTA cantidadDescontada debe ser 6");
+                    assertEquals(0, asignacion.getCantidadDevuelta().compareTo(new BigDecimal("6.00")),
+                            "Rama A: asignación DEVUELTA cantidadDevuelta debe ser 6");
+                } else if (AsignacionLotePedido.EstadoAsignacion.DESCONTADA.equals(asignacion.getEstado())) {
+                    encontroDescontada = true;
+                    assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("6.00")),
+                            "Rama A: asignación DESCONTADA cantidadDescontada debe ser 6");
+                    assertEquals(0, asignacion.getCantidadDevuelta().compareTo(BigDecimal.ZERO),
+                            "Rama A: asignación DESCONTADA cantidadDevuelta debe ser 0");
+                }
+            }
+            assertTrue(encontroDevuelta, "Rama A: debe existir una asignación DEVUELTA");
+            assertTrue(encontroDescontada, "Rama A: debe existir una asignación DESCONTADA");
+
+        } else if (primero.exitoso() && !segundo.exitoso()) {
+            assertEquals(1, exitos, "Rama B: solo la devolución debe triunfar");
+            assertEquals(1, errores, "Rama B: la venta debe fallar");
+
+            assertRechazoStock(segundo.error());
+
+            assertEquals(0, new BigDecimal("10.00").compareTo(sumaFinal), "Rama B: lote final debe ser 10");
+            assertEquals(0, new BigDecimal("10.00").compareTo(productoFinal.getStockLlenos()), "Rama B: stockLlenos final debe ser 10");
+
+            List<Pedido> todos = pedidoRepository.findAll();
+            assertEquals(1, todos.size(), "Rama B: debe persistir solo el pedido original");
+            assertEquals("ENTREGADO", todos.get(0).getEstadoPedido(), "Rama B: el pedido original debe estar ENTREGADO");
+
+            List<AsignacionLotePedido> asignaciones = asignacionLotePedidoRepository.findAll();
+            assertEquals(1, asignaciones.size(), "Rama B: debe haber exactamente una asignación");
+            AsignacionLotePedido asignacion = asignaciones.get(0);
+            assertEquals(AsignacionLotePedido.EstadoAsignacion.DEVUELTA, asignacion.getEstado(),
+                    "Rama B: la asignación debe estar DEVUELTA");
+            assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("6.00")),
+                    "Rama B: cantidadDescontada debe ser 6");
+            assertEquals(0, asignacion.getCantidadDevuelta().compareTo(new BigDecimal("6.00")),
+                    "Rama B: cantidadDevuelta debe ser 6");
+        } else {
+            fail("Escenario no válido: se esperaba Rama A (ambos éxitos) o Rama B (solo devolución exitosa)");
+        }
+
+        assertTrue(sumaFinal.signum() >= 0, "cantidadActual no debe ser negativa");
+        assertTrue(reservadoFinal.signum() >= 0, "stockReservado no debe ser negativo");
+    }
+
+    @Test
+    @Timeout(30)
+    void anulacionCompraYVentaSimultaneas_estadoConsistente() throws Exception {
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { compraService.anularCompra(idCompra); return null; },
+                () -> { pedidoService.createOrder(buildPedido("LOCAL", 6), idUsuario); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int errores = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertEquals(1, exitos, "Debe haber exactamente 1 éxito");
+        assertEquals(1, errores, "Debe haber exactamente 1 error");
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal suma = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        BigDecimal reservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+
+        assertEquals(0, reservado.compareTo(BigDecimal.ZERO), "stockReservado debe ser 0 en ambas ramas");
+        assertTrue(suma.signum() >= 0, "cantidadActual no debe ser negativa");
+
+        if (primero.exitoso() && !segundo.exitoso()) {
+            assertRechazoStock(segundo.error());
+
+            Compra compra = compraRepository.findById(idCompra).orElseThrow();
+            assertEquals(2, compra.getSituacion(), "Rama A: Compra debe estar anulada");
+
+            List<InventarioLote> lotes = inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto);
+            assertEquals(0, lotes.size(), "Rama A: el lote de la compra debe estar eliminado");
+
+            assertEquals(0, producto.getStockLlenos().compareTo(BigDecimal.ZERO), "Rama A: stockLlenos debe ser 0");
+            assertEquals(0, suma.compareTo(BigDecimal.ZERO), "Rama A: no debe quedar stock en lotes");
+
+            List<Pedido> todos = pedidoRepository.findAll();
+            assertEquals(0, todos.size(), "Rama A: no debe persistir un pedido nuevo");
+
+        } else if (!primero.exitoso() && segundo.exitoso()) {
+            assertRechazoConflicto(primero.error());
+
+            Compra compra = compraRepository.findById(idCompra).orElseThrow();
+            assertEquals(1, compra.getSituacion(), "Rama B: Compra no debe estar anulada");
+
+            List<InventarioLote> lotes = inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto);
+            assertEquals(1, lotes.size(), "Rama B: el lote no debe eliminarse");
+            assertEquals(0, new BigDecimal("4.00").compareTo(lotes.get(0).getCantidadActual()),
+                    "Rama B: lote cantidadActual debe ser 4");
+
+            assertEquals(0, new BigDecimal("4.00").compareTo(producto.getStockLlenos()),
+                    "Rama B: stockLlenos debe ser 4");
+
+            List<Pedido> todos = pedidoRepository.findAll();
+            assertEquals(1, todos.size(), "Rama B: debe persistir el pedido nuevo");
+            assertEquals("ENTREGADO", todos.get(0).getEstadoPedido(), "Rama B: el pedido nuevo debe estar ENTREGADO");
+
+            List<AsignacionLotePedido> asignaciones = asignacionLotePedidoRepository.findAll();
+            assertEquals(1, asignaciones.size(), "Rama B: debe haber exactamente una asignación");
+            AsignacionLotePedido asignacion = asignaciones.get(0);
+            assertEquals(AsignacionLotePedido.EstadoAsignacion.DESCONTADA, asignacion.getEstado(),
+                    "Rama B: la asignación debe estar DESCONTADA");
+            assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("6.00")),
+                    "Rama B: cantidadDescontada debe ser 6");
+            assertEquals(0, asignacion.getCantidadDevuelta().compareTo(BigDecimal.ZERO),
+                    "Rama B: cantidadDevuelta debe ser 0");
+        } else {
+            fail("Escenario no válido: se esperaba Rama A (anulación exitosa) o Rama B (venta exitosa)");
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    void ordenInversoDetalles_noProduceDeadlock() throws Exception {
+        idProducto2 = ensureProducto2(new BigDecimal("10.00"), BigDecimal.ZERO);
+        ensureLoteParaProducto(idProducto2, new BigDecimal("10.00"), new BigDecimal("10.00"));
+
+        List<PedidoDTO.DetalleCreate> detallesA = List.of(
+                new PedidoDTO.DetalleCreate(idProducto, 3, new BigDecimal("10.00"), 0),
+                new PedidoDTO.DetalleCreate(idProducto2, 3, new BigDecimal("10.00"), 0)
+        );
+
+        List<PedidoDTO.DetalleCreate> detallesB = List.of(
+                new PedidoDTO.DetalleCreate(idProducto2, 3, new BigDecimal("10.00"), 0),
+                new PedidoDTO.DetalleCreate(idProducto, 3, new BigDecimal("10.00"), 0)
+        );
+
+        ParResultados<PedidoDTO.SimpleResponse> par = ejecutarConcurrente(
+                () -> pedidoService.createOrder(buildPedidoConDetalles("LOCAL", detallesA), idUsuario),
+                () -> pedidoService.createOrder(buildPedidoConDetalles("LOCAL", detallesB), idUsuario)
+        );
+
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> primero = par.primero();
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> segundo = par.segundo();
+
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int errores = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertEquals(2, exitos, "Ambos pedidos deben crearse exitosamente");
+        assertEquals(0, errores, "No debe haber errores");
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+
+        Producto producto1 = productoRepository.findById(idProducto).orElseThrow();
+        Producto producto2 = productoRepository.findById(idProducto2).orElseThrow();
+        BigDecimal suma1 = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        BigDecimal suma2 = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto2);
+        BigDecimal reservado1 = producto1.getStockReservado() != null ? producto1.getStockReservado() : BigDecimal.ZERO;
+        BigDecimal reservado2 = producto2.getStockReservado() != null ? producto2.getStockReservado() : BigDecimal.ZERO;
+
+        List<Pedido> todos = pedidoRepository.findAll();
+        List<AsignacionLotePedido> asignaciones = asignacionLotePedidoRepository.findAll();
+
+        assertEquals(0, new BigDecimal("4.00").compareTo(suma1), "Producto 1: lote cantidadActual debe ser 4");
+        assertEquals(0, new BigDecimal("4.00").compareTo(suma2), "Producto 2: lote cantidadActual debe ser 4");
+        assertEquals(0, new BigDecimal("4.00").compareTo(producto1.getStockLlenos()), "Producto 1: stockLlenos debe ser 4");
+        assertEquals(0, new BigDecimal("4.00").compareTo(producto2.getStockLlenos()), "Producto 2: stockLlenos debe ser 4");
+        assertEquals(0, reservado1.compareTo(BigDecimal.ZERO), "Producto 1: stockReservado debe ser 0");
+        assertEquals(0, reservado2.compareTo(BigDecimal.ZERO), "Producto 2: stockReservado debe ser 0");
+
+        assertEquals(2, todos.size(), "Debe haber exactamente 2 pedidos");
+        long entregados = todos.stream()
+                .filter(p -> "ENTREGADO".equalsIgnoreCase(p.getEstadoPedido()))
+                .count();
+        assertEquals(2, entregados, "Ambos pedidos deben estar ENTREGADO");
+
+        assertEquals(4, asignaciones.size(), "Debe haber exactamente 4 asignaciones");
+
+        long descontadas = asignaciones.stream()
+                .filter(a -> AsignacionLotePedido.EstadoAsignacion.DESCONTADA.equals(a.getEstado()))
+                .count();
+        assertEquals(4, descontadas, "Todas las asignaciones deben estar DESCONTADA");
+
+        for (AsignacionLotePedido asignacion : asignaciones) {
+            assertEquals(0, asignacion.getCantidadDescontada().compareTo(new BigDecimal("3.00")),
+                    "cantidadDescontada debe ser 3");
+            assertEquals(0, asignacion.getCantidadDevuelta().compareTo(BigDecimal.ZERO),
+                    "cantidadDevuelta debe ser 0");
+            assertTrue(asignacion.getCantidadDescontada().signum() >= 0, "cantidadDescontada no debe ser negativa");
+            assertTrue(asignacion.getCantidadDevuelta().signum() >= 0, "cantidadDevuelta no debe ser negativa");
+        }
+
+        List<InventarioLote> lotesP1 = inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto);
+        List<InventarioLote> lotesP2 = inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto2);
+        assertEquals(1, lotesP1.size(), "Producto 1 debe tener exactamente 1 lote");
+        assertEquals(1, lotesP2.size(), "Producto 2 debe tener exactamente 1 lote");
     }
 }
