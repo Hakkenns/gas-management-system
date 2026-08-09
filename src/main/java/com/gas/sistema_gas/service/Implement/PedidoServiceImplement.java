@@ -338,6 +338,8 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
         List<PedidoDTO.EnvaseMovimientoCreate> envaseMvts = createDto.envaseMovimientos();
+        String tipoMov = createDto.tipoMovimientoEnvase();
+        boolean usarPrestamoLegado = tipoMov == null || tipoMov.isBlank();
 
         if (createDto.detalles() != null) {
             // FASE 4B-2A: Validar todos los detalles antes de procesar
@@ -432,7 +434,7 @@ public class PedidoServiceImplement implements PedidoService {
                 productoRepository.save(producto);
 
                 // Registrar préstamo de envases si corresponde
-                if (item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
+                if (usarPrestamoLegado && item.cantidadPrestada() != null && item.cantidadPrestada() > 0) {
                     if (item.cantidadPrestada() > item.cantidad()) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                 "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
@@ -459,8 +461,6 @@ public class PedidoServiceImplement implements PedidoService {
         // =====================================================================
         // PROCESAR MOVIMIENTO DE ENVASES (nuevo modal de Movimiento de Envases)
         // =====================================================================
-        String tipoMov = createDto.tipoMovimientoEnvase();
-
         if (envaseMvts != null && !envaseMvts.isEmpty()) {
             for (PedidoDTO.EnvaseMovimientoCreate envMvt : envaseMvts) {
                 if (envMvt.idProducto() == null || envMvt.cantidad() == null || envMvt.cantidad() <= 0) {

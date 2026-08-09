@@ -487,4 +487,285 @@ class EnvaseFlujoMySqlTest {
                 () -> assertEquals(null, respuestaCapturada)
         );
     }
+
+    @Test
+    void prestamoExplicitoConCantidadPrestadaLegada_noDebeDuplicarDeuda() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(5);
+            producto.setRequiereEnvase(true);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro préstamo duplicado " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor préstamo duplicado " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.prestamo.duplicado." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                null,
+                clienteId,
+                null,
+                "Cliente Envase Test",
+                null,
+                null,
+                null,
+                null,
+                usuarioId,
+                null,
+                null,
+                null,
+                null,
+                "LOCAL",
+                null,
+                List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
+                "PRESTAMO",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 1, null, null, null))
+        ), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        List<ControlEnvase> controlesNuevoPedido = controlEnvaseRepository.findByPedido_Id(respuesta.idPedido());
+
+        assertAll(
+                () -> assertNotNull(respuesta),
+                () -> assertEquals(pedidosAntes + 1, pedidoRepository.count()),
+                () -> assertEquals(4, producto.getStockVacios()),
+                () -> assertEquals(controlesAntes + 1, controlEnvaseRepository.count()),
+                () -> assertEquals(1, controlesNuevoPedido.size()),
+                () -> assertTrue(controlesNuevoPedido.stream().allMatch(control ->
+                        productoId.equals(control.getProducto().getId())
+                                && respuesta.idPedido().equals(control.getPedido().getId())
+                                && Integer.valueOf(1).equals(control.getCantidadPrestada())
+                                && Integer.valueOf(0).equals(control.getCantidadDevuelta())
+                                && "PRESTADO".equals(control.getEstado())))
+        );
+    }
+
+    @Test
+    void ningunoConCantidadPrestadaLegada_noDebeCrearPrestamo() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(5);
+            producto.setRequiereEnvase(true);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro ninguno legado " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor ninguno legado " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.ninguno.legado." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                null,
+                clienteId,
+                null,
+                "Cliente Envase Test",
+                null,
+                null,
+                null,
+                null,
+                usuarioId,
+                null,
+                null,
+                null,
+                null,
+                "LOCAL",
+                null,
+                List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
+                "NINGUNO",
+                List.of()
+        ), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        List<ControlEnvase> controlesNuevoPedido = controlEnvaseRepository.findByPedido_Id(respuesta.idPedido());
+
+        assertAll(
+                () -> assertNotNull(respuesta),
+                () -> assertEquals(pedidosAntes + 1, pedidoRepository.count()),
+                () -> assertEquals(5, producto.getStockVacios()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count()),
+                () -> assertEquals(0, controlesNuevoPedido.size())
+        );
+    }
+
+    @Test
+    void prestamoLegadoSinTipoMovimiento_debeSeguirFuncionando() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(5);
+            producto.setRequiereEnvase(true);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro préstamo legado " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor préstamo legado " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.prestamo.legado." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                null,
+                clienteId,
+                null,
+                "Cliente Envase Test",
+                null,
+                null,
+                null,
+                null,
+                usuarioId,
+                null,
+                null,
+                null,
+                null,
+                "LOCAL",
+                null,
+                List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
+                null,
+                List.of()
+        ), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        List<ControlEnvase> controlesNuevoPedido = controlEnvaseRepository.findByPedido_Id(respuesta.idPedido());
+
+        assertAll(
+                () -> assertNotNull(respuesta),
+                () -> assertEquals(4, producto.getStockVacios()),
+                () -> assertEquals(controlesAntes + 1, controlEnvaseRepository.count()),
+                () -> assertEquals(1, controlesNuevoPedido.size()),
+                () -> assertEquals(productoId, controlesNuevoPedido.get(0).getProducto().getId()),
+                () -> assertEquals(1, controlesNuevoPedido.get(0).getCantidadPrestada()),
+                () -> assertEquals(0, controlesNuevoPedido.get(0).getCantidadDevuelta()),
+                () -> assertEquals("PRESTADO", controlesNuevoPedido.get(0).getEstado())
+        );
+    }
 }
