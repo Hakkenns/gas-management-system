@@ -18,6 +18,8 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.service.EnvaseService;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -31,6 +33,9 @@ public class EnvaseServiceImplement implements EnvaseService {
 
     @Autowired
     private EnvaseRepository envaseRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional
@@ -103,14 +108,32 @@ public class EnvaseServiceImplement implements EnvaseService {
     @Override
     @Transactional
     public void registrarDevolucion(EnvioEnvaseDTO.DevolucionRequest request) {
-        ControlEnvase control = controlEnvaseRepository.findById(request.idControl())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, 
-                "El registro de control de envase no existe"));
-
         if (request.cantidadDevolver() == null || request.cantidadDevolver() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
                 "La cantidad a devolver debe ser mayor a 0");
         }
+
+        ControlEnvase controlInicial = controlEnvaseRepository.findById(request.idControl())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "El registro de control de envase no existe"));
+
+        if (controlInicial.getProducto() == null || controlInicial.getProducto().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "El producto asociado al control de envase no existe");
+        }
+
+        Long idProducto = controlInicial.getProducto().getId();
+        entityManager.detach(controlInicial);
+        List<Producto> productosBloqueados = productoRepository.findAllByIdInForUpdate(List.of(idProducto));
+        if (productosBloqueados.size() != 1) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "El producto asociado al control de envase no existe");
+        }
+        Producto productoBloqueado = productosBloqueados.get(0);
+
+        ControlEnvase control = controlEnvaseRepository.findByIdForUpdate(request.idControl())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "El registro de control de envase no existe"));
 
         Integer prestada = control.getCantidadPrestada() != null ? control.getCantidadPrestada() : 0;
         Integer devueltaActual = control.getCantidadDevuelta() != null ? control.getCantidadDevuelta() : 0;
@@ -135,11 +158,8 @@ public class EnvaseServiceImplement implements EnvaseService {
         controlEnvaseRepository.save(control);
 
         // Actualizar stock_vacios del producto (aumenta porque el envase vuelve al local)
-        if (control.getProducto() != null) {
-            Producto producto = control.getProducto();
-            Integer stockVaciosActual = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
-            producto.setStockVacios(stockVaciosActual + request.cantidadDevolver());
-            productoRepository.save(producto);
-        }
+        Integer stockVaciosActual = productoBloqueado.getStockVacios() != null ? productoBloqueado.getStockVacios() : 0;
+        productoBloqueado.setStockVacios(stockVaciosActual + request.cantidadDevolver());
+        productoRepository.save(productoBloqueado);
     }
 }

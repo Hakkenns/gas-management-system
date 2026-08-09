@@ -60,9 +60,11 @@ import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
+import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.service.CompraService;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.EnvaseService;
 import com.gas.sistema_gas.service.InventarioLoteService;
 import com.gas.sistema_gas.service.PedidoService;
 
@@ -178,6 +180,9 @@ public class InventarioConcurrenciaMySqlTest {
 
     @Autowired
     private PedidoService pedidoService;
+
+    @Autowired
+    private EnvaseService envaseService;
 
     @Autowired
     private ProductoRepository productoRepository;
@@ -603,6 +608,10 @@ public class InventarioConcurrenciaMySqlTest {
     }
 
     private PedidoDTO.Create buildPedidoPrestamoEnvase() {
+        return buildPedidoPrestamoEnvase(1);
+    }
+
+    private PedidoDTO.Create buildPedidoPrestamoEnvase(int cantidad) {
         return new PedidoDTO.Create(
                 null,
                 idCliente,
@@ -620,9 +629,9 @@ public class InventarioConcurrenciaMySqlTest {
                 "DOMICILIO",
                 null,
                 List.<PedidoDTO.PagoCreate>of(),
-                List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
+                List.of(new PedidoDTO.DetalleCreate(idProducto, cantidad, new BigDecimal("10.00"), 0)),
                 "PRESTAMO",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, null, null, null))
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, cantidad, null, null, null))
         );
     }
 
@@ -756,6 +765,163 @@ public class InventarioConcurrenciaMySqlTest {
         assertEquals(1, control.getCantidadPrestada());
         assertEquals(0, control.getCantidadDevuelta());
         assertEquals("PRESTADO", control.getEstado());
+    }
+
+    @Test
+    @Timeout(30)
+    void dosDevolucionesMismoPrestamo_noDebenDuplicarStockVacios() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(1);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        PedidoDTO.SimpleResponse pedidoPrestamo = pedidoService.createOrder(buildPedidoPrestamoEnvase(), idUsuario);
+        assertNotNull(pedidoPrestamo, "Debe existir el pedido válido asociado al préstamo");
+        assertEquals(1, controlEnvaseRepository.count(), "Debe existir exactamente un préstamo inicial");
+
+        ControlEnvase controlInicial = controlEnvaseRepository.findAll().get(0);
+        Long idControl = controlInicial.getId();
+        assertEquals(1, controlInicial.getCantidadPrestada(), "El préstamo inicial debe ser de un envase");
+        assertEquals(0, controlInicial.getCantidadDevuelta(), "El préstamo inicial no debe tener devoluciones");
+        assertEquals("PRESTADO", controlInicial.getEstado(), "El préstamo inicial debe estar PRESTADO");
+        assertEquals(0, productoRepository.findById(idProducto).orElseThrow().getStockVacios(),
+                "El préstamo debe dejar stockVacios en 0");
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControl, 1)); return null; },
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControl, 1)); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int rechazos = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+        assertEquals(1, exitos, "Debe completar exactamente una devolución");
+        assertEquals(1, rechazos, "La devolución duplicada debe rechazarse");
+
+        for (Throwable error : new Throwable[] {primero.error(), segundo.error()}) {
+            if (error == null) {
+                continue;
+            }
+            Throwable causa = error;
+            while (causa != null && !(causa instanceof ResponseStatusException)) {
+                causa = causa.getCause();
+            }
+            assertTrue(causa instanceof ResponseStatusException,
+                    "Una devolución rechazada debe informar ResponseStatusException");
+            ResponseStatusException rechazo = (ResponseStatusException) causa;
+            assertEquals(HttpStatus.BAD_REQUEST, rechazo.getStatusCode(),
+                    "El rechazo debe ser BAD_REQUEST");
+            assertEquals("La cantidad a devolver excede el saldo pendiente", rechazo.getReason(),
+                    "El rechazo debe corresponder al saldo pendiente del préstamo");
+        }
+
+        ControlEnvase controlFinal = controlEnvaseRepository.findById(idControl).orElseThrow();
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+
+        assertEquals(1, controlFinal.getCantidadPrestada(), "cantidadPrestada debe conservarse en 1");
+        assertEquals(1, controlFinal.getCantidadDevuelta(), "cantidadDevuelta no puede superar 1");
+        assertEquals("SALDADO", controlFinal.getEstado(), "El préstamo debe quedar SALDADO");
+        assertEquals(1, productoFinal.getStockVacios(), "stockVacios solo puede aumentar de 0 a 1");
+        assertTrue(controlFinal.getCantidadDevuelta() <= controlFinal.getCantidadPrestada(),
+                "No puede devolverse más de lo prestado");
+        assertTrue(productoFinal.getStockVacios() <= 1, "stockVacios no puede duplicarse");
+    }
+
+    @Test
+    @Timeout(30)
+    void dosDevolucionesParcialesConcurrentes_debenAcumularAmbas() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(2);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        PedidoDTO.SimpleResponse pedidoPrestamo = pedidoService.createOrder(buildPedidoPrestamoEnvase(2), idUsuario);
+        assertNotNull(pedidoPrestamo, "Debe existir el pedido válido asociado al préstamo");
+        assertEquals(1, controlEnvaseRepository.count(), "Debe existir exactamente un préstamo inicial");
+
+        ControlEnvase controlInicial = controlEnvaseRepository.findAll().get(0);
+        Long idControl = controlInicial.getId();
+        assertEquals(2, controlInicial.getCantidadPrestada(), "El préstamo inicial debe ser de dos envases");
+        assertEquals(0, controlInicial.getCantidadDevuelta(), "El préstamo inicial no debe tener devoluciones");
+        assertEquals("PRESTADO", controlInicial.getEstado(), "El préstamo inicial debe estar PRESTADO");
+        assertEquals(0, productoRepository.findById(idProducto).orElseThrow().getStockVacios(),
+                "El préstamo debe dejar stockVacios en 0");
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControl, 1)); return null; },
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControl, 1)); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int rechazos = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+        assertEquals(2, exitos, "Ambas devoluciones parciales válidas deben triunfar");
+        assertEquals(0, rechazos, "Ninguna devolución parcial válida debe rechazarse");
+
+        ControlEnvase controlFinal = controlEnvaseRepository.findById(idControl).orElseThrow();
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+
+        assertEquals(2, controlFinal.getCantidadPrestada(), "cantidadPrestada debe conservarse en 2");
+        assertEquals(2, controlFinal.getCantidadDevuelta(), "Las dos devoluciones deben acumularse");
+        assertEquals(2, productoFinal.getStockVacios(), "stockVacios debe acumular las dos devoluciones");
+        assertEquals("SALDADO", controlFinal.getEstado(), "El préstamo debe quedar SALDADO");
+    }
+
+    @Test
+    @Timeout(30)
+    void dosDevolucionesDeControlesDistintosMismoProducto_debenAcumularStock() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(2);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        pedidoService.createOrder(buildPedidoPrestamoEnvase(), idUsuario);
+        pedidoService.createOrder(buildPedidoPrestamoEnvase(), idUsuario);
+        List<ControlEnvase> controlesIniciales = controlEnvaseRepository.findAll();
+        assertEquals(2, controlesIniciales.size(), "Deben existir dos préstamos iniciales");
+        assertEquals(0, productoRepository.findById(idProducto).orElseThrow().getStockVacios(),
+                "Los préstamos deben dejar stockVacios en 0");
+
+        Long idControlA = controlesIniciales.get(0).getId();
+        Long idControlB = controlesIniciales.get(1).getId();
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControlA, 1)); return null; },
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControlB, 1)); return null; }
+        );
+
+        ResultadoConcurrente<Void> primero = par.primero();
+        ResultadoConcurrente<Void> segundo = par.segundo();
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int rechazos = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+        assertEquals(2, exitos, "Ambas devoluciones válidas deben triunfar");
+        assertEquals(0, rechazos, "Ninguna devolución válida debe rechazarse");
+
+        ControlEnvase controlA = controlEnvaseRepository.findById(idControlA).orElseThrow();
+        ControlEnvase controlB = controlEnvaseRepository.findById(idControlB).orElseThrow();
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+
+        assertEquals(1, controlA.getCantidadDevuelta(), "Control A debe registrar una devolución");
+        assertEquals("SALDADO", controlA.getEstado(), "Control A debe quedar SALDADO");
+        assertEquals(1, controlB.getCantidadDevuelta(), "Control B debe registrar una devolución");
+        assertEquals("SALDADO", controlB.getEstado(), "Control B debe quedar SALDADO");
+        assertEquals(2, productoFinal.getStockVacios(), "stockVacios debe acumular ambas devoluciones");
     }
 
     @Test
