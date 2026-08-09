@@ -340,7 +340,6 @@ $(function() {
         const productoNombre = $('#input-producto-nombre').val();
         const cantidad = parseInt($('#select-cantidad').val()) || 0;
         const precio = parseMoney($('#select-precio').val());
-        const prestados = parseInt($('#input-cantidad-prestada').val()) || 0;
 
         // Validaciones con SweetAlert2
         if (!productoId || !productoNombre) {
@@ -378,34 +377,29 @@ $(function() {
             return;
         }
 
-        const subtotal = (cantidad * precio) + (prestados * precio);
+        const subtotal = cantidad * precio;
         const existingRow = $(`#tabla-filas-venta tr`).filter(function() {
             return $(this).data('productoId') === productoId;
         }).first();
 
         if (existingRow.length) {
             const existingCantidad = parseInt(existingRow.data('cantidad')) || 0;
-            const existingPrestados = parseInt(existingRow.data('prestados')) || 0;
             const nuevaCantidad = existingCantidad + cantidad;
-            const nuevosPrestados = existingPrestados + prestados;
-            const nuevoSubtotal = (nuevaCantidad * precio) + (nuevosPrestados * precio);
+            const nuevoSubtotal = nuevaCantidad * precio;
 
             existingRow.data('cantidad', nuevaCantidad);
-            existingRow.data('prestados', nuevosPrestados);
             existingRow.data('subtotal', nuevoSubtotal);
             existingRow.data('precio', precio);
 
             existingRow.find('td').eq(1).text(nuevaCantidad);
             existingRow.find('td').eq(2).text(`S/ ${formatMoney(precio)}`);
-            existingRow.find('td').eq(3).text(nuevosPrestados > 0 ? nuevosPrestados : '');
-            existingRow.find('td').eq(4).text(`S/ ${formatMoney(nuevoSubtotal)}`);
+            existingRow.find('td').eq(3).text(`S/ ${formatMoney(nuevoSubtotal)}`);
         } else {
             const tr = $('<tr>');
             tr.html(`
                 <td>${productoNombre}</td>
                 <td class="text-center">${cantidad}</td>
                 <td class="text-right">S/ ${formatMoney(precio)}</td>
-                <td class="text-center">${prestados > 0 ? prestados : ''}</td>
                 <td class="text-right">S/ ${formatMoney(subtotal)}</td>
                 <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-detalle"><i class="fas fa-trash"></i></button></td>
             `);
@@ -413,7 +407,6 @@ $(function() {
             tr.data('productoId', productoId);
             tr.data('cantidad', cantidad);
             tr.data('precio', precio);
-            tr.data('prestados', prestados);
             tr.data('subtotal', subtotal);
 
             $('#tabla-filas-venta').append(tr);
@@ -868,7 +861,7 @@ $(function() {
                 idProducto: $(this).data('productoId') ? Number($(this).data('productoId')) : null,
                 cantidad: $(this).data('cantidad'),
                 precioUnitario: $(this).data('precio'),
-                cantidadPrestada: $(this).data('prestados')
+                cantidadPrestada: 0
             });
         });
 

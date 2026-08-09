@@ -320,7 +320,7 @@
                             <div class="card border-secondary mt-3" id="card-agregar-productos">
                                 <div class="card-header bg-secondary text-white py-2">Agregar productos al detalle</div>
                                 <div class="card-body row align-items-end py-3">
-                                    <div class="form-group col-md-4 mb-0">
+                                    <div class="form-group col-md-6 mb-0">
                                         <label>Producto</label>
                                         <div class="input-group">
                                             <input type="hidden" id="select-producto" />
@@ -341,10 +341,6 @@
                                         <input type="number" class="form-control" id="select-precio" step="0.01" min="0.01">
                                     </div>
                                     <div class="form-group col-md-2 mb-0">
-                                        <label>Prestados</label>
-                                        <input type="number" class="form-control" id="input-cantidad-prestada" min="0" value="0">
-                                    </div>
-                                    <div class="form-group col-md-2 mb-0">
                                         <button type="button" id="btn-agregar-detalle" class="btn btn-success btn-block">
                                             <i class="fas fa-plus"></i> Añadir
                                         </button>
@@ -360,7 +356,6 @@
                                             <th>Producto</th>
                                             <th width="12%">Cantidad</th>
                                             <th width="15%">P. Unitario</th>
-                                            <th width="15%">Prestados</th>
                                             <th width="18%">Subtotal</th>
                                             <th width="10%" class="col-quitar-producto">Quitar</th>
                                         </tr>
