@@ -45,6 +45,7 @@ import com.gas.sistema_gas.Model.AsignacionLotePedido;
 import com.gas.sistema_gas.Model.Categoria;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.Compra;
+import com.gas.sistema_gas.Model.ControlEnvase;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.Pedido;
@@ -55,6 +56,7 @@ import com.gas.sistema_gas.Model.Rubro;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.AsignacionLotePedidoRepository;
 import com.gas.sistema_gas.Repository.CompraRepository;
+import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
@@ -185,6 +187,9 @@ public class InventarioConcurrenciaMySqlTest {
 
     @Autowired
     private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private ControlEnvaseRepository controlEnvaseRepository;
 
     @Autowired
     private AsignacionLotePedidoRepository asignacionLotePedidoRepository;
@@ -501,6 +506,25 @@ public class InventarioConcurrenciaMySqlTest {
         fail("La operación fallida debe contener ResponseStatusException en su cadena de causas", error);
     }
 
+    private void assertRechazoStockEnvases(Throwable error) {
+        assertNotNull(error, "Se esperaba un error en la operación fallida");
+        assertNoLockingError(error);
+        Throwable cur = error;
+        while (cur != null) {
+            if (cur instanceof ResponseStatusException rse) {
+                assertEquals(HttpStatus.BAD_REQUEST, rse.getStatusCode(),
+                        "El rechazo debe ser BAD_REQUEST, no " + rse.getStatusCode());
+                String mensaje = rse.getReason() != null ? rse.getReason() : rse.getMessage();
+                assertNotNull(mensaje, "El rechazo de stock de envases debe incluir un mensaje");
+                assertTrue(mensaje.contains("Stock de envases insuficiente"),
+                        "El rechazo debe corresponder a stock de envases insuficiente: " + mensaje);
+                return;
+            }
+            cur = cur.getCause();
+        }
+        fail("La operación fallida debe contener ResponseStatusException en su cadena de causas", error);
+    }
+
     private void assertRechazoConflicto(Throwable error) {
         assertNotNull(error, "Se esperaba un error en la operación fallida");
         assertNoLockingError(error);
@@ -576,6 +600,78 @@ public class InventarioConcurrenciaMySqlTest {
                 "NINGUNO",
                 List.<PedidoDTO.EnvaseMovimientoCreate>of()
         );
+    }
+
+    private PedidoDTO.Create buildPedidoPrestamoEnvase() {
+        return new PedidoDTO.Create(
+                null,
+                idCliente,
+                null,
+                "Cliente Concurrencia",
+                "Dirección de prueba",
+                "Referencia de prueba",
+                "999999999",
+                idEmpleado,
+                idUsuario,
+                null,
+                null,
+                null,
+                null,
+                "DOMICILIO",
+                null,
+                List.<PedidoDTO.PagoCreate>of(),
+                List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
+                "PRESTAMO",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, null, null, null))
+        );
+    }
+
+    @Test
+    @Timeout(30)
+    void dosPrestamosUltimoEnvase_soloUnoDebeTenerExito() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(1);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        PedidoDTO.Create dtoPrestamo = buildPedidoPrestamoEnvase();
+        ParResultados<PedidoDTO.SimpleResponse> par = ejecutarConcurrente(
+                () -> pedidoService.createOrder(dtoPrestamo, idUsuario),
+                () -> pedidoService.createOrder(dtoPrestamo, idUsuario)
+        );
+
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> primero = par.primero();
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> segundo = par.segundo();
+        int exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        int rechazos = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+
+        assertEquals(1, exitos, "Debe haber exactamente un préstamo exitoso");
+        assertEquals(1, rechazos, "Debe haber exactamente un préstamo rechazado");
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+        if (!primero.exitoso()) {
+            assertRechazoStockEnvases(primero.error());
+        }
+        if (!segundo.exitoso()) {
+            assertRechazoStockEnvases(segundo.error());
+        }
+
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+        assertEquals(0, productoFinal.getStockVacios(), "Debe agotarse el único envase vacío");
+        assertTrue(productoFinal.getStockVacios() >= 0, "stockVacios no debe ser negativo");
+        assertEquals(new BigDecimal("1.00"), productoFinal.getStockReservado(),
+                "Solo debe quedar la reserva del pedido exitoso");
+
+        assertEquals(1, controlEnvaseRepository.count(), "Debe existir un único préstamo de envase");
+        assertEquals(1, pedidoRepository.count(), "Debe persistir únicamente el pedido exitoso");
+
+        ControlEnvase control = controlEnvaseRepository.findAll().get(0);
+        assertEquals(idProducto, control.getProducto().getId());
+        assertEquals(1, control.getCantidadPrestada());
+        assertEquals(0, control.getCantidadDevuelta());
+        assertEquals("PRESTADO", control.getEstado());
     }
 
     @Test
