@@ -282,4 +282,104 @@ class EnvaseFlujoMySqlTest {
                 () -> assertEquals(null, respuestaCapturada, "No debe devolverse un pedido creado")
         );
     }
+
+    @Test
+    void crearVentaEnvase_debeDescontarStockVaciosYNoCrearDeuda() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(5);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro venta envase " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor venta envase " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.venta." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                null,
+                clienteId,
+                null,
+                "Cliente Envase Test",
+                null,
+                null,
+                null,
+                null,
+                usuarioId,
+                null,
+                null,
+                null,
+                null,
+                "LOCAL",
+                null,
+                List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                "VENTA",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null))
+        ), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        Pedido pedido = pedidoRepository.findById(respuesta.idPedido()).orElseThrow();
+        long detallesEnvase = transactionTemplate.execute(status -> entityManager.createQuery(
+                "SELECT COUNT(d) FROM DetallePedido d WHERE d.pedido.id = :idPedido "
+                        + "AND d.producto.id = :idProducto AND d.cantidad = :cantidad", Long.class)
+                .setParameter("idPedido", respuesta.idPedido())
+                .setParameter("idProducto", productoId)
+                .setParameter("cantidad", 2)
+                .getSingleResult());
+
+        assertAll(
+                () -> assertNotNull(respuesta),
+                () -> assertEquals(pedidosAntes + 1, pedidoRepository.count()),
+                () -> assertNotNull(pedido),
+                () -> assertEquals(3, producto.getStockVacios()),
+                () -> assertTrue(producto.getStockVacios() >= 0),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count()),
+                () -> assertEquals(1, detallesEnvase),
+                () -> assertEquals(new BigDecimal("30.00"), respuesta.montoTotal())
+        );
+    }
 }

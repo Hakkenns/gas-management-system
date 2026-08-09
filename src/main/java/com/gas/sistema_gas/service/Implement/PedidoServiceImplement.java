@@ -474,6 +474,16 @@ public class PedidoServiceImplement implements PedidoService {
                 }
 
                 if ("VENTA".equalsIgnoreCase(tipoMov)) {
+                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null
+                            ? productoEnvase.getStockVacios()
+                            : 0;
+                    if (stockVaciosActual < envMvt.cantidad()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Stock de envases insuficiente para " + productoEnvase.getNombre());
+                    }
+                    productoEnvase.setStockVacios(stockVaciosActual - envMvt.cantidad());
+                    productoRepository.save(productoEnvase);
+
                     // Venta de envases: agregar como detalle de pedido (suma al total)
                     BigDecimal precioUnitarioEnvase = envMvt.precioUnitario() != null
                         ? envMvt.precioUnitario()
