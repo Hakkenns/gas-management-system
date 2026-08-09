@@ -17,6 +17,14 @@ public interface ControlEnvaseRepository extends JpaRepository<ControlEnvase, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM ControlEnvase c WHERE c.id = :id")
     Optional<ControlEnvase> findByIdForUpdate(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT c.producto.id FROM ControlEnvase c "
+            + "WHERE c.pedido.id = :idPedido AND c.producto IS NOT NULL")
+    List<Long> findProductoIdsByPedidoId(@Param("idPedido") Long idPedido);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM ControlEnvase c WHERE c.pedido.id = :idPedido ORDER BY c.id ASC")
+    List<ControlEnvase> findByPedido_IdForUpdate(@Param("idPedido") Long idPedido);
     
     List<ControlEnvase> findByPedido_Id(Long idPedido);
 

@@ -791,7 +791,13 @@ public class PedidoServiceImplement implements PedidoService {
             reservasPorProducto.merge(idProducto, BigDecimal.valueOf(detalle.getCantidad()), BigDecimal::add);
         }
 
-        List<com.gas.sistema_gas.Model.ControlEnvase> controlesEnvase = controlEnvaseRepository.findByPedido_Id(pedido.getId());
+        List<Long> idsProductosPrestamos = controlEnvaseRepository.findProductoIdsByPedidoId(pedido.getId());
+        Set<Long> idsProductosAnulacion = new LinkedHashSet<>(reservasPorProducto.keySet());
+        idsProductosAnulacion.addAll(idsProductosPrestamos);
+        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductosAnulacion);
+
+        List<com.gas.sistema_gas.Model.ControlEnvase> controlesEnvase = controlEnvaseRepository
+                .findByPedido_IdForUpdate(pedido.getId());
         Map<Long, Integer> pendientesPorProducto = new java.util.HashMap<>();
 
         for (com.gas.sistema_gas.Model.ControlEnvase control : controlesEnvase) {
@@ -804,13 +810,14 @@ public class PedidoServiceImplement implements PedidoService {
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                             "El préstamo pendiente no tiene producto asociado");
                 }
-                pendientesPorProducto.merge(control.getProducto().getId(), pendiente, Integer::sum);
+                Long idProducto = control.getProducto().getId();
+                if (!productosBloqueados.containsKey(idProducto)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "El producto del préstamo pendiente no fue bloqueado");
+                }
+                pendientesPorProducto.merge(idProducto, pendiente, Integer::sum);
             }
         }
-
-        Set<Long> idsProductosAnulacion = new LinkedHashSet<>(reservasPorProducto.keySet());
-        idsProductosAnulacion.addAll(pendientesPorProducto.keySet());
-        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductosAnulacion);
 
         for (Map.Entry<Long, BigDecimal> entry : reservasPorProducto.entrySet()) {
             Producto producto = productosBloqueados.get(entry.getKey());

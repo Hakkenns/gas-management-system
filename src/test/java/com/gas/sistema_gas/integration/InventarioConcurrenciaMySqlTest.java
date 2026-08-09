@@ -926,6 +926,70 @@ public class InventarioConcurrenciaMySqlTest {
 
     @Test
     @Timeout(30)
+    void devolucionYAnulacionMismoPedido_noDebenDuplicarEnvase() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(1);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        PedidoDTO.SimpleResponse pedidoPrestamo = pedidoService.createOrder(buildPedidoPrestamoEnvase(), idUsuario);
+        assertNotNull(pedidoPrestamo, "Debe existir el pedido válido asociado al préstamo");
+        Long idPedido = pedidoPrestamo.idPedido();
+        List<ControlEnvase> controlesIniciales = controlEnvaseRepository.findByPedido_Id(idPedido);
+
+        assertEquals("PENDIENTE", pedidoRepository.findById(idPedido).orElseThrow().getEstadoPedido(),
+                "El pedido inicial debe estar PENDIENTE");
+        assertEquals(1, controlesIniciales.size(), "Debe existir exactamente un préstamo inicial");
+        ControlEnvase controlInicial = controlesIniciales.get(0);
+        Long idControl = controlInicial.getId();
+        assertEquals(1, controlInicial.getCantidadPrestada(), "cantidadPrestada inicial debe ser 1");
+        assertEquals(0, controlInicial.getCantidadDevuelta(), "cantidadDevuelta inicial debe ser 0");
+        assertEquals("PRESTADO", controlInicial.getEstado(), "El préstamo inicial debe estar PRESTADO");
+        assertEquals(0, productoRepository.findById(idProducto).orElseThrow().getStockVacios(),
+                "El préstamo debe dejar stockVacios en 0");
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> { envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(idControl, 1)); return null; },
+                () -> { pedidoService.deleteOrder(idPedido); return null; }
+        );
+
+        ResultadoConcurrente<Void> devolucion = par.primero();
+        ResultadoConcurrente<Void> anulacion = par.segundo();
+        assertNoLockingError(devolucion.error());
+        assertNoLockingError(anulacion.error());
+
+        String rechazoDevolucion = "ninguno";
+        if (!devolucion.exitoso()) {
+            Throwable causa = devolucion.error();
+            while (causa != null && !(causa instanceof ResponseStatusException)) {
+                causa = causa.getCause();
+            }
+            assertTrue(causa instanceof ResponseStatusException,
+                    "La devolución rechazada debe informar una excepción de negocio");
+            ResponseStatusException rechazo = (ResponseStatusException) causa;
+            assertEquals(HttpStatus.NOT_FOUND, rechazo.getStatusCode(),
+                    "La devolución solo puede rechazarse porque el control fue eliminado");
+            rechazoDevolucion = rechazo.getStatusCode() + ": " + rechazo.getReason();
+        }
+
+        Pedido pedidoFinal = pedidoRepository.findById(idPedido).orElseThrow();
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+        List<ControlEnvase> controlesFinales = controlEnvaseRepository.findByPedido_Id(idPedido);
+
+        assertEquals("ANULADO", pedidoFinal.getEstadoPedido(), "El pedido debe quedar ANULADO");
+        assertEquals(1, productoFinal.getStockVacios(), "El único envase debe reponerse exactamente una vez");
+        assertTrue(productoFinal.getStockVacios() != 2,
+                "El envase no puede reponerse dos veces por devolución y anulación");
+        assertEquals(0, controlesFinales.size(), "El control del pedido debe eliminarse al anularlo");
+        System.out.println("DEVOLUCION_VS_ANULACION: devolucion="
+                + (devolucion.exitoso() ? "EXITO" : rechazoDevolucion)
+                + ", anulacion=" + (anulacion.exitoso() ? "EXITO" : anulacion.error().getClass().getSimpleName()));
+    }
+
+    @Test
+    @Timeout(30)
     void dosDomicilio_ultimoStock_noSobreReserva() throws Exception {
         ParResultados<Void> par = ejecutarConcurrente(
                 () -> { pedidoService.createOrder(buildPedido("DOMICILIO", 6), idUsuario); return null; },
