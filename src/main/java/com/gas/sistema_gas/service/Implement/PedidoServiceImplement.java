@@ -337,6 +337,7 @@ public class PedidoServiceImplement implements PedidoService {
 
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
         BigDecimal montoAcumulado = BigDecimal.ZERO;
+        List<PedidoDTO.EnvaseMovimientoCreate> envaseMvts = createDto.envaseMovimientos();
 
         if (createDto.detalles() != null) {
             // FASE 4B-2A: Validar todos los detalles antes de procesar
@@ -352,25 +353,36 @@ public class PedidoServiceImplement implements PedidoService {
                             "La cantidad debe ser mayor a cero");
                 }
             }
+        }
 
-            // FASE 4B-2A: Bloquear todos los productos únicos en una sola llamada ordenada por ID
-            Set<Long> idsProductos = extraerIdsDeDetallesCreate(createDto.detalles());
-            Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductos);
+        Set<Long> idsProductosDetalles = createDto.detalles() != null
+                ? extraerIdsDeDetallesCreate(createDto.detalles())
+                : new LinkedHashSet<>();
+        Set<Long> idsProductosEnvase = envaseMvts != null
+                ? envaseMvts.stream()
+                        .filter(e -> e != null && e.idProducto() != null && e.cantidad() != null && e.cantidad() > 0)
+                        .map(PedidoDTO.EnvaseMovimientoCreate::idProducto)
+                        .collect(Collectors.toCollection(LinkedHashSet::new))
+                : new LinkedHashSet<>();
+        Set<Long> idsProductosABloquear = new LinkedHashSet<>(idsProductosDetalles);
+        idsProductosABloquear.addAll(idsProductosEnvase);
+        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductosABloquear);
 
-            List<Long> idsProductosOrdenados = idsProductos.stream()
-                    .sorted(Comparator.naturalOrder())
-                    .collect(Collectors.toList());
-            List<InventarioLote> lotesBloqueados = inventarioLoteRepository
-                    .findByProductoIdsForUpdate(idsProductosOrdenados);
-            Map<Long, BigDecimal> stockActualPorProducto = new java.util.HashMap<>();
-            for (InventarioLote lote : lotesBloqueados) {
-                BigDecimal cantidadActual = lote.getCantidadActual() != null
-                        ? lote.getCantidadActual()
-                        : BigDecimal.ZERO;
-                stockActualPorProducto.merge(
-                        lote.getProducto().getId(), cantidadActual, BigDecimal::add);
-            }
+        List<Long> idsProductosDetallesOrdenados = idsProductosDetalles.stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.toList());
+        List<InventarioLote> lotesBloqueados = inventarioLoteRepository
+                .findByProductoIdsForUpdate(idsProductosDetallesOrdenados);
+        Map<Long, BigDecimal> stockActualPorProducto = new java.util.HashMap<>();
+        for (InventarioLote lote : lotesBloqueados) {
+            BigDecimal cantidadActual = lote.getCantidadActual() != null
+                    ? lote.getCantidadActual()
+                    : BigDecimal.ZERO;
+            stockActualPorProducto.merge(
+                    lote.getProducto().getId(), cantidadActual, BigDecimal::add);
+        }
 
+        if (createDto.detalles() != null) {
             for (PedidoDTO.DetalleCreate item : createDto.detalles()) {
                 Producto producto = productosBloqueados.get(item.idProducto());
 
@@ -425,6 +437,14 @@ public class PedidoServiceImplement implements PedidoService {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                 "La cantidad de envases prestados no puede ser mayor a la cantidad comprada.");
                     }
+                    Integer stockVaciosActual = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
+                    if (stockVaciosActual < item.cantidadPrestada()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Stock de envases insuficiente para " + producto.getNombre());
+                    }
+                    producto.setStockVacios(stockVaciosActual - item.cantidadPrestada());
+                    productoRepository.save(producto);
+
                     com.gas.sistema_gas.Model.ControlEnvase prestamo = new com.gas.sistema_gas.Model.ControlEnvase();
                     prestamo.setPedido(pedidoGuardado);
                     prestamo.setProducto(producto);
@@ -440,7 +460,6 @@ public class PedidoServiceImplement implements PedidoService {
         // PROCESAR MOVIMIENTO DE ENVASES (nuevo modal de Movimiento de Envases)
         // =====================================================================
         String tipoMov = createDto.tipoMovimientoEnvase();
-        List<PedidoDTO.EnvaseMovimientoCreate> envaseMvts = createDto.envaseMovimientos();
 
         if (envaseMvts != null && !envaseMvts.isEmpty()) {
             for (PedidoDTO.EnvaseMovimientoCreate envMvt : envaseMvts) {
@@ -448,9 +467,11 @@ public class PedidoServiceImplement implements PedidoService {
                     continue;
                 }
 
-                Producto productoEnvase = productoRepository.findById(envMvt.idProducto())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Producto de envase no encontrado"));
+                Producto productoEnvase = productosBloqueados.get(envMvt.idProducto());
+                if (productoEnvase == null) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Producto de envase no encontrado");
+                }
 
                 if ("VENTA".equalsIgnoreCase(tipoMov)) {
                     // Venta de envases: agregar como detalle de pedido (suma al total)
@@ -470,6 +491,16 @@ public class PedidoServiceImplement implements PedidoService {
 
                 } else if ("PRESTAMO".equalsIgnoreCase(tipoMov)) {
                     // Préstamo de envases: registrar en control_envase (no suma al total)
+                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null
+                            ? productoEnvase.getStockVacios()
+                            : 0;
+                    if (stockVaciosActual < envMvt.cantidad()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Stock de envases insuficiente para " + productoEnvase.getNombre());
+                    }
+                    productoEnvase.setStockVacios(stockVaciosActual - envMvt.cantidad());
+                    productoRepository.save(productoEnvase);
+
                     com.gas.sistema_gas.Model.ControlEnvase prestamoEnvase = new com.gas.sistema_gas.Model.ControlEnvase();
                     prestamoEnvase.setPedido(pedidoGuardado);
                     prestamoEnvase.setProducto(productoEnvase);
@@ -484,11 +515,6 @@ public class PedidoServiceImplement implements PedidoService {
                     controlEnvaseRepository.save(prestamoEnvase);
 
                     // Descontar stock_vacios del producto cuando se presta un envase
-                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null ? productoEnvase.getStockVacios() : 0;
-                    if (stockVaciosActual >= envMvt.cantidad()) {
-                        productoEnvase.setStockVacios(stockVaciosActual - envMvt.cantidad());
-                        productoRepository.save(productoEnvase);
-                    }
                 }
             }
         }

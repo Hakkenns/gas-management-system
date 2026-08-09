@@ -2,6 +2,8 @@ package com.gas.sistema_gas.integration;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,9 +21,14 @@ import com.gas.sistema_gas.SistemaGasApplication;
 import com.gas.sistema_gas.Model.Categoria;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.ControlEnvase;
+import com.gas.sistema_gas.Model.Correlativo;
+import com.gas.sistema_gas.Model.Compra;
+import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.Perfil;
 import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Model.Proveedor;
+import com.gas.sistema_gas.Model.Rubro;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
@@ -29,9 +36,12 @@ import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.dto.PedidoDTO;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest(classes = SistemaGasApplication.class)
 @ContextConfiguration(
@@ -65,6 +75,8 @@ class EnvaseFlujoMySqlTest {
 
     private Long pedidoId;
     private Long productoId;
+    private Long clienteId;
+    private Long usuarioId;
 
     @BeforeEach
     void prepararFixture() {
@@ -135,6 +147,8 @@ class EnvaseFlujoMySqlTest {
 
             pedidoId = pedido.getId();
             productoId = producto.getId();
+            clienteId = cliente.getId();
+            usuarioId = usuario.getId();
         });
     }
 
@@ -165,6 +179,107 @@ class EnvaseFlujoMySqlTest {
         assertAll(
                 () -> assertEquals(5, producto.getStockVacios()),
                 () -> assertEquals(0, deudas.size())
+        );
+    }
+
+    @Test
+    void crearPrestamoSinStockSuficiente_debeRechazarYNoCrearDeuda() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(1);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro préstamo " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor préstamo " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+        PedidoDTO.SimpleResponse respuesta = null;
+        ResponseStatusException excepcion = null;
+
+        try {
+            respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                    null,
+                    clienteId,
+                    null,
+                    "Cliente Envase Test",
+                    null,
+                    null,
+                    null,
+                    null,
+                    usuarioId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "LOCAL",
+                    null,
+                    List.of(),
+                    List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                    "PRESTAMO",
+                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, null, null, null))
+            ), usuarioId);
+        } catch (ResponseStatusException error) {
+            excepcion = error;
+        }
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        long controlesDespues = controlEnvaseRepository.count();
+        long pedidosDespues = pedidoRepository.count();
+        ResponseStatusException excepcionCapturada = excepcion;
+        PedidoDTO.SimpleResponse respuestaCapturada = respuesta;
+
+        assertAll(
+                () -> assertNotNull(excepcionCapturada, "createOrder debe rechazar el préstamo sin stock suficiente"),
+                () -> assertTrue(excepcionCapturada.getReason() != null
+                        && excepcionCapturada.getReason().contains("Stock de envases insuficiente")),
+                () -> assertEquals(1, producto.getStockVacios()),
+                () -> assertEquals(controlesAntes, controlesDespues),
+                () -> assertEquals(pedidosAntes, pedidosDespues),
+                () -> assertEquals(null, respuestaCapturada, "No debe devolverse un pedido creado")
         );
     }
 }
