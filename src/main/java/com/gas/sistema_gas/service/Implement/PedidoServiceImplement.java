@@ -650,9 +650,7 @@ public class PedidoServiceImplement implements PedidoService {
         // ===== CONTROL DE INVENTARIO SEGÚN ESTADOS =====
 
         if ("ANULADO".equals(estadoNormalizado)) {
-            // Liberar reservas ANTES de marcar como ANULADO
-            liberarReservaPedido(pedido);
-            pedido.setEstadoPedido("ANULADO");
+            anularPedidoPendienteConReversion(pedido);
         } else {
             pedido.setEstadoPedido(estadoNormalizado);
 
@@ -739,11 +737,71 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se puede anular un pedido en estado PENDIENTE");
         }
 
-        // Liberar reservas antes de marcar como ANULADO
-        liberarReservaPedido(pedido);
+        anularPedidoPendienteConReversion(pedido);
+        pedidoRepository.save(pedido);
+    }
+
+    /**
+     * Revierte una anulación de pedido pendiente. El pedido debe llegar ya bloqueado por el llamador.
+     */
+    private void anularPedidoPendienteConReversion(Pedido pedido) {
+        List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
+        Map<Long, BigDecimal> reservasPorProducto = new java.util.HashMap<>();
+        for (DetallePedido detalle : detalles) {
+            Long idProducto = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
+            if (idProducto == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
+            }
+            reservasPorProducto.merge(idProducto, BigDecimal.valueOf(detalle.getCantidad()), BigDecimal::add);
+        }
+
+        List<com.gas.sistema_gas.Model.ControlEnvase> controlesEnvase = controlEnvaseRepository.findByPedido_Id(pedido.getId());
+        Map<Long, Integer> pendientesPorProducto = new java.util.HashMap<>();
+
+        for (com.gas.sistema_gas.Model.ControlEnvase control : controlesEnvase) {
+            int cantidadPrestada = control.getCantidadPrestada() != null ? control.getCantidadPrestada() : 0;
+            int cantidadDevuelta = control.getCantidadDevuelta() != null ? control.getCantidadDevuelta() : 0;
+            int pendiente = Math.max(0, cantidadPrestada - cantidadDevuelta);
+
+            if (pendiente > 0) {
+                if (control.getProducto() == null || control.getProducto().getId() == null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "El préstamo pendiente no tiene producto asociado");
+                }
+                pendientesPorProducto.merge(control.getProducto().getId(), pendiente, Integer::sum);
+            }
+        }
+
+        Set<Long> idsProductosAnulacion = new LinkedHashSet<>(reservasPorProducto.keySet());
+        idsProductosAnulacion.addAll(pendientesPorProducto.keySet());
+        Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductosAnulacion);
+
+        for (Map.Entry<Long, BigDecimal> entry : reservasPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(entry.getKey());
+            BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+            if (reservadoActual.compareTo(entry.getValue()) < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "La reserva del producto es menor que la cantidad del pedido");
+            }
+        }
+
+        for (Map.Entry<Long, BigDecimal> entry : reservasPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(entry.getKey());
+            BigDecimal reservadoActual = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+            producto.setStockReservado(reservadoActual.subtract(entry.getValue()));
+            productoRepository.save(producto);
+        }
+
+        for (Map.Entry<Long, Integer> entry : pendientesPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(entry.getKey());
+            int stockVaciosActual = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
+            producto.setStockVacios(stockVaciosActual + entry.getValue());
+            productoRepository.save(producto);
+        }
+
+        controlEnvaseRepository.deleteByPedido_Id(pedido.getId());
 
         pedido.setEstadoPedido("ANULADO");
-        pedidoRepository.save(pedido);
     }
 
     /**
