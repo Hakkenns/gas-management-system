@@ -626,6 +626,90 @@ public class InventarioConcurrenciaMySqlTest {
         );
     }
 
+    private PedidoDTO.Create buildPedidoVentaEnvase() {
+        return new PedidoDTO.Create(
+                null,
+                idCliente,
+                null,
+                "Cliente Concurrencia",
+                "Dirección de prueba",
+                "Referencia de prueba",
+                "999999999",
+                idEmpleado,
+                idUsuario,
+                null,
+                null,
+                null,
+                null,
+                "DOMICILIO",
+                null,
+                List.<PedidoDTO.PagoCreate>of(),
+                List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
+                "VENTA",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, new BigDecimal("10.00"), null, null))
+        );
+    }
+
+    @Test
+    @Timeout(30)
+    void ventaYPrestamoUltimoEnvase_soloUnoDebeTenerExito() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setStockVacios(1);
+            producto.setRequiereEnvase(true);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        PedidoDTO.Create dtoVenta = buildPedidoVentaEnvase();
+        PedidoDTO.Create dtoPrestamo = buildPedidoPrestamoEnvase();
+        ParResultados<PedidoDTO.SimpleResponse> par = ejecutarConcurrente(
+                () -> pedidoService.createOrder(dtoVenta, idUsuario),
+                () -> pedidoService.createOrder(dtoPrestamo, idUsuario)
+        );
+
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> venta = par.primero();
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> prestamo = par.segundo();
+        int exitos = (venta.exitoso() ? 1 : 0) + (prestamo.exitoso() ? 1 : 0);
+        int rechazos = (venta.exitoso() ? 0 : 1) + (prestamo.exitoso() ? 0 : 1);
+
+        assertEquals(1, exitos, "Debe haber exactamente una operación exitosa");
+        assertEquals(1, rechazos, "Debe haber exactamente una operación rechazada");
+        assertNoLockingError(venta.error());
+        assertNoLockingError(prestamo.error());
+
+        Producto productoFinal = productoRepository.findById(idProducto).orElseThrow();
+        assertEquals(0, productoFinal.getStockVacios(), "Debe agotarse el único envase vacío");
+        assertTrue(productoFinal.getStockVacios() >= 0, "stockVacios no debe ser negativo");
+        assertEquals(new BigDecimal("1.00"), productoFinal.getStockReservado(),
+                "Solo debe quedar la reserva del pedido exitoso");
+        assertEquals(1, pedidoRepository.count(), "No debe persistir un segundo pedido parcial");
+
+        if (venta.exitoso()) {
+            assertRechazoStockEnvases(prestamo.error());
+            assertEquals(0, controlEnvaseRepository.count());
+            long detallesVenta = transactionTemplate.execute(status -> entityManager.createQuery(
+                    "SELECT COUNT(d) FROM DetallePedido d WHERE d.pedido.id = :idPedido", Long.class)
+                    .setParameter("idPedido", venta.valor().idPedido())
+                    .getSingleResult());
+            assertEquals(2, detallesVenta, "La venta exitosa debe tener detalle normal y detalle de envase");
+            System.out.println("GANADOR VENTA VS PRESTAMO: VENTA");
+        } else {
+            assertRechazoStockEnvases(venta.error());
+            assertEquals(1, controlEnvaseRepository.count());
+            ControlEnvase control = controlEnvaseRepository.findAll().get(0);
+            assertEquals(idProducto, control.getProducto().getId());
+            assertEquals(1, control.getCantidadPrestada());
+            assertEquals(0, control.getCantidadDevuelta());
+            assertEquals("PRESTADO", control.getEstado());
+            long detallesPrestamo = transactionTemplate.execute(status -> entityManager.createQuery(
+                    "SELECT COUNT(d) FROM DetallePedido d WHERE d.pedido.id = :idPedido", Long.class)
+                    .setParameter("idPedido", prestamo.valor().idPedido())
+                    .getSingleResult());
+            assertEquals(1, detallesPrestamo, "El préstamo exitoso debe tener solo el detalle normal");
+            System.out.println("GANADOR VENTA VS PRESTAMO: PRESTAMO");
+        }
+    }
+
     @Test
     @Timeout(30)
     void dosPrestamosUltimoEnvase_soloUnoDebeTenerExito() throws Exception {
