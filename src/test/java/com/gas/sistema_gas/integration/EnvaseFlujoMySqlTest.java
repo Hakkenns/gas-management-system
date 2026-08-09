@@ -382,4 +382,109 @@ class EnvaseFlujoMySqlTest {
                 () -> assertEquals(new BigDecimal("30.00"), respuesta.montoTotal())
         );
     }
+
+    @Test
+    void crearVentaEnvaseSinStockSuficiente_debeRechazarYHacerRollback() {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(1);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro venta sin stock " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor venta sin stock " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.venta.sin.stock." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+        long detallesAntes = transactionTemplate.execute(status -> entityManager.createQuery(
+                "SELECT COUNT(d) FROM DetallePedido d", Long.class).getSingleResult());
+
+        PedidoDTO.SimpleResponse respuesta = null;
+        ResponseStatusException excepcion = null;
+        try {
+            respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                    null,
+                    clienteId,
+                    null,
+                    "Cliente Envase Test",
+                    null,
+                    null,
+                    null,
+                    null,
+                    usuarioId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "LOCAL",
+                    null,
+                    List.of(),
+                    List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                    "VENTA",
+                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null))
+            ), usuarioId);
+        } catch (ResponseStatusException error) {
+            excepcion = error;
+        }
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        long detallesDespues = transactionTemplate.execute(status -> entityManager.createQuery(
+                "SELECT COUNT(d) FROM DetallePedido d", Long.class).getSingleResult());
+        ResponseStatusException excepcionCapturada = excepcion;
+        PedidoDTO.SimpleResponse respuestaCapturada = respuesta;
+
+        assertAll(
+                () -> assertNotNull(excepcionCapturada),
+                () -> assertTrue(excepcionCapturada.getReason() != null
+                        && excepcionCapturada.getReason().contains("Stock de envases insuficiente")),
+                () -> assertEquals(1, producto.getStockVacios()),
+                () -> assertTrue(producto.getStockVacios() >= 0),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count()),
+                () -> assertEquals(detallesAntes, detallesDespues),
+                () -> assertEquals(null, respuestaCapturada)
+        );
+    }
 }
