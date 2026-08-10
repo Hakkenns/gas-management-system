@@ -51,7 +51,8 @@ public class PedidoDTO {
         Integer cantidad,
         BigDecimal precioUnitario,
         String fechaLimiteDevolucion,
-        String observacion
+        String observacion,
+        String tipoPrestamo
     ){}
 
     public record PagoCreate(

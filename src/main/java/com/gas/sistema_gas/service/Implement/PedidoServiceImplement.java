@@ -1,7 +1,9 @@
 package com.gas.sistema_gas.service.Implement;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -9,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -453,6 +456,11 @@ public class PedidoServiceImplement implements PedidoService {
                     prestamo.setCliente(pedidoGuardado.getCliente());
                     prestamo.setCantidadPrestada(item.cantidadPrestada());
                     prestamo.setEstado("PRESTADO");
+                    LocalDateTime fechaPrestamo = LocalDateTime.now();
+                    prestamo.setFechaPrestamo(fechaPrestamo);
+                    prestamo.setFechaLimiteDevolucion(fechaPrestamo.toLocalDate().plusDays(3));
+                    prestamo.setFechaDevolucion(null);
+                    prestamo.setTipoPrestamo("NORMAL");
                     controlEnvaseRepository.save(prestamo);
                 }
             }
@@ -500,6 +508,49 @@ public class PedidoServiceImplement implements PedidoService {
                     montoAcumulado = montoAcumulado.add(importeLineaEnvase);
 
                 } else if ("PRESTAMO".equalsIgnoreCase(tipoMov)) {
+                    String tipoPrestamo = envMvt.tipoPrestamo() == null || envMvt.tipoPrestamo().isBlank()
+                            ? "NORMAL"
+                            : envMvt.tipoPrestamo().trim().toUpperCase(Locale.ROOT);
+                    if ("LEGADO".equals(tipoPrestamo)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "No se pueden crear préstamos de tipo LEGADO");
+                    }
+                    if (!"NORMAL".equals(tipoPrestamo) && !"ESPECIAL".equals(tipoPrestamo)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Tipo de préstamo inválido");
+                    }
+
+                    LocalDateTime fechaPrestamo = LocalDateTime.now();
+                    LocalDate fechaLimiteDevolucion = null;
+                    if ("NORMAL".equals(tipoPrestamo)) {
+                        LocalDate fechaInicial = fechaPrestamo.toLocalDate();
+                        LocalDate fechaMaxima = fechaInicial.plusDays(3);
+                        if (envMvt.fechaLimiteDevolucion() == null || envMvt.fechaLimiteDevolucion().isBlank()) {
+                            fechaLimiteDevolucion = fechaMaxima;
+                        } else {
+                            try {
+                                fechaLimiteDevolucion = LocalDate.parse(envMvt.fechaLimiteDevolucion());
+                            } catch (DateTimeParseException error) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "La fecha límite de devolución no tiene un formato válido");
+                            }
+                            if (fechaLimiteDevolucion.isBefore(fechaInicial)
+                                    || fechaLimiteDevolucion.isAfter(fechaMaxima)) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "La fecha límite de devolución debe estar entre hoy y los próximos 3 días");
+                            }
+                        }
+                    } else {
+                        if (!Boolean.TRUE.equals(pedidoGuardado.getCliente().getPrestamoIlimitado())) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "El cliente no está autorizado para préstamos especiales");
+                        }
+                        if (envMvt.fechaLimiteDevolucion() != null && !envMvt.fechaLimiteDevolucion().isBlank()) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "El préstamo especial no utiliza fecha límite de devolución");
+                        }
+                    }
+
                     // Préstamo de envases: registrar en control_envase (no suma al total)
                     Integer stockVaciosActual = productoEnvase.getStockVacios() != null
                             ? productoEnvase.getStockVacios()
@@ -517,10 +568,10 @@ public class PedidoServiceImplement implements PedidoService {
                     prestamoEnvase.setCliente(pedidoGuardado.getCliente());
                     prestamoEnvase.setCantidadPrestada(envMvt.cantidad());
                     prestamoEnvase.setEstado("PRESTADO");
-
-                    if (envMvt.fechaLimiteDevolucion() != null && !envMvt.fechaLimiteDevolucion().isBlank()) {
-                        prestamoEnvase.setFechaDevolucion(LocalDateTime.parse(envMvt.fechaLimiteDevolucion()));
-                    }
+                    prestamoEnvase.setFechaPrestamo(fechaPrestamo);
+                    prestamoEnvase.setFechaLimiteDevolucion(fechaLimiteDevolucion);
+                    prestamoEnvase.setFechaDevolucion(null);
+                    prestamoEnvase.setTipoPrestamo(tipoPrestamo);
 
                     controlEnvaseRepository.save(prestamoEnvase);
 

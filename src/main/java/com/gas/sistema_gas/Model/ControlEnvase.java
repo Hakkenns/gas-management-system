@@ -1,5 +1,6 @@
 package com.gas.sistema_gas.Model;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
@@ -52,8 +53,14 @@ public class ControlEnvase {
     @Column(name = "fecha_prestamo", nullable = false)
     private LocalDateTime fechaPrestamo;
 
+    @Column(name = "fecha_limite_devolucion")
+    private LocalDate fechaLimiteDevolucion;
+
     @Column(name = "fecha_devolucion")
     private LocalDateTime fechaDevolucion;
+
+    @Column(name = "tipo_prestamo", nullable = false, length = 20)
+    private String tipoPrestamo;
 
     // Ajustado para coincidir con el ENUM del SQL ('PRESTADO', 'DEVUELTO', 'PARCIAL')
     @Column(nullable = false, length = 20)

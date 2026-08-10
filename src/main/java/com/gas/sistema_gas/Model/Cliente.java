@@ -54,6 +54,9 @@ public class Cliente {
     @Column(nullable = false)
     private Integer estado = 1;
 
+    @Column(name = "prestamo_ilimitado")
+    private Boolean prestamoIlimitado = false;
+
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private LocalDateTime createdAt;
     

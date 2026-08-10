@@ -631,7 +631,7 @@ public class InventarioConcurrenciaMySqlTest {
                 List.<PedidoDTO.PagoCreate>of(),
                 List.of(new PedidoDTO.DetalleCreate(idProducto, cantidad, new BigDecimal("10.00"), 0)),
                 "PRESTAMO",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, cantidad, null, null, null))
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, cantidad, null, null, null, null))
         );
     }
 
@@ -655,7 +655,7 @@ public class InventarioConcurrenciaMySqlTest {
                 List.<PedidoDTO.PagoCreate>of(),
                 List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
                 "VENTA",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, new BigDecimal("10.00"), null, null))
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, new BigDecimal("10.00"), null, null, null))
         );
     }
 

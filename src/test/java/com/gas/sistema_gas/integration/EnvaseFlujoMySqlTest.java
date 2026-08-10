@@ -3,9 +3,12 @@ package com.gas.sistema_gas.integration;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -14,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -36,6 +41,8 @@ import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.service.EnvaseService;
+import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
 import jakarta.persistence.EntityManager;
@@ -70,6 +77,12 @@ class EnvaseFlujoMySqlTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private EnvaseService envaseService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -80,6 +93,13 @@ class EnvaseFlujoMySqlTest {
 
     @BeforeEach
     void prepararFixture() {
+        assertEquals("sistema_gas_concurrency_test",
+                jdbcTemplate.queryForObject("SELECT DATABASE()", String.class));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'control_envase' "
+                        + "AND COLUMN_NAME IN ('fecha_limite_devolucion', 'tipo_prestamo')",
+                Integer.class));
         String sufijoUnico = UUID.randomUUID().toString().substring(0, 8);
 
         transactionTemplate.executeWithoutResult(status -> {
@@ -140,6 +160,11 @@ class EnvaseFlujoMySqlTest {
             controlEnvase.setCantidadPrestada(1);
             controlEnvase.setCantidadDevuelta(0);
             controlEnvase.setEstado("PRESTADO");
+            LocalDateTime fechaPrestamo = LocalDateTime.now();
+            controlEnvase.setFechaPrestamo(fechaPrestamo);
+            controlEnvase.setFechaLimiteDevolucion(fechaPrestamo.toLocalDate().plusDays(3));
+            controlEnvase.setFechaDevolucion(null);
+            controlEnvase.setTipoPrestamo("NORMAL");
             controlEnvase.setProducto(producto);
             controlEnvase.setCliente(cliente);
             controlEnvase.setPedido(pedido);
@@ -260,7 +285,7 @@ class EnvaseFlujoMySqlTest {
                     List.of(),
                     List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                     "PRESTAMO",
-                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, null, null, null))
+                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, null, null, null, null))
             ), usuarioId);
         } catch (ResponseStatusException error) {
             excepcion = error;
@@ -358,7 +383,7 @@ class EnvaseFlujoMySqlTest {
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                 "VENTA",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null))
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null, null))
         ), usuarioId);
 
         Producto producto = productoRepository.findById(productoId).orElseThrow();
@@ -463,7 +488,7 @@ class EnvaseFlujoMySqlTest {
                     List.of(),
                     List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                     "VENTA",
-                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null))
+                    List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, new BigDecimal("10.00"), null, null, null))
             ), usuarioId);
         } catch (ResponseStatusException error) {
             excepcion = error;
@@ -564,7 +589,7 @@ class EnvaseFlujoMySqlTest {
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
                 "PRESTAMO",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 1, null, null, null))
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 1, null, null, null, null))
         ), usuarioId);
 
         Producto producto = productoRepository.findById(productoId).orElseThrow();
@@ -766,6 +791,255 @@ class EnvaseFlujoMySqlTest {
                 () -> assertEquals(1, controlesNuevoPedido.get(0).getCantidadPrestada()),
                 () -> assertEquals(0, controlesNuevoPedido.get(0).getCantidadDevuelta()),
                 () -> assertEquals("PRESTADO", controlesNuevoPedido.get(0).getEstado())
+        );
+    }
+
+    @Test
+    void prestamoNormalSinFecha_debeAsignarLimiteTresDias() {
+        prepararInventarioParaPrestamo(5);
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoPrestamo(null, null), usuarioId);
+        ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("NORMAL", prestamo.getTipoPrestamo()),
+                () -> assertEquals(prestamo.getFechaPrestamo().toLocalDate().plusDays(3),
+                        prestamo.getFechaLimiteDevolucion()),
+                () -> assertNull(prestamo.getFechaDevolucion())
+        );
+    }
+
+    @Test
+    void prestamoNormalConFechaValida_debeConservarFechaSolicitada() {
+        prepararInventarioParaPrestamo(5);
+        LocalDate fechaSolicitada = LocalDate.now().plusDays(2);
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoPrestamo(fechaSolicitada.toString(), "NORMAL"), usuarioId);
+        ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("NORMAL", prestamo.getTipoPrestamo()),
+                () -> assertEquals(fechaSolicitada, prestamo.getFechaLimiteDevolucion()),
+                () -> assertNull(prestamo.getFechaDevolucion())
+        );
+    }
+
+    @Test
+    void prestamoNormalConFechaMayorATresDias_debeRechazarse() {
+        prepararInventarioParaPrestamo(5);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoPrestamo(LocalDate.now().plusDays(4).toString(), "NORMAL"), usuarioId));
+
+        assertRollbackPrestamo(error, pedidosAntes, controlesAntes, 5);
+    }
+
+    @Test
+    void prestamoNormalConFechaPasada_debeRechazarse() {
+        prepararInventarioParaPrestamo(5);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoPrestamo(LocalDate.now().minusDays(1).toString(), "NORMAL"), usuarioId));
+
+        assertRollbackPrestamo(error, pedidosAntes, controlesAntes, 5);
+    }
+
+    @Test
+    void prestamoEspecialClienteNoAutorizado_debeRechazarse() {
+        actualizarPrestamoIlimitado(false);
+        prepararInventarioParaPrestamo(5);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoPrestamo(null, "ESPECIAL"), usuarioId));
+
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode()),
+                () -> assertEquals("El cliente no está autorizado para préstamos especiales", error.getReason()),
+                () -> assertEquals(5, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
+        );
+    }
+
+    @Test
+    void prestamoEspecialClienteAutorizado_debeCrearseSinFechaLimite() {
+        actualizarPrestamoIlimitado(true);
+        prepararInventarioParaPrestamo(5);
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoPrestamo(null, "ESPECIAL"), usuarioId);
+        ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("ESPECIAL", prestamo.getTipoPrestamo()),
+                () -> assertNotNull(prestamo.getFechaPrestamo()),
+                () -> assertNull(prestamo.getFechaLimiteDevolucion()),
+                () -> assertNull(prestamo.getFechaDevolucion())
+        );
+    }
+
+    @Test
+    void prestamoEspecialConFecha_debeRechazarse() {
+        actualizarPrestamoIlimitado(true);
+        prepararInventarioParaPrestamo(5);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoPrestamo(LocalDate.now().toString(), "ESPECIAL"), usuarioId));
+
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode()),
+                () -> assertEquals("El préstamo especial no utiliza fecha límite de devolución", error.getReason()),
+                () -> assertEquals(5, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
+        );
+    }
+
+    @Test
+    void crearPrestamoTipoLegado_debeRechazarse() {
+        prepararInventarioParaPrestamo(5);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoPrestamo(null, "LEGADO"), usuarioId));
+
+        assertRollbackPrestamo(error, pedidosAntes, controlesAntes, 5);
+    }
+
+    @Test
+    void devolucionPrestamoNormal_noDebeSobrescribirFechaLimite() {
+        prepararInventarioParaPrestamo(5);
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoPrestamo(null, "NORMAL"), usuarioId);
+        ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
+        LocalDate fechaLimiteAntes = prestamo.getFechaLimiteDevolucion();
+
+        envaseService.registrarDevolucion(new EnvioEnvaseDTO.DevolucionRequest(prestamo.getId(), 1));
+
+        ControlEnvase devuelto = controlEnvaseRepository.findById(prestamo.getId()).orElseThrow();
+        assertAll(
+                () -> assertEquals(fechaLimiteAntes, devuelto.getFechaLimiteDevolucion()),
+                () -> assertNotNull(devuelto.getFechaDevolucion()),
+                () -> assertEquals(1, devuelto.getCantidadDevuelta()),
+                () -> assertEquals("SALDADO", devuelto.getEstado())
+        );
+    }
+
+    @Test
+    void prestamoLegadoSinTipoMovimiento_debeAsignarNormalYTresDias() {
+        prepararInventarioParaPrestamo(5);
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
+                null, null, null, null, "LOCAL", null, List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
+                null, List.of()), usuarioId);
+        ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("NORMAL", prestamo.getTipoPrestamo()),
+                () -> assertEquals(prestamo.getFechaPrestamo().toLocalDate().plusDays(3),
+                        prestamo.getFechaLimiteDevolucion()),
+                () -> assertNull(prestamo.getFechaDevolucion())
+        );
+    }
+
+    private void prepararInventarioParaPrestamo(int stockVacios) {
+        String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Correlativo> correlativos = entityManager.createQuery(
+                    "FROM Correlativo c WHERE c.tipo = :tipo AND c.serie = :serie", Correlativo.class)
+                    .setParameter("tipo", "VENTA_NOTA")
+                    .setParameter("serie", "NV001")
+                    .getResultList();
+            if (correlativos.isEmpty()) {
+                Correlativo correlativo = new Correlativo();
+                correlativo.setTipo("VENTA_NOTA");
+                correlativo.setSerie("NV001");
+                correlativo.setNumeroActual(0);
+                entityManager.persist(correlativo);
+            }
+
+            Producto producto = productoRepository.findById(productoId).orElseThrow();
+            producto.setStockVacios(stockVacios);
+
+            Rubro rubro = new Rubro();
+            rubro.setNombre("Rubro fecha préstamo " + rucUnico);
+            rubro.setEstado(1);
+            entityManager.persist(rubro);
+
+            Proveedor proveedor = new Proveedor();
+            proveedor.setNombre("Proveedor fecha préstamo " + rucUnico);
+            proveedor.setTelefono("999999999");
+            proveedor.setCorreo("proveedor.fecha." + rucUnico + "@test.com");
+            proveedor.setRuc(rucUnico);
+            proveedor.setEstado(1);
+            proveedor.setRubro(rubro);
+            entityManager.persist(proveedor);
+
+            Compra compra = new Compra();
+            compra.setProveedor(proveedor);
+            compra.setUsuario(entityManager.getReference(Usuario.class, usuarioId));
+            compra.setFechaCompra(LocalDateTime.now());
+            compra.setMontoTotal(new BigDecimal("10.00"));
+            compra.setSituacion(1);
+            entityManager.persist(compra);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.ONE);
+            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+        });
+    }
+
+    private PedidoDTO.Create crearPedidoPrestamo(String fechaLimiteDevolucion, String tipoPrestamo) {
+        return new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
+                null, null, null, null, "LOCAL", null, List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                "PRESTAMO",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(
+                        productoId, 1, null, fechaLimiteDevolucion, null, tipoPrestamo)));
+    }
+
+    private ControlEnvase unicoPrestamo(Long idPedido) {
+        List<ControlEnvase> controles = controlEnvaseRepository.findByPedido_Id(idPedido);
+        assertEquals(1, controles.size());
+        return controles.get(0);
+    }
+
+    private void actualizarPrestamoIlimitado(boolean prestamoIlimitado) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Cliente cliente = clienteRepository.findById(clienteId).orElseThrow();
+            cliente.setPrestamoIlimitado(prestamoIlimitado);
+            clienteRepository.saveAndFlush(cliente);
+        });
+    }
+
+    private void assertRollbackPrestamo(ResponseStatusException error, long pedidosAntes,
+            long controlesAntes, int stockVaciosEsperado) {
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode()),
+                () -> assertEquals(stockVaciosEsperado,
+                        productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
         );
     }
 }
