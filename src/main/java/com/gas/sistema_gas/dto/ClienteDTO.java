@@ -35,7 +35,8 @@ public class ClienteDTO {
         String direccion,
         String referencia,
         String correo,
-        Integer estado
+        Integer estado,
+        Boolean prestamoIlimitado
     ){}
 
     public record Update(

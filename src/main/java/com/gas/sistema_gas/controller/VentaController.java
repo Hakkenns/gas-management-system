@@ -213,6 +213,7 @@ public class VentaController {
         respuesta.put("telefono", cliente.telefono());
         respuesta.put("direccion", cliente.direccion());
         respuesta.put("referencia", cliente.referencia());
+        respuesta.put("prestamoIlimitado", Boolean.TRUE.equals(cliente.prestamoIlimitado()));
         return ResponseEntity.ok(respuesta);
     }
 

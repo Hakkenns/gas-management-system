@@ -385,6 +385,13 @@
 
                                     <!-- Sub-seccion que se muestra si se selecciona VENTA o PRESTAMO -->
                                     <div id="subseccion-mov-envase" style="display:none;">
+                                        <div class="form-group" id="grupo-tipo-prestamo" style="display:none;">
+                                            <label for="select-tipo-prestamo">Tipo de préstamo</label>
+                                            <select class="form-control" id="select-tipo-prestamo">
+                                                <option value="NORMAL">Normal (máximo 3 días)</option>
+                                                <option value="ESPECIAL" disabled>Especial (sin fecha fija)</option>
+                                            </select>
+                                        </div>
                                         <div class="row align-items-end">
                                             <div class="form-group col-md-4 mb-0">
                                                 <label>Producto (Envase)</label>

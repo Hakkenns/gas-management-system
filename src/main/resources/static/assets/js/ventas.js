@@ -76,6 +76,47 @@ $(function() {
     setInterval(actualizarEstadosPedidosEnTabla, 3000);
     let detallesVenta = [];
     let pagosVenta = [];
+    let clientePrestamoIlimitado = false;
+
+    function fechaLocalConOffset(dias) {
+        const fecha = new Date();
+        fecha.setHours(0, 0, 0, 0);
+        fecha.setDate(fecha.getDate() + dias);
+        const anio = fecha.getFullYear();
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dia = String(fecha.getDate()).padStart(2, '0');
+        return `${anio}-${mes}-${dia}`;
+    }
+
+    function actualizarCamposTipoPrestamo() {
+        const tipoMovimiento = $('#select-tipo-mov-envase').val();
+        const selectorTipo = $('#select-tipo-prestamo');
+        const opcionEspecial = selectorTipo.find('option[value="ESPECIAL"]');
+
+        opcionEspecial.prop('disabled', clientePrestamoIlimitado !== true);
+
+        if (tipoMovimiento !== 'PRESTAMO') {
+            $('#grupo-tipo-prestamo').hide();
+            $('#grupo-envase-fecha-limite').hide();
+            return;
+        }
+
+        $('#grupo-tipo-prestamo').show();
+        if (selectorTipo.val() === 'ESPECIAL' && clientePrestamoIlimitado !== true) {
+            selectorTipo.val('NORMAL');
+        }
+
+        if (selectorTipo.val() === 'ESPECIAL') {
+            $('#grupo-envase-fecha-limite').hide();
+            $('#select-envase-fecha-limite').val('');
+            return;
+        }
+
+        $('#grupo-envase-fecha-limite').show();
+        $('#select-envase-fecha-limite')
+            .attr('min', fechaLocalConOffset(0))
+            .attr('max', fechaLocalConOffset(3));
+    }
 
     function parseMoney(value) {
         const number = Number(String(value).replace(/[^0-9.-]+/g, '').replace(',', '.'));
@@ -128,6 +169,10 @@ $(function() {
         $('#row-num-operacion').hide();
         $('#input-num-operacion').prop('required', false);
         $('#select-tipo-mov-envase').val('NINGUNO');
+        clientePrestamoIlimitado = false;
+        $('#select-tipo-prestamo').val('NORMAL');
+        $('#select-envase-fecha-limite').val('');
+        actualizarCamposTipoPrestamo();
         $('#subseccion-mov-envase').hide();
         solicitudEnvaseActual++;
         limpiarEnvaseVinculado();
@@ -193,6 +238,8 @@ $(function() {
                     $('#input-telefono-cliente').val(res.telefono || '');
                     $('#input-direccion-cliente').val(res.direccion || '');
                     $('#input-referencia-cliente').val(res.referencia || '');
+                    clientePrestamoIlimitado = res.prestamoIlimitado === true;
+                    actualizarCamposTipoPrestamo();
                     $('#cliente-feedback').text('Cliente encontrado en la base de datos. Datos autocompletados.');
                 } else {
                     limpiarCamposCliente();
@@ -219,12 +266,14 @@ $(function() {
     });
 
     function limpiarCamposCliente() {
+        clientePrestamoIlimitado = false;
         $('#input-id-cliente').val('');
         $('#input-nombre-cliente').val('');
         $('#input-telefono-cliente').val('');
         $('#input-direccion-cliente').val('');
         $('#input-referencia-cliente').val('');
         $('#cliente-feedback').text('Cliente no encontrado. Complete los datos manualmente.');
+        actualizarCamposTipoPrestamo();
     }
 
     // El mismo modal se utiliza para producto principal y envase. El destino
@@ -541,11 +590,16 @@ $(function() {
         const tipo = $(this).val();
         if (tipo === 'NINGUNO') {
             $('#subseccion-mov-envase').hide();
+            $('#select-tipo-prestamo').val('NORMAL');
+            actualizarCamposTipoPrestamo();
         } else {
             $('#subseccion-mov-envase').show();
             if (tipo === 'VENTA') {
+                $('#select-tipo-prestamo').val('NORMAL');
+                $('#grupo-tipo-prestamo').hide();
                 $('#grupo-envase-precio').show();
                 $('#grupo-envase-fecha-limite').hide();
+                $('#select-envase-fecha-limite').val('');
                 $('.col-envase-precio').show();
                 $('.col-envase-fecha').hide();
                 // Al activar la venta de envases, consultar el vínculo del
@@ -560,12 +614,15 @@ $(function() {
                 }
             } else if (tipo === 'PRESTAMO') {
                 $('#grupo-envase-precio').hide();
-                $('#grupo-envase-fecha-limite').show();
                 $('.col-envase-precio').hide();
                 $('.col-envase-fecha').show();
+                $('#select-tipo-prestamo').val('NORMAL');
+                actualizarCamposTipoPrestamo();
             }
         }
     });
+
+    $('#select-tipo-prestamo').on('change', actualizarCamposTipoPrestamo);
 
     // Buscar producto para envase
     $('#btn-buscar-envase-producto').on('click', function() {
@@ -587,7 +644,10 @@ $(function() {
         const cantidad = parseInt($('#select-envase-cantidad').val()) || 0;
         const precio = parseMoney($('#select-envase-precio').val());
         const tipo = $('#select-tipo-mov-envase').val();
-        const fechaLimite = $('#select-envase-fecha-limite').val() || '';
+        const tipoPrestamo = tipo === 'PRESTAMO'
+            ? ($('#select-tipo-prestamo').val() || 'NORMAL')
+            : null;
+        let fechaLimite = $('#select-envase-fecha-limite').val() || '';
 
         // Validaciones con SweetAlert2
         if (!idProducto || !nombreProducto) {
@@ -625,8 +685,42 @@ $(function() {
             return;
         }
 
+        if (tipo === 'PRESTAMO') {
+            if (tipoPrestamo === 'ESPECIAL' && clientePrestamoIlimitado !== true) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Préstamo especial no autorizado',
+                    text: 'El cliente seleccionado no está autorizado para préstamos especiales.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
+                return;
+            }
+
+            if (tipoPrestamo === 'ESPECIAL') {
+                fechaLimite = '';
+            } else if (fechaLimite
+                    && (fechaLimite < fechaLocalConOffset(0) || fechaLimite > fechaLocalConOffset(3))) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Fecha límite inválida',
+                    text: 'La fecha límite debe estar entre hoy y los próximos 3 días.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#3085d6'
+                });
+                $('#select-envase-fecha-limite').focus();
+                return;
+            }
+        }
+
         const existingRow = $('#tabla-envases-mov tr').filter(function() {
-            return $(this).data('productoId') === idProducto;
+            const fila = $(this);
+            if (fila.data('productoId') !== idProducto) {
+                return false;
+            }
+            return tipo !== 'PRESTAMO'
+                || (fila.data('tipoPrestamo') === tipoPrestamo
+                    && (fila.data('fechaLimite') || '') === fechaLimite);
         }).first();
 
         if (existingRow.length) {
@@ -651,11 +745,14 @@ $(function() {
                 `);
                 tr.data('precio', precio);
             } else {
+                const textoFechaLimite = tipoPrestamo === 'ESPECIAL'
+                    ? 'Sin límite (especial)'
+                    : (fechaLimite || 'Automático (+3 días)');
                 tr.html(`
                     <td>${nombreProducto}</td>
                     <td class="text-center">${cantidad}</td>
                     <td class="text-right col-envase-precio" style="display:none;">-</td>
-                    <td class="text-center col-envase-fecha">${fechaLimite || '-'}</td>
+                    <td class="text-center col-envase-fecha">${textoFechaLimite}</td>
                     <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
                 `);
             }
@@ -663,6 +760,7 @@ $(function() {
             tr.data('productoId', idProducto);
             tr.data('cantidad', cantidad);
             tr.data('fechaLimite', fechaLimite);
+            tr.data('tipoPrestamo', tipoPrestamo);
             $('#tabla-envases-mov').append(tr);
         }
 
@@ -675,6 +773,10 @@ $(function() {
         $('#select-envase-cantidad').val('1');
         $('#select-envase-precio').val('');
         $('#select-envase-fecha-limite').val('');
+        if ($('#select-tipo-mov-envase').val() === 'PRESTAMO') {
+            $('#select-tipo-prestamo').val('NORMAL');
+            actualizarCamposTipoPrestamo();
+        }
     });
 
     // Quitar envase
@@ -881,12 +983,16 @@ $(function() {
         venta.envaseMovimientos = [];
         if (tipoMovEnvase !== 'NINGUNO') {
             $('#tabla-envases-mov tr').each(function() {
+                const tipoPrestamo = $(this).data('tipoPrestamo') || null;
                 venta.envaseMovimientos.push({
                     idProducto: $(this).data('productoId') ? Number($(this).data('productoId')) : null,
                     cantidad: $(this).data('cantidad'),
                     precioUnitario: $(this).data('precio') || 0,
-                    fechaLimiteDevolucion: $(this).data('fechaLimite') || '',
-                    observacion: ''
+                    fechaLimiteDevolucion: tipoPrestamo === 'ESPECIAL'
+                        ? ''
+                        : ($(this).data('fechaLimite') || ''),
+                    observacion: '',
+                    tipoPrestamo: tipoPrestamo
                 });
             });
         }
