@@ -1,6 +1,7 @@
 package com.gas.sistema_gas.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class EnvioEnvaseDTO {
@@ -19,7 +20,11 @@ public class EnvioEnvaseDTO {
         Integer cantidadDevuelta,
         Integer cantidadPendiente,
         String estado,
-        Long idProducto
+        Long idProducto,
+        String tipoPrestamo,
+        LocalDateTime fechaPrestamo,
+        LocalDate fechaLimiteDevolucion,
+        boolean vencido
     ) {}
 
     public record DevolucionRequest(

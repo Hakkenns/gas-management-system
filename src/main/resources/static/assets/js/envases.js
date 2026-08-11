@@ -111,7 +111,7 @@ function cargarDeudores() {
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="9" class="text-center text-muted">
+            <td colspan="12" class="text-center text-muted">
                 <i class="fas fa-spinner fa-spin"></i> Cargando deudores...
             </td>
         </tr>
@@ -128,7 +128,7 @@ function cargarDeudores() {
             if (!data || data.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="text-center text-success">
+                    <td colspan="12" class="text-center text-success">
                             <i class="fas fa-check-circle"></i> No hay clientes con envases pendientes
                         </td>
                     </tr>
@@ -146,6 +146,18 @@ function cargarDeudores() {
                 } else {
                     estadoBadge = '<span class="badge badge-secondary">' + item.estado + '</span>';
                 }
+                if (item.vencido) {
+                    estadoBadge += ' <span class="badge badge-danger">Vencido</span>';
+                }
+
+                let tipoPrestamo = item.tipoPrestamo || "-";
+                if (tipoPrestamo === "NORMAL") {
+                    tipoPrestamo = '<span class="badge badge-primary">Normal</span>';
+                } else if (tipoPrestamo === "ESPECIAL") {
+                    tipoPrestamo = '<span class="badge badge-success">Especial</span>';
+                } else if (tipoPrestamo === "LEGADO") {
+                    tipoPrestamo = '<span class="badge badge-secondary">Legado</span>';
+                }
 
                 const tr = document.createElement("tr");
                 tr.dataset.idControl = item.idControl;
@@ -154,12 +166,13 @@ function cargarDeudores() {
                 tr.dataset.cantidadPrestada = item.cantidadPrestada || 0;
                 tr.dataset.cantidadDevuelta = item.cantidadDevuelta || 0;
 
-                let fechaStr = "-";
-                if (item.fechaEntrega) {
-                    try {
-                        const d = new Date(item.fechaEntrega);
-                        fechaStr = d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
-                    } catch(e) {}
+                const fechaStr = formatearFecha(item.fechaEntrega);
+                const fechaPrestamoStr = formatearFecha(item.fechaPrestamo);
+                let fechaLimiteStr = formatearFecha(item.fechaLimiteDevolucion);
+                if (!item.fechaLimiteDevolucion && item.tipoPrestamo === "ESPECIAL") {
+                    fechaLimiteStr = "Sin fecha fija";
+                } else if (!item.fechaLimiteDevolucion && item.tipoPrestamo === "LEGADO") {
+                    fechaLimiteStr = "No registrada";
                 }
 
                 tr.innerHTML = `
@@ -168,6 +181,9 @@ function cargarDeudores() {
                     <td>${item.direccionCliente || "-"}</td>
                     <td>${item.codigoPedido || "-"}</td>
                     <td>${fechaStr}</td>
+                    <td>${fechaPrestamoStr}</td>
+                    <td class="text-center">${tipoPrestamo}</td>
+                    <td class="text-center">${fechaLimiteStr}</td>
                     <td>${item.productoNombre || "-"}</td>
                     <td class="text-center"><span class="badge badge-danger" style="font-size: 1rem;">${pendiente}</span></td>
                     <td class="text-center">${estadoBadge}</td>
@@ -196,10 +212,24 @@ function cargarDeudores() {
             console.error("Error cargando deudores:", err);
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9" class="text-center text-danger">
+                    <td colspan="12" class="text-center text-danger">
                         <i class="fas fa-exclamation-triangle"></i> Error al cargar los deudores
                     </td>
                 </tr>
             `;
         });
+}
+
+function formatearFecha(fecha) {
+    if (!fecha) return "-";
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [anio, mes, dia] = fecha.split("-");
+        return `${dia}/${mes}/${anio}`;
+    }
+
+    const date = new Date(fecha);
+    return Number.isNaN(date.getTime())
+        ? "-"
+        : date.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }

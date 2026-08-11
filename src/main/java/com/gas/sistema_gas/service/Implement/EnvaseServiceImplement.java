@@ -1,6 +1,7 @@
 package com.gas.sistema_gas.service.Implement;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -76,6 +77,11 @@ public class EnvaseServiceImplement implements EnvaseService {
             Integer prestada = ce.getCantidadPrestada() != null ? ce.getCantidadPrestada() : 0;
             Integer devuelta = ce.getCantidadDevuelta() != null ? ce.getCantidadDevuelta() : 0;
             Integer pendiente = prestada - devuelta;
+            boolean pendienteSegunEstado = "PRESTADO".equals(ce.getEstado()) || "PARCIAL".equals(ce.getEstado());
+            boolean vencido = pendienteSegunEstado
+                && "NORMAL".equals(ce.getTipoPrestamo())
+                && ce.getFechaLimiteDevolucion() != null
+                && ce.getFechaLimiteDevolucion().isBefore(LocalDate.now());
 
             String nombreProducto = ce.getProducto() != null ? ce.getProducto().getNombre() : "N/A";
             if (ce.getProducto() != null && ce.getProducto().getCapacidad() != null) {
@@ -100,7 +106,11 @@ public class EnvaseServiceImplement implements EnvaseService {
                 devuelta,
                 pendiente,
                 ce.getEstado(),
-                ce.getProducto() != null ? ce.getProducto().getId() : null
+                ce.getProducto() != null ? ce.getProducto().getId() : null,
+                ce.getTipoPrestamo(),
+                ce.getFechaPrestamo(),
+                ce.getFechaLimiteDevolucion(),
+                vencido
             );
         }).collect(Collectors.toList());
     }
