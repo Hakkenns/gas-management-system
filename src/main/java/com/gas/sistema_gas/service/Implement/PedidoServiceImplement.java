@@ -243,6 +243,11 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedido = pedidoMapper.toEntity(createDto);
         pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
         pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
+        if ("CANJE".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
+                && !"LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El canje de envases solo está disponible para ventas LOCAL");
+        }
 
         // Lógica de fecha límite de pago para créditos
         if (createDto.fechaLimitePago() != null) {
@@ -358,6 +363,36 @@ public class PedidoServiceImplement implements PedidoService {
                 if (item.cantidad() == null || item.cantidad() < 1) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "La cantidad debe ser mayor a cero");
+                }
+            }
+        }
+
+        if ("CANJE".equalsIgnoreCase(tipoMov)) {
+            if (envaseMvts == null || envaseMvts.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El canje requiere al menos un movimiento de envase");
+            }
+
+            Map<Long, Integer> cantidadesDetallePorProducto = new java.util.HashMap<>();
+            for (PedidoDTO.DetalleCreate detalle : createDto.detalles()) {
+                cantidadesDetallePorProducto.merge(detalle.idProducto(), detalle.cantidad(), Integer::sum);
+            }
+
+            Map<Long, Integer> cantidadesCanjePorProducto = new java.util.HashMap<>();
+            for (PedidoDTO.EnvaseMovimientoCreate movimiento : envaseMvts) {
+                if (movimiento == null || movimiento.idProducto() == null
+                        || movimiento.cantidad() == null || movimiento.cantidad() <= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El movimiento de canje debe incluir producto y cantidad mayor a cero");
+                }
+                cantidadesCanjePorProducto.merge(movimiento.idProducto(), movimiento.cantidad(), Integer::sum);
+            }
+
+            for (Map.Entry<Long, Integer> canje : cantidadesCanjePorProducto.entrySet()) {
+                int cantidadDetalle = cantidadesDetallePorProducto.getOrDefault(canje.getKey(), 0);
+                if (cantidadDetalle == 0 || canje.getValue() != cantidadDetalle) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "La cantidad de envases canjeados debe corresponder a la venta del producto");
                 }
             }
         }
@@ -508,6 +543,17 @@ public class PedidoServiceImplement implements PedidoService {
 
                     BigDecimal importeLineaEnvase = precioUnitarioEnvase.multiply(BigDecimal.valueOf(envMvt.cantidad()));
                     montoAcumulado = montoAcumulado.add(importeLineaEnvase);
+
+                } else if ("CANJE".equalsIgnoreCase(tipoMov)) {
+                    if (!Boolean.TRUE.equals(productoEnvase.getRequiereEnvase())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "El producto no requiere envase para registrar un canje");
+                    }
+                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null
+                            ? productoEnvase.getStockVacios()
+                            : 0;
+                    productoEnvase.setStockVacios(stockVaciosActual + envMvt.cantidad());
+                    productoRepository.save(productoEnvase);
 
                 } else if ("PRESTAMO".equalsIgnoreCase(tipoMov)) {
                     String tipoPrestamo = envMvt.tipoPrestamo() == null || envMvt.tipoPrestamo().isBlank()

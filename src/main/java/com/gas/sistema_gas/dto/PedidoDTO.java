@@ -33,7 +33,7 @@ public class PedidoDTO {
         @NotNull(message = "El detalle de la venta es obligatorio")
         List<DetalleCreate> detalles,
         // Movimiento de envases
-        String tipoMovimientoEnvase, // "NINGUNO", "VENTA", "PRESTAMO"
+        String tipoMovimientoEnvase, // "NINGUNO", "VENTA", "PRESTAMO", "CANJE"
         List<EnvaseMovimientoCreate> envaseMovimientos
     ){}
 

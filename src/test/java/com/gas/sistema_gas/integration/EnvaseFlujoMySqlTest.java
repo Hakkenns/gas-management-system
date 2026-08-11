@@ -955,7 +955,103 @@ class EnvaseFlujoMySqlTest {
         );
     }
 
+    @Test
+    void crearCanjeLocal_debeIncrementarVaciosSinDeudaNiDetalleAdicional() {
+        prepararInventarioParaPrestamo(4);
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoCanje(1, List.of()), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        long detalles = contarDetallesPedido(respuesta.idPedido());
+        BigDecimal loteDisponible = stockActualLotes();
+
+        assertAll(
+                () -> assertEquals("ENTREGADO", respuesta.estadoPedido()),
+                () -> assertEquals(5, producto.getStockVacios()),
+                () -> assertEquals(0, producto.getStockLlenos().compareTo(BigDecimal.ZERO)),
+                () -> assertEquals(0, loteDisponible.compareTo(BigDecimal.ZERO)),
+                () -> assertEquals(1, detalles, "CANJE no debe crear un detalle de envase adicional"),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count(),
+                        "CANJE no debe crear deuda de envase"),
+                () -> assertEquals(0, respuesta.montoTotal().compareTo(new BigDecimal("10.00")))
+        );
+    }
+
+    @Test
+    void crearCanjeLocal_cantidadN_debeIncrementarVaciosYDescontarLlenosUnaSolaVez() {
+        prepararInventarioParaPrestamo(4, 2);
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoCanje(2, List.of()), usuarioId);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        long detalles = contarDetallesPedido(respuesta.idPedido());
+        BigDecimal loteDisponible = stockActualLotes();
+
+        assertAll(
+                () -> assertEquals(6, producto.getStockVacios()),
+                () -> assertEquals(0, producto.getStockLlenos().compareTo(BigDecimal.ZERO)),
+                () -> assertEquals(0, loteDisponible.compareTo(BigDecimal.ZERO)),
+                () -> assertEquals(1, detalles, "La venta de gas debe persistirse una sola vez"),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count()),
+                () -> assertEquals(0, respuesta.montoTotal().compareTo(new BigDecimal("20.00")))
+        );
+    }
+
+    @Test
+    void crearCanjeLocal_falloPosteriorDebeRevertirVaciosYVenta() {
+        prepararInventarioParaPrestamo(4);
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(crearPedidoCanje(1,
+                        List.of(new PedidoDTO.PagoCreate(999_999L, new BigDecimal("10.00"), null))), usuarioId));
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        BigDecimal loteDisponible = stockActualLotes();
+
+        assertAll(
+                () -> assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode()),
+                () -> assertEquals(4, producto.getStockVacios()),
+                () -> assertEquals(0, loteDisponible.compareTo(BigDecimal.ONE)),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
+        );
+    }
+
+    @Test
+    void crearCanjeDomicilio_debeRechazarseSinModificarStockVacios() {
+        long pedidosAntes = pedidoRepository.count();
+        long controlesAntes = controlEnvaseRepository.count();
+
+        PedidoDTO.Create canjeDomicilio = new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
+                null, null, null, null, "DOMICILIO", null, List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                "CANJE",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 1, null, null, null, null)));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(canjeDomicilio, usuarioId));
+
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode()),
+                () -> assertTrue(error.getReason().contains("solo está disponible para ventas LOCAL")),
+                () -> assertEquals(4, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
+        );
+    }
+
     private void prepararInventarioParaPrestamo(int stockVacios) {
+        prepararInventarioParaPrestamo(stockVacios, 1);
+    }
+
+    private void prepararInventarioParaPrestamo(int stockVacios, int cantidadLote) {
         String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
         transactionTemplate.executeWithoutResult(status -> {
             List<Correlativo> correlativos = entityManager.createQuery(
@@ -1000,8 +1096,8 @@ class EnvaseFlujoMySqlTest {
             lote.setProducto(producto);
             lote.setProveedor(proveedor);
             lote.setCompra(compra);
-            lote.setCantidadInicial(BigDecimal.ONE);
-            lote.setCantidadActual(BigDecimal.ONE);
+            lote.setCantidadInicial(BigDecimal.valueOf(cantidadLote));
+            lote.setCantidadActual(BigDecimal.valueOf(cantidadLote));
             lote.setPrecioCompra(new BigDecimal("10.00"));
             lote.setPrecioVenta(new BigDecimal("10.00"));
             entityManager.persist(lote);
@@ -1016,6 +1112,30 @@ class EnvaseFlujoMySqlTest {
                 "PRESTAMO",
                 List.of(new PedidoDTO.EnvaseMovimientoCreate(
                         productoId, 1, null, fechaLimiteDevolucion, null, tipoPrestamo)));
+    }
+
+    private PedidoDTO.Create crearPedidoCanje(int cantidad, List<PedidoDTO.PagoCreate> pagos) {
+        return new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
+                null, null, null, null, "LOCAL", null, pagos,
+                List.of(new PedidoDTO.DetalleCreate(productoId, cantidad, new BigDecimal("10.00"), null)),
+                "CANJE",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, cantidad, null, null, null, null)));
+    }
+
+    private long contarDetallesPedido(Long idPedido) {
+        return transactionTemplate.execute(status -> entityManager.createQuery(
+                "SELECT COUNT(d) FROM DetallePedido d WHERE d.pedido.id = :idPedido", Long.class)
+                .setParameter("idPedido", idPedido)
+                .getSingleResult());
+    }
+
+    private BigDecimal stockActualLotes() {
+        return transactionTemplate.execute(status -> entityManager.createQuery(
+                "SELECT COALESCE(SUM(i.cantidadActual), 0) FROM InventarioLote i "
+                        + "WHERE i.producto.id = :idProducto", BigDecimal.class)
+                .setParameter("idProducto", productoId)
+                .getSingleResult());
     }
 
     private ControlEnvase unicoPrestamo(Long idPedido) {

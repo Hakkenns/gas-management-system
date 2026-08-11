@@ -523,9 +523,9 @@ $(function() {
                     return null;
                 }
 
-                // Solo la venta de envases autoselecciona el envase vinculado.
+                // La venta y el canje autoseleccionan el envase vinculado.
                 // Para cualquier otro movimiento los campos ya quedaron limpios.
-                if ($('#select-tipo-mov-envase').val() !== 'VENTA') {
+                if (!['VENTA', 'CANJE'].includes($('#select-tipo-mov-envase').val())) {
                     return null;
                 }
 
@@ -588,6 +588,18 @@ $(function() {
     // Mostrar/ocultar subseccion segun tipo de movimiento
     $('#select-tipo-mov-envase').on('change', function() {
         const tipo = $(this).val();
+        const tipoExistente = $('#tabla-envases-mov tr').first().data('tipoMovimiento');
+        if (tipoExistente && tipo !== tipoExistente) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Movimiento de envases pendiente',
+                text: 'Retire los envases agregados antes de cambiar el tipo de movimiento.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3085d6'
+            });
+            $(this).val(tipoExistente);
+            return;
+        }
         if (tipo === 'NINGUNO') {
             $('#subseccion-mov-envase').hide();
             $('#select-tipo-prestamo').val('NORMAL');
@@ -609,6 +621,21 @@ $(function() {
                     cargarEnvaseVinculado(productoPrincipalId);
                 } else {
                     // También invalida cualquier consulta anterior pendiente.
+                    solicitudEnvaseActual++;
+                    limpiarEnvaseVinculado();
+                }
+            } else if (tipo === 'CANJE') {
+                $('#select-tipo-prestamo').val('NORMAL');
+                $('#grupo-tipo-prestamo').hide();
+                $('#grupo-envase-precio').hide();
+                $('#grupo-envase-fecha-limite').hide();
+                $('#select-envase-fecha-limite').val('');
+                $('.col-envase-precio').hide();
+                $('.col-envase-fecha').hide();
+                const productoPrincipalId = $('#select-producto').val();
+                if (productoPrincipalId) {
+                    cargarEnvaseVinculado(productoPrincipalId);
+                } else {
                     solicitudEnvaseActual++;
                     limpiarEnvaseVinculado();
                 }
@@ -715,7 +742,8 @@ $(function() {
 
         const existingRow = $('#tabla-envases-mov tr').filter(function() {
             const fila = $(this);
-            if (fila.data('productoId') !== idProducto) {
+            if (fila.data('productoId') !== idProducto
+                || fila.data('tipoMovimiento') !== tipo) {
                 return false;
             }
             return tipo !== 'PRESTAMO'
@@ -744,7 +772,7 @@ $(function() {
                     <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
                 `);
                 tr.data('precio', precio);
-            } else {
+            } else if (tipo === 'PRESTAMO') {
                 const textoFechaLimite = tipoPrestamo === 'ESPECIAL'
                     ? 'Sin límite (especial)'
                     : (fechaLimite || 'Automático (+3 días)');
@@ -755,10 +783,19 @@ $(function() {
                     <td class="text-center col-envase-fecha">${textoFechaLimite}</td>
                     <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
                 `);
+            } else {
+                tr.html(`
+                    <td>${nombreProducto}</td>
+                    <td class="text-center">${cantidad}</td>
+                    <td class="text-right col-envase-precio" style="display:none;">-</td>
+                    <td class="text-center col-envase-fecha" style="display:none;">-</td>
+                    <td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-quitar-envase"><i class="fas fa-trash"></i></button></td>
+                `);
             }
             tr.attr('data-producto-id', idProducto);
             tr.data('productoId', idProducto);
             tr.data('cantidad', cantidad);
+            tr.data('tipoMovimiento', tipo);
             tr.data('fechaLimite', fechaLimite);
             tr.data('tipoPrestamo', tipoPrestamo);
             $('#tabla-envases-mov').append(tr);

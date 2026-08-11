@@ -691,6 +691,31 @@ class PedidoServiceImplementTest {
         verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
     }
 
+    @Test
+    void createOrder_canjeDomicilio_rechazaAntesDePersistir() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, "Juan", "999999999", "Av. Test 123", "referencia",
+                "12345678", 1L, 1L, null, null, null,
+                "PENDIENTE", "DOMICILIO", null,
+                List.of(),
+                List.of(new PedidoDTO.DetalleCreate(1L, 1, new BigDecimal("10.00"), 0)),
+                "CANJE",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(1L, 1, null, null, null, null))
+        );
+        Pedido pedido = pedido(1L, "PENDIENTE");
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"))
+                .thenReturn("NV001-0001");
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("El canje de envases solo está disponible para ventas LOCAL", exception.getReason());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+    }
+
     // =========================================================================
     // FASE 4B-2A: PRUEBAS NUEVAS — BLOQUEOS ATÓMICOS DE PRODUCTOS
     // =========================================================================

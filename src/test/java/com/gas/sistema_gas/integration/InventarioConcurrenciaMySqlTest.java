@@ -659,6 +659,65 @@ public class InventarioConcurrenciaMySqlTest {
         );
     }
 
+    private PedidoDTO.Create buildPedidoCanjeLocal() {
+        return new PedidoDTO.Create(
+                null,
+                idCliente,
+                null,
+                "Cliente Concurrencia",
+                "Dirección de prueba",
+                "Referencia de prueba",
+                "999999999",
+                idEmpleado,
+                idUsuario,
+                null,
+                null,
+                null,
+                null,
+                "LOCAL",
+                null,
+                List.<PedidoDTO.PagoCreate>of(),
+                List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
+                "CANJE",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, null, null, null, null))
+        );
+    }
+
+    @Test
+    @Timeout(30)
+    void dosCanjesLocalesMismoProducto_acumulanVaciosSinPerdida() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setRequiereEnvase(true);
+            producto.setStockVacios(0);
+            productoRepository.saveAndFlush(producto);
+        });
+
+        ParResultados<PedidoDTO.SimpleResponse> par = ejecutarConcurrente(
+                () -> pedidoService.createOrder(buildPedidoCanjeLocal(), idUsuario),
+                () -> pedidoService.createOrder(buildPedidoCanjeLocal(), idUsuario)
+        );
+
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> primero = par.primero();
+        ResultadoConcurrente<PedidoDTO.SimpleResponse> segundo = par.segundo();
+        assertTrue(primero.exitoso(), "El primer canje debe terminar sin excepción: " + primero.error());
+        assertTrue(segundo.exitoso(), "El segundo canje debe terminar sin excepción: " + segundo.error());
+        assertNoLockingError(primero.error());
+        assertNoLockingError(segundo.error());
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        BigDecimal loteDisponible = inventarioLoteRepository.sumCantidadActualByProductoId(idProducto);
+        BigDecimal reservado = producto.getStockReservado() != null ? producto.getStockReservado() : BigDecimal.ZERO;
+
+        assertEquals(2, producto.getStockVacios(), "Cada canje debe registrar un envase vacío");
+        assertEquals(0, producto.getStockLlenos().compareTo(new BigDecimal("8.00")));
+        assertEquals(0, loteDisponible.compareTo(new BigDecimal("8.00")));
+        assertEquals(0, reservado.compareTo(BigDecimal.ZERO));
+        assertEquals(2, pedidoRepository.count());
+        assertEquals(0, controlEnvaseRepository.count(), "CANJE no debe crear préstamos");
+        assertEquals(2, asignacionLotePedidoRepository.count());
+    }
+
     @Test
     @Timeout(30)
     void ventaYPrestamoUltimoEnvase_soloUnoDebeTenerExito() throws Exception {
