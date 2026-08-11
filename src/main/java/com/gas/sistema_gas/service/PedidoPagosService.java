@@ -15,6 +15,12 @@ public interface PedidoPagosService {
     List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias);
     
     List<PedidoPago> registrarPagosMultiples(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias, MultipartFile evidenciaVuelto);
+
+    List<PedidoPago> confirmarEntregaConPagos(ConfirmarEntregaMixtaDTO dto, List<MultipartFile> evidencias,
+                                              MultipartFile evidenciaVuelto);
+
+    PedidoPago confirmarEntregaPagoUnico(PedidoPagoYapeDTO dto, MultipartFile evidencia,
+                                         MultipartFile evidenciaVuelto);
     
     List<PedidoPago> findByPedidoId(Long idPedido);
 }

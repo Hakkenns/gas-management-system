@@ -28,7 +28,10 @@ import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.ControlEnvase;
 import com.gas.sistema_gas.Model.Correlativo;
 import com.gas.sistema_gas.Model.Compra;
+import com.gas.sistema_gas.Model.DetallePedido;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
+import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.Perfil;
 import com.gas.sistema_gas.Model.Producto;
@@ -37,13 +40,20 @@ import com.gas.sistema_gas.Model.Rubro;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
+import com.gas.sistema_gas.Repository.DetallePedidoRepository;
+import com.gas.sistema_gas.Repository.MetodoPagoRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.service.PedidoPagosService;
 import com.gas.sistema_gas.service.EnvaseService;
+import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
+import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -72,6 +82,18 @@ class EnvaseFlujoMySqlTest {
     private PedidoRepository pedidoRepository;
 
     @Autowired
+    private DetallePedidoRepository detallePedidoRepository;
+
+    @Autowired
+    private PedidoPagoRepository pedidoPagoRepository;
+
+    @Autowired
+    private MetodoPagoRepository metodoPagoRepository;
+
+    @Autowired
+    private PedidoPagosService pedidoPagosService;
+
+    @Autowired
     private ControlEnvaseRepository controlEnvaseRepository;
 
     @Autowired
@@ -90,6 +112,9 @@ class EnvaseFlujoMySqlTest {
     private Long productoId;
     private Long clienteId;
     private Long usuarioId;
+    private Long empleadoId;
+    private Long efectivoId;
+    private Long yapeId;
 
     @BeforeEach
     void prepararFixture() {
@@ -129,6 +154,28 @@ class EnvaseFlujoMySqlTest {
             usuario.setEstado(1);
             usuario.setPerfil(perfil);
             usuario = usuarioRepository.saveAndFlush(usuario);
+
+            Empleado empleado = new Empleado();
+            long identificador = Math.floorMod(System.nanoTime(), 100_000_000L);
+            empleado.setNombre("Motorizado Envase Test");
+            empleado.setDni(String.format("%08d", identificador));
+            empleado.setTelefono(String.format("9%08d", identificador));
+            empleado.setCorreo("motorizado." + sufijoUnico + "@gmail.com");
+            empleado.setEstado(1);
+            entityManager.persist(empleado);
+
+            MetodoPago efectivo = metodoPagoRepository.findByNombre("Efectivo").orElseGet(() -> {
+                MetodoPago metodo = new MetodoPago();
+                metodo.setNombre("Efectivo");
+                metodo.setEstado(1);
+                return metodoPagoRepository.saveAndFlush(metodo);
+            });
+            MetodoPago yape = metodoPagoRepository.findByNombre("Yape").orElseGet(() -> {
+                MetodoPago metodo = new MetodoPago();
+                metodo.setNombre("Yape");
+                metodo.setEstado(1);
+                return metodoPagoRepository.saveAndFlush(metodo);
+            });
 
             Producto producto = new Producto();
             producto.setNombre("Envase Test");
@@ -174,6 +221,9 @@ class EnvaseFlujoMySqlTest {
             productoId = producto.getId();
             clienteId = cliente.getId();
             usuarioId = usuario.getId();
+            empleadoId = empleado.getId();
+            efectivoId = efectivo.getId();
+            yapeId = yape.getId();
         });
     }
 
@@ -1024,26 +1074,140 @@ class EnvaseFlujoMySqlTest {
     }
 
     @Test
-    void crearCanjeDomicilio_debeRechazarseSinModificarStockVacios() {
-        long pedidosAntes = pedidoRepository.count();
+    void crearCanjeDomicilio_debeReservarYPersistirCanjeSinIncrementarVacios() {
+        prepararInventarioParaPrestamo(4);
         long controlesAntes = controlEnvaseRepository.count();
 
-        PedidoDTO.Create canjeDomicilio = new PedidoDTO.Create(
-                null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
-                null, null, null, null, "DOMICILIO", null, List.of(),
-                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
-                "CANJE",
-                List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, 1, null, null, null, null)));
-
-        ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> pedidoService.createOrder(canjeDomicilio, usuarioId));
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(crearPedidoCanjeDomicilio(1), usuarioId);
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        DetallePedido detalle = unicoDetalle(respuesta.idPedido());
 
         assertAll(
-                () -> assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode()),
-                () -> assertTrue(error.getReason().contains("solo está disponible para ventas LOCAL")),
-                () -> assertEquals(4, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
-                () -> assertEquals(pedidosAntes, pedidoRepository.count()),
-                () -> assertEquals(controlesAntes, controlEnvaseRepository.count())
+                () -> assertEquals("PENDIENTE", respuesta.estadoPedido()),
+                () -> assertEquals(4, producto.getStockVacios()),
+                () -> assertEquals(0, producto.getStockReservado().compareTo(BigDecimal.ONE)),
+                () -> assertEquals(1, detalle.getCantidadCanje()),
+                () -> assertEquals(1, contarDetallesPedido(respuesta.idPedido())),
+                () -> assertEquals(controlesAntes, controlEnvaseRepository.count()),
+                () -> assertEquals(0, respuesta.montoTotal().compareTo(new BigDecimal("10.00")))
+        );
+    }
+
+    @Test
+    void entregarCanjeDomicilio_q1YSegundaConfirmacion_debeAplicarUnaSolaVez() {
+        prepararInventarioParaPrestamo(4);
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(crearPedidoCanjeDomicilio(1), usuarioId);
+        avanzarHastaDomicilio(respuesta.idPedido());
+
+        PedidoPagoYapeDTO pago = new PedidoPagoYapeDTO(
+                respuesta.idPedido(), efectivoId, new BigDecimal("10.00"), "");
+        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
+        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
+
+        Producto producto = productoRepository.findById(productoId).orElseThrow();
+        Pedido pedido = pedidoRepository.findById(respuesta.idPedido()).orElseThrow();
+        DetallePedido detalle = unicoDetalle(respuesta.idPedido());
+        assertAll(
+                () -> assertEquals("ENTREGADO", pedido.getEstadoPedido()),
+                () -> assertEquals(5, producto.getStockVacios()),
+                () -> assertEquals(0, detalle.getCantidadCanje()),
+                () -> assertEquals(1, pedidoPagoRepository.findByPedido_Id(respuesta.idPedido()).size())
+        );
+    }
+
+    @Test
+    void entregarCanjeDomicilio_cantidadNConPagoMixto_debeSumarExactamenteN() {
+        prepararInventarioParaPrestamo(4, 3);
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(crearPedidoCanjeDomicilio(3), usuarioId);
+        avanzarHastaDomicilio(respuesta.idPedido());
+
+        pedidoPagosService.confirmarEntregaConPagos(new ConfirmarEntregaMixtaDTO(
+                respuesta.idPedido(),
+                List.of(
+                        new PagoRegistroDTO(efectivoId, new BigDecimal("10.00"), "", BigDecimal.ZERO),
+                        new PagoRegistroDTO(yapeId, new BigDecimal("20.00"), "op-yape", BigDecimal.ZERO))),
+                null, null);
+
+        assertAll(
+                () -> assertEquals(7, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(0, unicoDetalle(respuesta.idPedido()).getCantidadCanje()),
+                () -> assertEquals(2, pedidoPagoRepository.findByPedido_Id(respuesta.idPedido()).size())
+        );
+    }
+
+    @Test
+    void entregarCanjeDomicilio_multiplesProductos_debeAplicarCadaCantidad() {
+        prepararInventarioParaPrestamo(4, 2);
+        Long productoDosId = crearSegundoProductoConLote(7, 3);
+        PedidoDTO.Create dto = crearPedidoCanjeDomicilio(
+                List.of(
+                        new PedidoDTO.DetalleCreate(productoId, 2, new BigDecimal("10.00"), null),
+                        new PedidoDTO.DetalleCreate(productoDosId, 3, new BigDecimal("10.00"), null)),
+                List.of(
+                        new PedidoDTO.EnvaseMovimientoCreate(productoId, 2, null, null, null, null),
+                        new PedidoDTO.EnvaseMovimientoCreate(productoDosId, 3, null, null, null, null)));
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(dto, usuarioId);
+        avanzarHastaDomicilio(respuesta.idPedido());
+
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                respuesta.idPedido(), efectivoId, new BigDecimal("50.00"), ""), null, null);
+
+        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(respuesta.idPedido());
+        assertAll(
+                () -> assertEquals(6, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(10, productoRepository.findById(productoDosId).orElseThrow().getStockVacios()),
+                () -> assertEquals(2, detalles.size()),
+                () -> assertTrue(detalles.stream()
+                        .allMatch(detalle -> Integer.valueOf(0).equals(detalle.getCantidadCanje())))
+        );
+    }
+
+    @Test
+    void entregarOtrosMovimientosDomicilio_noDebeSumarVaciosAutomaticamente() {
+        prepararInventarioParaPrestamo(10, 3);
+
+        PedidoDTO.SimpleResponse ninguno = pedidoService.createOrder(crearPedidoMovimientoDomicilio("NINGUNO"), usuarioId);
+        avanzarHastaDomicilio(ninguno.idPedido());
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                ninguno.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null);
+        assertEquals(10, productoRepository.findById(productoId).orElseThrow().getStockVacios());
+
+        PedidoDTO.SimpleResponse venta = pedidoService.createOrder(crearPedidoMovimientoDomicilio("VENTA"), usuarioId);
+        colocarEnDomicilioParaProbarEntrega(venta.idPedido());
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                venta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null);
+        assertEquals(9, productoRepository.findById(productoId).orElseThrow().getStockVacios());
+
+        PedidoDTO.SimpleResponse prestamo = pedidoService.createOrder(crearPedidoMovimientoDomicilio("PRESTAMO"), usuarioId);
+        avanzarHastaDomicilio(prestamo.idPedido());
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                prestamo.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null);
+
+        assertAll(
+                () -> assertEquals(8, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(1, controlEnvaseRepository.findByPedido_Id(prestamo.idPedido()).size()),
+                () -> assertEquals(0, unicoDetalle(ninguno.idPedido()).getCantidadCanje()),
+                () -> assertEquals(0, unicoDetalle(prestamo.idPedido()).getCantidadCanje())
+        );
+    }
+
+    @Test
+    void confirmarCanjeDomicilio_falloPosteriorDebeRevertirEntregaPagoYCanje() {
+        prepararInventarioParaPrestamo(Integer.MAX_VALUE);
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(crearPedidoCanjeDomicilio(1), usuarioId);
+        avanzarHastaDomicilio(respuesta.idPedido());
+
+        assertThrows(ArithmeticException.class, () -> pedidoPagosService.confirmarEntregaPagoUnico(
+                new PedidoPagoYapeDTO(respuesta.idPedido(), efectivoId, new BigDecimal("10.00"), ""),
+                null, null));
+
+        assertAll(
+                () -> assertEquals("EN_DOMICILIO",
+                        pedidoRepository.findById(respuesta.idPedido()).orElseThrow().getEstadoPedido()),
+                () -> assertEquals(Integer.MAX_VALUE,
+                        productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(1, unicoDetalle(respuesta.idPedido()).getCantidadCanje()),
+                () -> assertEquals(0, pedidoPagoRepository.findByPedido_Id(respuesta.idPedido()).size())
         );
     }
 
@@ -1121,6 +1285,98 @@ class EnvaseFlujoMySqlTest {
                 List.of(new PedidoDTO.DetalleCreate(productoId, cantidad, new BigDecimal("10.00"), null)),
                 "CANJE",
                 List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, cantidad, null, null, null, null)));
+    }
+
+    private PedidoDTO.Create crearPedidoCanjeDomicilio(int cantidad) {
+        return crearPedidoCanjeDomicilio(
+                List.of(new PedidoDTO.DetalleCreate(
+                        productoId, cantidad, new BigDecimal("10.00"), null)),
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(
+                        productoId, cantidad, null, null, null, null)));
+    }
+
+    private PedidoDTO.Create crearPedidoCanjeDomicilio(
+            List<PedidoDTO.DetalleCreate> detalles,
+            List<PedidoDTO.EnvaseMovimientoCreate> movimientos) {
+        return new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, empleadoId, usuarioId,
+                null, null, null, null, "DOMICILIO", null, List.of(), detalles, "CANJE", movimientos);
+    }
+
+    private PedidoDTO.Create crearPedidoMovimientoDomicilio(String tipoMovimiento) {
+        List<PedidoDTO.EnvaseMovimientoCreate> movimientos;
+        if ("VENTA".equals(tipoMovimiento)) {
+            movimientos = List.of(new PedidoDTO.EnvaseMovimientoCreate(
+                    productoId, 1, new BigDecimal("10.00"), null, null, null));
+        } else if ("PRESTAMO".equals(tipoMovimiento)) {
+            movimientos = List.of(new PedidoDTO.EnvaseMovimientoCreate(
+                    productoId, 1, null, null, null, "NORMAL"));
+        } else {
+            movimientos = List.of();
+        }
+        return new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, empleadoId, usuarioId,
+                null, null, null, null, "DOMICILIO", null, List.of(),
+                List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
+                tipoMovimiento, movimientos);
+    }
+
+    private void avanzarHastaDomicilio(Long idPedido) {
+        pedidoService.updateEstadoPedido(idPedido, "ACEPTADO");
+        pedidoService.updateEstadoPedido(idPedido, "CARGADO");
+        pedidoService.updateEstadoPedido(idPedido, "EN_CAMINO");
+        pedidoService.updateEstadoPedido(idPedido, "EN_DOMICILIO");
+    }
+
+    private void colocarEnDomicilioParaProbarEntrega(Long idPedido) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Pedido pedido = pedidoRepository.findById(idPedido).orElseThrow();
+            pedido.setEstadoPedido("EN_DOMICILIO");
+            pedidoRepository.saveAndFlush(pedido);
+        });
+    }
+
+    private Long crearSegundoProductoConLote(int stockVacios, int cantidadLote) {
+        return transactionTemplate.execute(status -> {
+            Categoria categoria = entityManager.createQuery("FROM Categoria", Categoria.class)
+                    .getResultList().get(0);
+            Proveedor proveedor = entityManager.createQuery("FROM Proveedor", Proveedor.class)
+                    .getResultList().get(0);
+            Compra compra = entityManager.createQuery("FROM Compra", Compra.class)
+                    .getResultList().get(0);
+
+            Producto producto = new Producto();
+            producto.setNombre("Envase Test Secundario " + UUID.randomUUID());
+            producto.setPrecioCompra(new BigDecimal("10.00"));
+            producto.setGananciaProducto(BigDecimal.ZERO);
+            producto.setPrecioVenta(new BigDecimal("10.00"));
+            producto.setStockLlenos(BigDecimal.valueOf(cantidadLote));
+            producto.setStockMinimo(BigDecimal.ZERO);
+            producto.setStockVacios(stockVacios);
+            producto.setStockReservado(BigDecimal.ZERO);
+            producto.setRequiereEnvase(true);
+            producto.setEstado(1);
+            producto.setCategoria(categoria);
+            entityManager.persist(producto);
+
+            InventarioLote lote = new InventarioLote();
+            lote.setProducto(producto);
+            lote.setProveedor(proveedor);
+            lote.setCompra(compra);
+            lote.setCantidadInicial(BigDecimal.valueOf(cantidadLote));
+            lote.setCantidadActual(BigDecimal.valueOf(cantidadLote));
+            lote.setPrecioCompra(new BigDecimal("10.00"));
+            lote.setPrecioVenta(new BigDecimal("10.00"));
+            entityManager.persist(lote);
+            entityManager.flush();
+            return producto.getId();
+        });
+    }
+
+    private DetallePedido unicoDetalle(Long idPedido) {
+        List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(idPedido);
+        assertEquals(1, detalles.size());
+        return detalles.get(0);
     }
 
     private long contarDetallesPedido(Long idPedido) {

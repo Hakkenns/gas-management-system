@@ -34,6 +34,14 @@ public class DetallePedido {
     @NotNull(message = "El precio unitario es obligatorio")
     private BigDecimal precioUnitario;
 
+    /**
+     * Vacíos que deben recibirse al entregar un CANJE a domicilio.
+     * Cero indica que no hay retorno pendiente o que ya fue aplicado.
+     */
+    @Column(name = "cantidad_canje")
+    @Min(value = 0, message = "La cantidad de canje no puede ser negativa")
+    private Integer cantidadCanje = 0;
+
     // Relación ManyToOne con Pedido
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido", nullable = false)

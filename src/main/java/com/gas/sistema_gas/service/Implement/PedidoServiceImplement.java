@@ -243,12 +243,6 @@ public class PedidoServiceImplement implements PedidoService {
         Pedido pedido = pedidoMapper.toEntity(createDto);
         pedido.setCodigo(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"));
         pedido.setTipoVenta(createDto.tipoVenta() != null ? createDto.tipoVenta() : "DOMICILIO");
-        if ("CANJE".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
-                && !"LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El canje de envases solo está disponible para ventas LOCAL");
-        }
-
         // Lógica de fecha límite de pago para créditos
         if (createDto.fechaLimitePago() != null) {
             LocalDateTime baseline = pedido.getFechaSolicitud() != null ? pedido.getFechaSolicitud() : LocalDateTime.now();
@@ -330,7 +324,8 @@ public class PedidoServiceImplement implements PedidoService {
             }
         } else {
             pedido.setEstadoPedido("PENDIENTE");
-            if (createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
+            if (!"CANJE".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
+                    && createDto.estadoPedido() != null && !createDto.estadoPedido().isBlank()) {
                 pedido.setEstadoPedido(createDto.estadoPedido());
                 if ("ENTREGADO".equalsIgnoreCase(createDto.estadoPedido()) && pedido.getFechaEntrega() == null) {
                     pedido.setFechaEntrega(LocalDateTime.now());
@@ -367,6 +362,7 @@ public class PedidoServiceImplement implements PedidoService {
             }
         }
 
+        Map<Long, Integer> cantidadesCanjePorProducto = new java.util.HashMap<>();
         if ("CANJE".equalsIgnoreCase(tipoMov)) {
             if (envaseMvts == null || envaseMvts.isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -378,7 +374,6 @@ public class PedidoServiceImplement implements PedidoService {
                 cantidadesDetallePorProducto.merge(detalle.idProducto(), detalle.cantidad(), Integer::sum);
             }
 
-            Map<Long, Integer> cantidadesCanjePorProducto = new java.util.HashMap<>();
             for (PedidoDTO.EnvaseMovimientoCreate movimiento : envaseMvts) {
                 if (movimiento == null || movimiento.idProducto() == null
                         || movimiento.cantidad() == null || movimiento.cantidad() <= 0) {
@@ -452,6 +447,10 @@ public class PedidoServiceImplement implements PedidoService {
                 detalle.setProducto(producto);
                 detalle.setCantidad(item.cantidad());
                 detalle.setPrecioUnitario(precioUnitario);
+                if ("CANJE".equalsIgnoreCase(tipoMov)
+                        && "DOMICILIO".equalsIgnoreCase(pedido.getTipoVenta())) {
+                    detalle.setCantidadCanje(item.cantidad());
+                }
 
                 BigDecimal importeLinea = precioUnitario.multiply(BigDecimal.valueOf(item.cantidad()));
                 montoAcumulado = montoAcumulado.add(importeLinea);
@@ -549,11 +548,13 @@ public class PedidoServiceImplement implements PedidoService {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                 "El producto no requiere envase para registrar un canje");
                     }
-                    Integer stockVaciosActual = productoEnvase.getStockVacios() != null
-                            ? productoEnvase.getStockVacios()
-                            : 0;
-                    productoEnvase.setStockVacios(stockVaciosActual + envMvt.cantidad());
-                    productoRepository.save(productoEnvase);
+                    if ("LOCAL".equalsIgnoreCase(pedido.getTipoVenta())) {
+                        Integer stockVaciosActual = productoEnvase.getStockVacios() != null
+                                ? productoEnvase.getStockVacios()
+                                : 0;
+                        productoEnvase.setStockVacios(Math.addExact(stockVaciosActual, envMvt.cantidad()));
+                        productoRepository.save(productoEnvase);
+                    }
 
                 } else if ("PRESTAMO".equalsIgnoreCase(tipoMov)) {
                     String tipoPrestamo = envMvt.tipoPrestamo() == null || envMvt.tipoPrestamo().isBlank()
@@ -1082,7 +1083,8 @@ public class PedidoServiceImplement implements PedidoService {
                 det.getProducto().getNombre(),
                 det.getCantidad(),
                 det.getPrecioUnitario(),
-                cantPrestada
+                cantPrestada,
+                det.getCantidadCanje()
             );
         }).collect(Collectors.toList());
 

@@ -46,9 +46,12 @@ import com.gas.sistema_gas.Model.Categoria;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.Compra;
 import com.gas.sistema_gas.Model.ControlEnvase;
+import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
+import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Perfil;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.Proveedor;
@@ -57,16 +60,21 @@ import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.AsignacionLotePedidoRepository;
 import com.gas.sistema_gas.Repository.CompraRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
+import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
+import com.gas.sistema_gas.Repository.MetodoPagoRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.CompraService;
 import com.gas.sistema_gas.service.CorrelativoService;
 import com.gas.sistema_gas.service.EnvaseService;
 import com.gas.sistema_gas.service.InventarioLoteService;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.service.PedidoPagosService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -149,6 +157,16 @@ public class InventarioConcurrenciaMySqlTest {
                 for (String t : tableNames) {
                     stmt.execute("CREATE TABLE " + DB_TARGET + ".`" + t + "` LIKE " + DB_SOURCE + ".`" + t + "`");
                 }
+                try (ResultSet cantidadCanje = stmt.executeQuery(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                                + "WHERE TABLE_SCHEMA = '" + DB_TARGET + "' "
+                                + "AND TABLE_NAME = 'detalle_pedido' AND COLUMN_NAME = 'cantidad_canje'")) {
+                    cantidadCanje.next();
+                    if (cantidadCanje.getInt(1) == 0) {
+                        stmt.execute("ALTER TABLE " + DB_TARGET
+                                + ".detalle_pedido ADD COLUMN cantidad_canje INT NULL");
+                    }
+                }
             } catch (Exception ex) {
                 throw new IllegalStateException("No se pudo inicializar la base de datos de prueba", ex);
             }
@@ -194,6 +212,18 @@ public class InventarioConcurrenciaMySqlTest {
     private PedidoRepository pedidoRepository;
 
     @Autowired
+    private DetallePedidoRepository detallePedidoRepository;
+
+    @Autowired
+    private PedidoPagoRepository pedidoPagoRepository;
+
+    @Autowired
+    private MetodoPagoRepository metodoPagoRepository;
+
+    @Autowired
+    private PedidoPagosService pedidoPagosService;
+
+    @Autowired
     private ControlEnvaseRepository controlEnvaseRepository;
 
     @Autowired
@@ -223,6 +253,7 @@ public class InventarioConcurrenciaMySqlTest {
     private Long idEmpleado;
     private Long idCompra;
     private Long idCliente;
+    private Long idMetodoPago;
 
     private void truncateAll() {
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
@@ -352,6 +383,16 @@ public class InventarioConcurrenciaMySqlTest {
             e.setEstado(1);
             entityManager.persist(e);
             return e.getId();
+        });
+    }
+
+    private Long ensureMetodoPago() {
+        return transactionTemplate.execute(status -> {
+            MetodoPago metodo = new MetodoPago();
+            metodo.setNombre("Efectivo");
+            metodo.setEstado(1);
+            entityManager.persist(metodo);
+            return metodo.getId();
         });
     }
 
@@ -554,6 +595,7 @@ public class InventarioConcurrenciaMySqlTest {
         idProducto = ensureProducto(new BigDecimal("10.00"), BigDecimal.ZERO);
         idUsuario = ensureUsuario();
         idEmpleado = ensureEmpleado();
+        idMetodoPago = ensureMetodoPago();
         idCompra = ensureCompra();
         ensureLote(new BigDecimal("10.00"), new BigDecimal("10.00"));
         idCliente = ensureCliente();
@@ -683,6 +725,37 @@ public class InventarioConcurrenciaMySqlTest {
         );
     }
 
+    private PedidoDTO.Create buildPedidoCanjeDomicilio() {
+        return new PedidoDTO.Create(
+                null,
+                idCliente,
+                null,
+                "Cliente Concurrencia",
+                "Dirección de prueba",
+                "Referencia de prueba",
+                "999999999",
+                idEmpleado,
+                idUsuario,
+                null,
+                null,
+                null,
+                null,
+                "DOMICILIO",
+                null,
+                List.<PedidoDTO.PagoCreate>of(),
+                List.of(new PedidoDTO.DetalleCreate(idProducto, 1, new BigDecimal("10.00"), 0)),
+                "CANJE",
+                List.of(new PedidoDTO.EnvaseMovimientoCreate(idProducto, 1, null, null, null, null))
+        );
+    }
+
+    private void avanzarHastaDomicilio(Long idPedido) {
+        pedidoService.updateEstadoPedido(idPedido, "ACEPTADO");
+        pedidoService.updateEstadoPedido(idPedido, "CARGADO");
+        pedidoService.updateEstadoPedido(idPedido, "EN_CAMINO");
+        pedidoService.updateEstadoPedido(idPedido, "EN_DOMICILIO");
+    }
+
     @Test
     @Timeout(30)
     void dosCanjesLocalesMismoProducto_acumulanVaciosSinPerdida() throws Exception {
@@ -716,6 +789,69 @@ public class InventarioConcurrenciaMySqlTest {
         assertEquals(2, pedidoRepository.count());
         assertEquals(0, controlEnvaseRepository.count(), "CANJE no debe crear préstamos");
         assertEquals(2, asignacionLotePedidoRepository.count());
+    }
+
+    @Test
+    @Timeout(30)
+    void dosConfirmacionesMismoPedidoCanje_aplicanRetornoUnaSolaVez() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setRequiereEnvase(true);
+            producto.setStockVacios(0);
+            productoRepository.saveAndFlush(producto);
+        });
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedidoCanjeDomicilio(), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+        PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(
+                creado.idPedido(), idMetodoPago, new BigDecimal("10.00"), "");
+
+        ParResultados<PedidoPago> par = ejecutarConcurrente(
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null),
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null));
+
+        assertTrue(par.primero().exitoso(), "La primera confirmación debe terminar: " + par.primero().error());
+        assertTrue(par.segundo().exitoso(), "La segunda confirmación debe terminar: " + par.segundo().error());
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        DetallePedido detalle = detallePedidoRepository.findByPedido_Id(creado.idPedido()).get(0);
+        assertEquals(1, producto.getStockVacios(), "El retorno CANJE debe aplicarse exactamente una vez");
+        assertEquals(0, detalle.getCantidadCanje(), "El retorno debe quedar consumido");
+        assertEquals(1, pedidoPagoRepository.findByPedido_Id(creado.idPedido()).size(),
+                "La doble confirmación no debe duplicar pagos");
+    }
+
+    @Test
+    @Timeout(30)
+    void dosPedidosCanjeMismoProducto_conservanAmbosIncrementos() throws Exception {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setRequiereEnvase(true);
+            producto.setStockVacios(0);
+            productoRepository.saveAndFlush(producto);
+        });
+        PedidoDTO.SimpleResponse pedidoUno = pedidoService.createOrder(buildPedidoCanjeDomicilio(), idUsuario);
+        PedidoDTO.SimpleResponse pedidoDos = pedidoService.createOrder(buildPedidoCanjeDomicilio(), idUsuario);
+        avanzarHastaDomicilio(pedidoUno.idPedido());
+        avanzarHastaDomicilio(pedidoDos.idPedido());
+
+        ParResultados<PedidoPago> par = ejecutarConcurrente(
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                        pedidoUno.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null),
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                        pedidoDos.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null));
+
+        assertTrue(par.primero().exitoso(), "El primer pedido debe terminar: " + par.primero().error());
+        assertTrue(par.segundo().exitoso(), "El segundo pedido debe terminar: " + par.segundo().error());
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+
+        Producto producto = productoRepository.findById(idProducto).orElseThrow();
+        assertEquals(2, producto.getStockVacios(), "Ambos retornos deben conservarse");
+        assertEquals(2, pedidoPagoRepository.count(), "Cada pedido debe conservar un solo pago");
+        assertTrue(detallePedidoRepository.findAll().stream()
+                .allMatch(detalle -> Integer.valueOf(0).equals(detalle.getCantidadCanje())));
     }
 
     @Test

@@ -311,6 +311,16 @@ public class MotorizadoController {
             return "redirect:/motorizado/asignados";
         }
 
+        if ("ENTREGADO".equalsIgnoreCase(estado)) {
+            if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
+                return ResponseEntity.badRequest().body(java.util.Map.of(
+                        "success", false,
+                        "message", "La entrega debe confirmarse mediante el flujo de pago"));
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La entrega debe confirmarse mediante el flujo de pago");
+        }
+
         PedidoDTO.SimpleResponse updated = pedidoService.updateEstadoPedido(id, estado);
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             String estadoResp = updated != null ? (updated.estadoPedido() == null ? estado : updated.estadoPedido()) : estado;
@@ -389,6 +399,9 @@ public class MotorizadoController {
         try {
             var pedido = pedidoService.findByIdAndEmpleadoId(pedidoId, empleadoId);
             model.addAttribute("pedido", pedido);
+            model.addAttribute("canjesPendientes", pedidoService.getEditData(pedidoId).detalles().stream()
+                    .filter(detalle -> detalle.cantidadCanje() != null && detalle.cantidadCanje() > 0)
+                    .toList());
         } catch (Exception ex) {
             return "redirect:/motorizado/asignados";
         }
@@ -449,13 +462,7 @@ public class MotorizadoController {
         }
 
         PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(idPedido, idMetodo, montoRecibido, numOperacion);
-        var pago = pedidoPagosService.registrarPagoYape(dto, evidencia, evidenciaVuelto);
-
-        // Procesar retorna balón vacío (para pago único)
-        String retornaBalonVacioUnico = null;
-        if (requestedWith != null && "XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
-            retornaBalonVacioUnico = ""; // No se envía desde pagar-yape, solo desde confirmar-entrega
-        }
+        var pago = pedidoPagosService.confirmarEntregaPagoUnico(dto, evidencia, evidenciaVuelto);
 
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             return ResponseEntity.ok(java.util.Map.of("success", true, "idPago", pago.getId()));
@@ -470,7 +477,6 @@ public class MotorizadoController {
             @RequestParam("pagosJson") String pagosJson,
             @RequestPart(value = "evidencias", required = false) List<MultipartFile> evidencias,
             @RequestPart(value = "evidenciaVuelto", required = false) MultipartFile evidenciaVuelto,
-            @RequestParam(value = "retornaBalonVacio", required = false, defaultValue = "false") String retornaBalonVacio,
             HttpSession session) {
 
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
@@ -503,12 +509,8 @@ public class MotorizadoController {
                     mapper.getTypeFactory().constructCollectionType(List.class, PagoRegistroDTO.class));
 
             ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(idPedido, pagos);
-            List<PedidoPago> pagosGuardados = pedidoPagosService.registrarPagosMultiples(dto, evidencias, evidenciaVuelto);
-
-            // Procesar retorna balón vacío
-            if ("true".equalsIgnoreCase(retornaBalonVacio)) {
-                procesarRetornoBalonVacio(idPedido);
-            }
+            List<PedidoPago> pagosGuardados = pedidoPagosService
+                    .confirmarEntregaConPagos(dto, evidencias, evidenciaVuelto);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -521,22 +523,4 @@ public class MotorizadoController {
         }
     }
 
-    @Autowired
-    private com.gas.sistema_gas.Repository.DetallePedidoRepository detallePedidoRepositoryRetorna;
-    @Autowired
-    private com.gas.sistema_gas.Repository.ProductoRepository productoRepositoryRetorna;
-
-    private void procesarRetornoBalonVacio(Long idPedido) {
-        // Buscar los detalles del pedido para identificar productos que requieren envase
-        var detalles = detallePedidoRepositoryRetorna.findByPedido_Id(idPedido);
-        for (var detalle : detalles) {
-            var producto = detalle.getProducto();
-            if (Boolean.TRUE.equals(producto.getRequiereEnvase())) {
-                // Incrementar stockVacios por la cantidad comprada (el cliente devuelve un balón por cada uno comprado)
-                Integer vaciosActuales = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
-                producto.setStockVacios(vaciosActuales + detalle.getCantidad());
-                productoRepositoryRetorna.save(producto);
-            }
-        }
-    }
 }

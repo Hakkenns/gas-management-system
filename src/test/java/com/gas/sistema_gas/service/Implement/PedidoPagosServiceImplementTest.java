@@ -2,6 +2,7 @@ package com.gas.sistema_gas.service.Implement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -26,13 +27,17 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.Evidencia;
+import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
+import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
+import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 
@@ -53,6 +58,12 @@ class PedidoPagosServiceImplementTest {
 
     @Mock
     private EvidenciaRepository evidenciaRepository;
+
+    @Mock
+    private DetallePedidoRepository detallePedidoRepository;
+
+    @Mock
+    private ProductoRepository productoRepository;
 
     @InjectMocks
     private PedidoPagosServiceImplement pedidoPagosService;
@@ -412,5 +423,68 @@ class PedidoPagosServiceImplementTest {
 
         assertEquals("VUELTO", evidenciaVueltoGuardada.getTipoEvidencia());
         assertEquals(pagoEfectivo, evidenciaVueltoGuardada.getPedidoPago());
+    }
+
+    @Test
+    void confirmarEntregaMixta_conCanjesPendientesAgrupaProductoYConsumeDetalles() {
+        Pedido pedido = pedido("30.00");
+        pedido.setTipoVenta("DOMICILIO");
+        MetodoPago efectivo = metodo(1L, "Efectivo");
+        MetodoPago yape = metodo(2L, "Yape");
+        ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, List.of(
+                pagoDto(1L, "10.00", "op-efectivo"),
+                pagoDto(2L, "20.00", "op-yape")));
+
+        Producto producto = new Producto();
+        producto.setId(10L);
+        producto.setStockVacios(4);
+        DetallePedido detalleUno = new DetallePedido();
+        detalleUno.setPedido(pedido);
+        detalleUno.setProducto(producto);
+        detalleUno.setCantidadCanje(1);
+        DetallePedido detalleDos = new DetallePedido();
+        detalleDos.setPedido(pedido);
+        detalleDos.setProducto(producto);
+        detalleDos.setCantidadCanje(2);
+
+        List<PedidoPago> pagosSimulados = List.of(pagoSimulado("10.00"), pagoSimulado("20.00"));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(metodoPagoRepository.findById(1L)).thenReturn(Optional.of(efectivo));
+        when(metodoPagoRepository.findById(2L)).thenReturn(Optional.of(yape));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of()).thenReturn(pagosSimulados);
+        when(pedidoPagoRepository.save(any(PedidoPago.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalleUno, detalleDos));
+        when(productoRepository.findAllByIdInForUpdate(List.of(10L))).thenReturn(List.of(producto));
+
+        List<PedidoPago> resultado = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
+
+        assertEquals(2, resultado.size());
+        assertEquals(7, producto.getStockVacios());
+        assertEquals(0, detalleUno.getCantidadCanje());
+        assertEquals(0, detalleDos.getCantidadCanje());
+        verify(productoRepository).findAllByIdInForUpdate(List.of(10L));
+        verify(productoRepository).save(producto);
+        verify(detallePedidoRepository, times(2)).save(any(DetallePedido.class));
+    }
+
+    @Test
+    void confirmarEntregaMixta_dosVecesPedidoEntregado_noDuplicaPagosNiCanje() {
+        Pedido pedido = pedido("30.00");
+        pedido.setEstadoPedido("ENTREGADO");
+        PedidoPago pagoExistente = pagoSimulado("30.00");
+        ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, List.of());
+
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of(pagoExistente));
+
+        List<PedidoPago> primera = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
+        List<PedidoPago> segunda = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
+
+        assertSame(pagoExistente, primera.get(0));
+        assertSame(pagoExistente, segunda.get(0));
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(detallePedidoRepository, never()).findByPedido_Id(any());
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
     }
 }

@@ -111,7 +111,8 @@ public class PedidoDTO {
         String nombreProducto,
         Integer cantidad,
         BigDecimal precioUnitario,
-        Integer cantidadPrestada
+        Integer cantidadPrestada,
+        Integer cantidadCanje
     ){}
 
     public record PagoResponse(

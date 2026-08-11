@@ -21,10 +21,13 @@ import com.gas.sistema_gas.Model.Evidencia;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
+import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
+import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
@@ -46,6 +49,12 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
 
     @Autowired
     private EvidenciaRepository evidenciaRepository;
+
+    @Autowired
+    private DetallePedidoRepository detallePedidoRepository;
+
+    @Autowired
+    private ProductoRepository productoRepository;
 
     @Value("${app.evidencias.dir:src/main/resources/static/imagenes-sistema}")
     private String evidenciasDir;
@@ -290,6 +299,103 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         pedidoRepository.save(pedido);
 
         return pagosGuardados;
+    }
+
+    /**
+     * Confirma el pago y el retorno pendiente de CANJE dentro de una misma transacción.
+     * cantidadCanje > 0 representa retorno pendiente; 0 representa retorno ya aplicado.
+     */
+    @Override
+    @Transactional
+    public List<PedidoPago> confirmarEntregaConPagos(ConfirmarEntregaMixtaDTO dto,
+            List<MultipartFile> evidencias, MultipartFile evidenciaVuelto) {
+        if (dto == null || dto.idPedido == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido");
+        }
+
+        Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        if ("ENTREGADO".equalsIgnoreCase(pedido.getEstadoPedido())) {
+            return pedidoPagoRepository.findByPedido(pedido);
+        }
+        validarPedidoListoParaEntrega(pedido);
+
+        List<PedidoPago> pagosGuardados = registrarPagosMultiples(dto, evidencias, evidenciaVuelto);
+        procesarCanjeDomicilioPendiente(pedido);
+        return pagosGuardados;
+    }
+
+    @Override
+    @Transactional
+    public PedidoPago confirmarEntregaPagoUnico(PedidoPagoYapeDTO dto, MultipartFile evidencia,
+            MultipartFile evidenciaVuelto) {
+        if (dto == null || dto.idPedido == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido");
+        }
+
+        Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        if ("ENTREGADO".equalsIgnoreCase(pedido.getEstadoPedido())) {
+            return pedidoPagoRepository.findByPedido(pedido).stream().findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                            "El pedido ya fue entregado sin pagos registrados"));
+        }
+        validarPedidoListoParaEntrega(pedido);
+
+        PedidoPago pago = registrarPagoYape(dto, evidencia, evidenciaVuelto);
+        procesarCanjeDomicilioPendiente(pedido);
+        return pago;
+    }
+
+    private void validarPedidoListoParaEntrega(Pedido pedido) {
+        if (!"DOMICILIO".equalsIgnoreCase(pedido.getTipoVenta())
+                || !"EN_DOMICILIO".equalsIgnoreCase(pedido.getEstadoPedido())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El pedido debe estar EN_DOMICILIO para confirmar la entrega");
+        }
+    }
+
+    private void procesarCanjeDomicilioPendiente(Pedido pedido) {
+        if (!"DOMICILIO".equalsIgnoreCase(pedido.getTipoVenta())) {
+            return;
+        }
+
+        List<com.gas.sistema_gas.Model.DetallePedido> detallesCanjePendientes = detallePedidoRepository
+                .findByPedido_Id(pedido.getId()).stream()
+                .filter(detalle -> detalle.getCantidadCanje() != null && detalle.getCantidadCanje() > 0)
+                .toList();
+        if (detallesCanjePendientes.isEmpty()) {
+            return;
+        }
+
+        List<Long> idsOrdenados = detallesCanjePendientes.stream()
+                .map(detalle -> detalle.getProducto().getId())
+                .distinct()
+                .sorted()
+                .toList();
+        List<Producto> productos = productoRepository.findAllByIdInForUpdate(idsOrdenados);
+        if (productos.size() != idsOrdenados.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Uno o más productos no fueron encontrados");
+        }
+        java.util.Map<Long, Producto> productosBloqueados = new java.util.HashMap<>();
+        for (Producto producto : productos) {
+            productosBloqueados.put(producto.getId(), producto);
+        }
+
+        java.util.Map<Long, Integer> cantidadesPorProducto = new java.util.HashMap<>();
+        for (com.gas.sistema_gas.Model.DetallePedido detalle : detallesCanjePendientes) {
+            cantidadesPorProducto.merge(detalle.getProducto().getId(), detalle.getCantidadCanje(), Integer::sum);
+        }
+        for (java.util.Map.Entry<Long, Integer> canje : cantidadesPorProducto.entrySet()) {
+            Producto producto = productosBloqueados.get(canje.getKey());
+            int vaciosActuales = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
+            producto.setStockVacios(Math.addExact(vaciosActuales, canje.getValue()));
+            productoRepository.save(producto);
+        }
+        for (com.gas.sistema_gas.Model.DetallePedido detalle : detallesCanjePendientes) {
+            detalle.setCantidadCanje(0);
+            detallePedidoRepository.save(detalle);
+        }
     }
 
     @Override

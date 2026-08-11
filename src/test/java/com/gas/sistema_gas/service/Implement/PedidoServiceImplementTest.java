@@ -692,7 +692,7 @@ class PedidoServiceImplementTest {
     }
 
     @Test
-    void createOrder_canjeDomicilio_rechazaAntesDePersistir() {
+    void createOrder_canjeDomicilio_persisteCantidadPendienteSinIncrementarVacios() {
         PedidoDTO.Create createDto = new PedidoDTO.Create(
                 null, 1L, "Juan", "999999999", "Av. Test 123", "referencia",
                 "12345678", 1L, 1L, null, null, null,
@@ -703,17 +703,42 @@ class PedidoServiceImplementTest {
                 List.of(new PedidoDTO.EnvaseMovimientoCreate(1L, 1, null, null, null, null))
         );
         Pedido pedido = pedido(1L, "PENDIENTE");
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        producto.setRequiereEnvase(true);
+        producto.setStockVacios(4);
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        Empleado empleado = new Empleado();
+        empleado.setId(1L);
+        DetallePedido[] detalleGuardado = new DetallePedido[1];
+
         when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
         when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001"))
                 .thenReturn("NV001-0001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(empleadoRepository.findById(1L)).thenReturn(Optional.of(empleado));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L)))
+                .thenReturn(List.of(lote(1L, producto, new BigDecimal("10.00"))));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> {
+            detalleGuardado[0] = invocation.getArgument(0);
+            return detalleGuardado[0];
+        });
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "PENDIENTE"));
 
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> pedidoService.createOrder(createDto, 1L));
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(createDto, 1L);
 
-        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
-        assertEquals("El canje de envases solo está disponible para ventas LOCAL", exception.getReason());
-        verify(pedidoRepository, never()).save(any(Pedido.class));
-        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        assertEquals("PENDIENTE", respuesta.estadoPedido());
+        assertEquals(1, detalleGuardado[0].getCantidadCanje());
+        assertEquals(4, producto.getStockVacios());
+        assertEquals(0, producto.getStockReservado().compareTo(BigDecimal.ONE));
+        verify(controlEnvaseRepository, never()).save(any());
     }
 
     // =========================================================================
