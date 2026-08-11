@@ -3,6 +3,7 @@ package com.gas.sistema_gas.Mapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.dto.ClienteDTO;
@@ -20,6 +21,7 @@ public interface ClienteMapper {
     @Mapping(target = "estado", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "prestamoIlimitado", source = "prestamoIlimitado", defaultValue = "false")
     Cliente toEntity(ClienteDTO.Create createDto);
     
     // Convertir la entidad Cliente a Dto.SimpleResponse
@@ -29,5 +31,7 @@ public interface ClienteMapper {
     @Mapping(target = "estado", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "prestamoIlimitado", source = "prestamoIlimitado",
+            nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntityFromDto(ClienteDTO.Update updateDto, @MappingTarget Cliente cliente);
 }

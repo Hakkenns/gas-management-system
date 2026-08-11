@@ -166,6 +166,17 @@
                                    placeholder="cliente@correo.com">
                         </div>
 
+                        <div class="form-group mb-3">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input"
+                                       id="input-prestamo-ilimitado" name="prestamoIlimitado">
+                                <label class="custom-control-label" for="input-prestamo-ilimitado">
+                                    Préstamo especial sin fecha límite
+                                </label>
+                            </div>
+                            <small class="text-muted">Autoriza préstamos especiales para este cliente.</small>
+                        </div>
+
                         <div class="text-right">
                             <button type="submit" class="btn btn-info" id="btn-guardar">Guardar</button>
                             <button type="button" class="btn btn-secondary"
@@ -211,6 +222,10 @@
                         <tr>
                             <th>Correo:</th>
                             <td id="view-correo"></td>
+                        </tr>
+                        <tr>
+                            <th>Préstamo especial:</th>
+                            <td id="view-prestamo-ilimitado"></td>
                         </tr>
                     </table>
                 </div>

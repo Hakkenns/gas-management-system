@@ -21,7 +21,10 @@ document.addEventListener("DOMContentLoaded", function() {
             }
 
             var url = formCliente.action;
-            var data = new URLSearchParams(new FormData(formCliente)).toString();
+            var formData = new FormData(formCliente);
+            var inputPrestamoIlimitado = document.getElementById('input-prestamo-ilimitado');
+            formData.set('prestamoIlimitado', inputPrestamoIlimitado && inputPrestamoIlimitado.checked ? 'true' : 'false');
+            var data = new URLSearchParams(formData).toString();
 
             fetch(url, {
                 method: 'POST',
@@ -70,6 +73,8 @@ function abrirModalNuevo() {
     // Habilitar la edición del nombre por si acaso quedó bloqueado de una búsqueda previa
     var inputNombre = document.getElementById('input-nombre');
     if (inputNombre) inputNombre.readOnly = false;
+    var inputPrestamoIlimitado = document.getElementById('input-prestamo-ilimitado');
+    if (inputPrestamoIlimitado) inputPrestamoIlimitado.checked = false;
 
     document.getElementById('modal-titulo').textContent = 'Nuevo Cliente';
     if (form) form.action = '/clientes';
@@ -88,6 +93,7 @@ function abrirModalEditar(id) {
             document.getElementById('input-direccion').value  = cliente.direccion || '';
             document.getElementById('input-referencia').value = cliente.referencia || '';
             document.getElementById('input-correo').value     = cliente.correo || '';
+            document.getElementById('input-prestamo-ilimitado').checked = cliente.prestamoIlimitado === true;
 
             var form = document.getElementById('form-cliente');
             if (form) form.action = '/clientes/' + id + '/editar';
@@ -108,6 +114,7 @@ function verCliente(id) {
             document.getElementById('view-direccion').textContent = cliente.direccion || '';
             document.getElementById('view-referencia').textContent = cliente.referencia || '';
             document.getElementById('view-correo').textContent = cliente.correo || '';
+            document.getElementById('view-prestamo-ilimitado').textContent = cliente.prestamoIlimitado === true ? 'Sí' : 'No';
 
             $('#modal-ver-cliente').modal('show');
         })

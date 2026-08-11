@@ -24,7 +24,9 @@ public class ClienteDTO {
 
         // El correo es opcional, pero si lo entregan debe tener un formato válido
         @Email(message = "Debe proporcionar un formato de email válido")
-        String correo
+        String correo,
+
+        Boolean prestamoIlimitado
     ){}
 
     public record SimpleResponse(
@@ -57,6 +59,8 @@ public class ClienteDTO {
 
         // El correo es opcional, pero si lo entregan debe tener un formato válido
         @Email(message = "Debe proporcionar un formato de email válido")
-        String correo
+        String correo,
+
+        Boolean prestamoIlimitado
     ){}
 }

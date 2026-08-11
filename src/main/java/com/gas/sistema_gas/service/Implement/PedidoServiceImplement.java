@@ -271,6 +271,7 @@ public class PedidoServiceImplement implements PedidoService {
                                 createDto.telefonoCliente() == null ? "" : createDto.telefonoCliente(),
                                 createDto.direccionCliente() == null ? "" : createDto.direccionCliente(),
                                 createDto.referenciaCliente(),
+                                null,
                                 null
                         );
                         Cliente nuevoCliente = clienteMapper.toEntity(clienteDto);
@@ -286,6 +287,7 @@ public class PedidoServiceImplement implements PedidoService {
                     createDto.telefonoCliente() == null ? "" : createDto.telefonoCliente(),
                     createDto.direccionCliente() == null ? "" : createDto.direccionCliente(),
                     createDto.referenciaCliente(),
+                    null,
                     null
             );
             Cliente nuevoCliente = clienteMapper.toEntity(clienteDto);
