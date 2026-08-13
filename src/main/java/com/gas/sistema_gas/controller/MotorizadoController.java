@@ -453,6 +453,30 @@ public class MotorizadoController {
                             HttpSession session,
                             @RequestHeader(value = "X-Requested-With", required = false) String requestedWith) {
 
+        if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "No autenticado"));
+        }
+
+        var usuarioOpt = usuarioRepository.findById(usuarioId);
+        if (usuarioOpt.isEmpty() || usuarioOpt.get().getEmpleado() == null
+                || usuarioOpt.get().getEmpleado().getId() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", "Empleado no válido"));
+        }
+
+        Long empleadoId = usuarioOpt.get().getEmpleado().getId();
+        if (!pedidoService.existsByIdAndEmpleadoId(idPedido, empleadoId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", "Pedido no asignado a este motorizado"));
+        }
+
         boolean requiereOperacion = idMetodo != null && (idMetodo == 2L || idMetodo == 3L);
         if (requiereOperacion && (numOperacion == null || numOperacion.isBlank())) {
             if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
