@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 
 public class CajaDTO {
@@ -21,6 +22,24 @@ public class CajaDTO {
             String codigoCaja,
             LocalDateTime fechaHoraApertura,
             BigDecimal montoInicial,
+            String estado) {
+    }
+
+    public record CierreRequest(
+            @NotNull(message = "El monto declarado es obligatorio")
+            @DecimalMin(value = "0.00", message = "El monto declarado no puede ser negativo")
+            @Digits(integer = 10, fraction = 2, message = "El monto declarado debe tener como maximo 2 decimales")
+            BigDecimal montoDeclarado,
+            String observaciones) {
+    }
+
+    public record CierreResponse(
+            Long idSesionCaja,
+            String codigoCaja,
+            LocalDateTime fechaHoraCierre,
+            BigDecimal montoEsperado,
+            BigDecimal montoDeclarado,
+            BigDecimal diferencia,
             String estado) {
     }
 }

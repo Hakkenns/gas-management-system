@@ -1,6 +1,7 @@
 package com.gas.sistema_gas.service.Implement;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 import org.springframework.http.HttpStatus;
@@ -94,5 +95,93 @@ public class CajaServiceImplement implements CajaService {
                 sesionGuardada.getFechaHoraApertura(),
                 montoInicial,
                 sesionGuardada.getEstado().name());
+    }
+
+    @Override
+    @Transactional
+    public CajaDTO.CierreResponse cerrarCaja(Long usuarioId, BigDecimal montoDeclarado, String observaciones) {
+        BigDecimal montoDeclaradoNormalizado = normalizarMontoDeclarado(montoDeclarado);
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        Caja caja = cajaRepository.findByCodigoForUpdate(CODIGO_CAJA_PRINCIPAL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "La Caja principal no esta configurada"));
+
+        if (!Boolean.TRUE.equals(caja.getActiva())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La Caja principal esta inactiva");
+        }
+
+        SesionCaja sesion = sesionCajaRepository.findByCajaAndEstadoForUpdate(caja, EstadoSesionCaja.ABIERTA)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "La Caja principal no tiene una sesion abierta"));
+
+        BigDecimal efectivoEsperado = normalizarMonto(movimientoCajaRepository.calcularSaldoPorSesionYCanal(
+                sesion,
+                CanalFondos.CAJA_FISICA,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO));
+        BigDecimal diferencia = montoDeclaradoNormalizado.subtract(efectivoEsperado)
+                .setScale(2, RoundingMode.UNNECESSARY);
+
+        if (diferencia.compareTo(BigDecimal.ZERO) != 0 && !tieneTexto(observaciones)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La observacion de cierre es obligatoria cuando existe diferencia");
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        sesion.setFechaHoraCierre(ahora);
+        sesion.setUsuarioCierre(usuario);
+        sesion.setMontoEsperadoCierre(efectivoEsperado);
+        sesion.setMontoDeclaradoCierre(montoDeclaradoNormalizado);
+        sesion.setDiferenciaCierre(diferencia);
+        sesion.setEstado(EstadoSesionCaja.CERRADA);
+        sesion.setObservaciones(anexarObservacionCierre(sesion.getObservaciones(), observaciones));
+        SesionCaja sesionGuardada = sesionCajaRepository.save(sesion);
+
+        return new CajaDTO.CierreResponse(
+                sesionGuardada.getId(),
+                caja.getCodigo(),
+                sesionGuardada.getFechaHoraCierre(),
+                sesionGuardada.getMontoEsperadoCierre(),
+                sesionGuardada.getMontoDeclaradoCierre(),
+                sesionGuardada.getDiferenciaCierre(),
+                sesionGuardada.getEstado().name());
+    }
+
+    private BigDecimal normalizarMontoDeclarado(BigDecimal montoDeclarado) {
+        if (montoDeclarado == null || montoDeclarado.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El monto declarado debe ser mayor o igual a cero");
+        }
+
+        try {
+            return montoDeclarado.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El monto declarado debe tener como maximo 2 decimales");
+        }
+    }
+
+    private BigDecimal normalizarMonto(BigDecimal monto) {
+        BigDecimal montoSeguro = monto != null ? monto : BigDecimal.ZERO;
+        return montoSeguro.setScale(2, RoundingMode.UNNECESSARY);
+    }
+
+    private boolean tieneTexto(String texto) {
+        return texto != null && !texto.isBlank();
+    }
+
+    private String anexarObservacionCierre(String observacionExistente, String observacionCierre) {
+        if (!tieneTexto(observacionCierre)) {
+            return observacionExistente;
+        }
+
+        String cierreFormateado = "Cierre: " + observacionCierre.trim();
+        if (!tieneTexto(observacionExistente)) {
+            return cierreFormateado;
+        }
+        return observacionExistente + "\n" + cierreFormateado;
     }
 }

@@ -29,8 +29,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.SistemaGasApplication;
 import com.gas.sistema_gas.Model.Caja;
+import com.gas.sistema_gas.Model.CanalFondos;
 import com.gas.sistema_gas.Model.EstadoSesionCaja;
+import com.gas.sistema_gas.Model.MovimientoCaja;
+import com.gas.sistema_gas.Model.OrigenMovimiento;
 import com.gas.sistema_gas.Model.Perfil;
+import com.gas.sistema_gas.Model.SentidoMovimiento;
+import com.gas.sistema_gas.Model.SesionCaja;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
@@ -85,9 +90,10 @@ class CajaAperturaConcurrenciaMySqlTest {
         perfil = perfilRepository.saveAndFlush(perfil);
 
         Usuario usuario = new Usuario();
-        usuario.setUserName("caja.concurrente");
+        String sufijo = Long.toUnsignedString(System.nanoTime());
+        usuario.setUserName("caja.concurrente." + sufijo);
         usuario.setPassword("hash-prueba");
-        usuario.setCorreo("caja.concurrente@test.com");
+        usuario.setCorreo("caja.concurrente." + sufijo + "@test.com");
         usuario.setEstado(1);
         usuario.setPerfil(perfil);
         usuarioId = usuarioRepository.saveAndFlush(usuario).getId();
@@ -108,7 +114,7 @@ class CajaAperturaConcurrenciaMySqlTest {
         }
     }
 
-    private ResultadoConcurrente resolver(Future<CajaDTO.AperturaResponse> future) {
+    private <T> ResultadoConcurrente<T> resolver(Future<T> future) {
         try {
             return new ResultadoConcurrente(future.get(20, TimeUnit.SECONDS), null);
         } catch (TimeoutException e) {
@@ -148,8 +154,8 @@ class CajaAperturaConcurrenciaMySqlTest {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CyclicBarrier barrier = new CyclicBarrier(2);
 
-        ResultadoConcurrente primero;
-        ResultadoConcurrente segundo;
+        ResultadoConcurrente<CajaDTO.AperturaResponse> primero;
+        ResultadoConcurrente<CajaDTO.AperturaResponse> segundo;
         try {
             Future<CajaDTO.AperturaResponse> futurePrimero = executor.submit(() -> {
                 barrier.await();
@@ -185,7 +191,100 @@ class CajaAperturaConcurrenciaMySqlTest {
                 "La apertura exitosa debe devolver respuesta");
     }
 
-    private record ResultadoConcurrente(CajaDTO.AperturaResponse respuesta, Throwable error) {
+    @Test
+    @Timeout(30)
+    void cierreCaja_calculaSoloEfectivoFisicoYGuardaSnapshotsReales() {
+        CajaDTO.AperturaResponse apertura = cajaService.abrirCaja(usuarioId, new BigDecimal("100.00"), "Fondo inicial");
+        SesionCaja sesion = sesionCajaRepository.findById(apertura.idSesionCaja()).orElseThrow();
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow();
+
+        guardarMovimiento(caja, sesion, usuario, SentidoMovimiento.INGRESO, OrigenMovimiento.VENTA,
+                CanalFondos.CAJA_FISICA, "50.00");
+        guardarMovimiento(caja, sesion, usuario, SentidoMovimiento.EGRESO, OrigenMovimiento.AJUSTE,
+                CanalFondos.CAJA_FISICA, "20.00");
+        guardarMovimiento(caja, sesion, usuario, SentidoMovimiento.INGRESO, OrigenMovimiento.VENTA,
+                CanalFondos.DIGITAL_NEGOCIO, "30.00");
+        guardarMovimiento(caja, sesion, usuario, SentidoMovimiento.INGRESO, OrigenMovimiento.VENTA,
+                CanalFondos.CUSTODIA_MOTORIZADO, "20.00");
+
+        CajaDTO.CierreResponse cierre = cajaService.cerrarCaja(usuarioId, new BigDecimal("130.00"), null);
+
+        SesionCaja sesionCerrada = sesionCajaRepository.findById(apertura.idSesionCaja()).orElseThrow();
+        assertEquals("CERRADA", cierre.estado());
+        assertEquals(EstadoSesionCaja.CERRADA, sesionCerrada.getEstado());
+        assertEquals(0, sesionCerrada.getMontoEsperadoCierre().compareTo(new BigDecimal("130.00")));
+        assertEquals(0, sesionCerrada.getMontoDeclaradoCierre().compareTo(new BigDecimal("130.00")));
+        assertEquals(0, sesionCerrada.getDiferenciaCierre().compareTo(BigDecimal.ZERO));
+        assertNotNull(sesionCerrada.getUsuarioCierre());
+        assertNotNull(sesionCerrada.getFechaHoraCierre());
+    }
+
+    @Test
+    @Timeout(30)
+    void dosCierresSimultaneos_cajaPrincipal_permiteExactamenteUno() throws Exception {
+        CajaDTO.AperturaResponse apertura = cajaService.abrirCaja(usuarioId, new BigDecimal("100.00"), "Fondo inicial");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CyclicBarrier barrier = new CyclicBarrier(2);
+
+        ResultadoConcurrente<CajaDTO.CierreResponse> primero;
+        ResultadoConcurrente<CajaDTO.CierreResponse> segundo;
+        try {
+            Future<CajaDTO.CierreResponse> futurePrimero = executor.submit(() -> {
+                barrier.await();
+                return cajaService.cerrarCaja(usuarioId, new BigDecimal("100.00"), null);
+            });
+            Future<CajaDTO.CierreResponse> futureSegundo = executor.submit(() -> {
+                barrier.await();
+                return cajaService.cerrarCaja(usuarioId, new BigDecimal("100.00"), null);
+            });
+
+            primero = resolver(futurePrimero);
+            segundo = resolver(futureSegundo);
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "El executor concurrente no termino");
+        }
+
+        long exitos = (primero.exitoso() ? 1 : 0) + (segundo.exitoso() ? 1 : 0);
+        long errores = (primero.exitoso() ? 0 : 1) + (segundo.exitoso() ? 0 : 1);
+        assertEquals(1L, exitos, "Exactamente un cierre debe tener exito");
+        assertEquals(1L, errores, "Exactamente un cierre debe rechazarse");
+
+        Throwable rechazo = primero.error() != null ? primero.error() : segundo.error();
+        assertTrue(rechazo instanceof ResponseStatusException,
+                "El cierre rechazado debe ser ResponseStatusException");
+        assertEquals(HttpStatus.CONFLICT, ((ResponseStatusException) rechazo).getStatusCode());
+
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        SesionCaja sesionCerrada = sesionCajaRepository.findById(apertura.idSesionCaja()).orElseThrow();
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+        assertEquals(1L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.CERRADA),
+                "Debe existir exactamente una sesión CERRADA");
+        assertEquals(EstadoSesionCaja.CERRADA, sesionCerrada.getEstado());
+        assertEquals(0, sesionCerrada.getMontoEsperadoCierre().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, sesionCerrada.getMontoDeclaradoCierre().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, sesionCerrada.getDiferenciaCierre().compareTo(BigDecimal.ZERO));
+        assertNotNull(sesionCerrada.getFechaHoraCierre());
+        assertNotNull(sesionCerrada.getUsuarioCierre());
+    }
+
+    private void guardarMovimiento(Caja caja, SesionCaja sesion, Usuario usuario, SentidoMovimiento sentido,
+            OrigenMovimiento origen, CanalFondos canalFondos, String monto) {
+        MovimientoCaja movimiento = new MovimientoCaja();
+        movimiento.setCaja(caja);
+        movimiento.setSesionCaja(sesion);
+        movimiento.setFechaHora(java.time.LocalDateTime.now());
+        movimiento.setSentido(sentido);
+        movimiento.setOrigen(origen);
+        movimiento.setCanalFondos(canalFondos);
+        movimiento.setMonto(new BigDecimal(monto));
+        movimiento.setUsuarioResponsable(usuario);
+        movimiento.setDescripcion("Movimiento de prueba para cierre de Caja");
+        movimientoCajaRepository.saveAndFlush(movimiento);
+    }
+
+    private record ResultadoConcurrente<T>(T respuesta, Throwable error) {
         boolean exitoso() {
             return respuesta != null;
         }

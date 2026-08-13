@@ -89,6 +89,28 @@ class CajaServiceImplementTest {
         });
     }
 
+    private SesionCaja configurarCierreDisponible(BigDecimal efectivoEsperado) {
+        configurarUsuarioYCajaPrincipal();
+
+        SesionCaja sesion = new SesionCaja();
+        sesion.setId(20L);
+        sesion.setCaja(cajaPrincipal);
+        sesion.setEstado(EstadoSesionCaja.ABIERTA);
+        sesion.setObservaciones("Fondo inicial");
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.of(sesion));
+        when(movimientoCajaRepository.calcularSaldoPorSesionYCanal(
+                sesion,
+                CanalFondos.CAJA_FISICA,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO)).thenReturn(efectivoEsperado);
+        return sesion;
+    }
+
+    private void configurarGuardadoCierre() {
+        when(sesionCajaRepository.save(any(SesionCaja.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
     @Test
     void abrirCaja_conCienSoles_creaSesionYMovimientoApertura() {
         configurarUsuarioYCajaPrincipal();
@@ -185,5 +207,131 @@ class CajaServiceImplementTest {
         verify(cajaRepository, never()).findByCodigoForUpdate(any());
         verify(sesionCajaRepository, never()).save(any());
         verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_cierreExacto_guardaSnapshotsYEstadoCerrada() {
+        SesionCaja sesion = configurarCierreDisponible(new BigDecimal("100.00"));
+        configurarGuardadoCierre();
+
+        CajaDTO.CierreResponse response = cajaService.cerrarCaja(10L, new BigDecimal("100"), null);
+
+        assertEquals(EstadoSesionCaja.CERRADA, sesion.getEstado());
+        assertEquals(0, sesion.getMontoEsperadoCierre().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, sesion.getMontoDeclaradoCierre().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, sesion.getDiferenciaCierre().compareTo(BigDecimal.ZERO));
+        assertEquals(usuario, sesion.getUsuarioCierre());
+        assertEquals("Fondo inicial", sesion.getObservaciones());
+        assertEquals(20L, response.idSesionCaja());
+        assertEquals("CAJA_PRINCIPAL", response.codigoCaja());
+        assertEquals("CERRADA", response.estado());
+        verify(sesionCajaRepository).save(sesion);
+    }
+
+    @Test
+    void cerrarCaja_sobrante_conNota_loPermite() {
+        SesionCaja sesion = configurarCierreDisponible(new BigDecimal("100.00"));
+        configurarGuardadoCierre();
+
+        CajaDTO.CierreResponse response = cajaService.cerrarCaja(10L, new BigDecimal("110.00"), "Sobrante contado");
+
+        assertEquals(0, response.diferencia().compareTo(new BigDecimal("10.00")));
+        assertEquals(EstadoSesionCaja.CERRADA, sesion.getEstado());
+        assertEquals("Fondo inicial\nCierre: Sobrante contado", sesion.getObservaciones());
+        verify(sesionCajaRepository).save(sesion);
+    }
+
+    @Test
+    void cerrarCaja_faltante_conNota_loPermite() {
+        SesionCaja sesion = configurarCierreDisponible(new BigDecimal("100.00"));
+        configurarGuardadoCierre();
+
+        CajaDTO.CierreResponse response = cajaService.cerrarCaja(10L, new BigDecimal("90.00"), "Faltante contado");
+
+        assertEquals(0, response.diferencia().compareTo(new BigDecimal("-10.00")));
+        assertEquals(EstadoSesionCaja.CERRADA, sesion.getEstado());
+        verify(sesionCajaRepository).save(sesion);
+    }
+
+    @Test
+    void cerrarCaja_diferenciaSinObservacion_rechazaSinGuardarCierre() {
+        SesionCaja sesion = configurarCierreDisponible(new BigDecimal("100.00"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(10L, new BigDecimal("90.00"), "   "));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals(EstadoSesionCaja.ABIERTA, sesion.getEstado());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_montoNegativo_rechazaAntesDeConsultar() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(10L, new BigDecimal("-0.01"), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(usuarioRepository, never()).findById(any());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_montoConMasDeDosDecimales_rechazaSinRedondear() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(10L, new BigDecimal("100.001"), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(usuarioRepository, never()).findById(any());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_usuarioInexistente_rechazaSinCerrarSesion() {
+        when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(99L, new BigDecimal("100.00"), null));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        verify(cajaRepository, never()).findByCodigoForUpdate(any());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_cajaInactiva_rechazaSinCerrarSesion() {
+        configurarUsuarioYCajaPrincipal();
+        cajaPrincipal.setActiva(false);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(10L, new BigDecimal("100.00"), null));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_sinSesionAbierta_rechazaSinGuardarCierre() {
+        configurarUsuarioYCajaPrincipal();
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.cerrarCaja(10L, new BigDecimal("100.00"), null));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).calcularSaldoPorSesionYCanal(any(), any(), any(), any());
+        verify(sesionCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void cerrarCaja_conservaObservacionAperturaYAnexaNotaCierre() {
+        SesionCaja sesion = configurarCierreDisponible(new BigDecimal("100.00"));
+        configurarGuardadoCierre();
+
+        cajaService.cerrarCaja(10L, new BigDecimal("100.00"), "Arqueo correcto");
+
+        assertEquals("Fondo inicial\nCierre: Arqueo correcto", sesion.getObservaciones());
+        verify(sesionCajaRepository).save(sesion);
     }
 }
