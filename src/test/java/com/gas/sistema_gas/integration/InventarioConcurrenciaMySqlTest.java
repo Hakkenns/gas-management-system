@@ -167,6 +167,16 @@ public class InventarioConcurrenciaMySqlTest {
                                 + ".detalle_pedido ADD COLUMN cantidad_canje INT NULL");
                     }
                 }
+                try (ResultSet envaseVendido = stmt.executeQuery(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                                + "WHERE TABLE_SCHEMA = '" + DB_TARGET + "' "
+                                + "AND TABLE_NAME = 'detalle_pedido' AND COLUMN_NAME = 'es_envase_vendido'")) {
+                    envaseVendido.next();
+                    if (envaseVendido.getInt(1) == 0) {
+                        stmt.execute("ALTER TABLE " + DB_TARGET
+                                + ".detalle_pedido ADD COLUMN es_envase_vendido TINYINT(1) NOT NULL DEFAULT 0");
+                    }
+                }
             } catch (Exception ex) {
                 throw new IllegalStateException("No se pudo inicializar la base de datos de prueba", ex);
             }

@@ -1,9 +1,11 @@
 package com.gas.sistema_gas.service.Implement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -656,6 +658,37 @@ class PedidoServiceImplementTest {
         // Verificar que se guardó Producto
         verify(productoRepository).save(any(Producto.class));
         verify(pedidoRepository).save(any(Pedido.class));
+    }
+
+    @Test
+    void updateEstadoPedido_ACEPTADO_a_CARGADO_ignoraDetalleDeEnvaseVendido() {
+        Pedido pedido = pedido(241L, "ACEPTADO");
+        Producto contenido = producto(1L, BigDecimal.ONE);
+        Producto envase = producto(2L, BigDecimal.ZERO);
+        DetallePedido detalleContenido = detalle(contenido, 1);
+        DetallePedido detalleEnvase = detalle(envase, 2);
+        detalleEnvase.setEsEnvaseVendido(true);
+
+        when(pedidoRepository.findByIdForUpdate(241L)).thenReturn(Optional.of(pedido));
+        when(detalleRepository.findByPedido_Id(241L)).thenReturn(List.of(detalleContenido, detalleEnvase));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(contenido));
+        when(inventarioLoteRepository.sumCantidadActualByProductoId(1L)).thenReturn(new BigDecimal("9.00"));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(241L, "CARGADO"));
+
+        pedidoService.updateEstadoPedido(241L, "CARGADO");
+
+        assertAll(
+                () -> assertEquals("CARGADO", pedido.getEstadoPedido()),
+                () -> assertEquals(BigDecimal.ZERO, contenido.getStockReservado()),
+                () -> assertEquals(BigDecimal.ZERO, envase.getStockReservado())
+        );
+        verify(inventarioLoteService).descontarStockPorPEPS(detalleContenido);
+        verify(inventarioLoteService, never()).descontarStockPorPEPS(
+                argThat(detalle -> detalle == detalleEnvase));
+        verify(inventarioLoteRepository).sumCantidadActualByProductoId(1L);
+        verify(inventarioLoteRepository, never()).sumCantidadActualByProductoId(2L);
     }
 
     // ---------- PRUEBA 13: createOrder con idPedido rechaza edición ----------

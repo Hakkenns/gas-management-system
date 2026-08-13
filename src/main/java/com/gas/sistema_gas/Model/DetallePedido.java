@@ -42,6 +42,13 @@ public class DetallePedido {
     @Min(value = 0, message = "La cantidad de canje no puede ser negativa")
     private Integer cantidadCanje = 0;
 
+    /**
+     * Identifica una línea facturable de envase vendido. No representa
+     * contenido sujeto a lotes, reservas ni consumo PEPS.
+     */
+    @Column(name = "es_envase_vendido", nullable = false)
+    private Boolean esEnvaseVendido = false;
+
     // Relación ManyToOne con Pedido
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_pedido", nullable = false)

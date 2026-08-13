@@ -447,6 +447,7 @@ public class PedidoServiceImplement implements PedidoService {
                 detalle.setProducto(producto);
                 detalle.setCantidad(item.cantidad());
                 detalle.setPrecioUnitario(precioUnitario);
+                detalle.setEsEnvaseVendido(false);
                 if ("CANJE".equalsIgnoreCase(tipoMov)
                         && "DOMICILIO".equalsIgnoreCase(pedido.getTipoVenta())) {
                     detalle.setCantidadCanje(item.cantidad());
@@ -538,6 +539,7 @@ public class PedidoServiceImplement implements PedidoService {
                     detalleEnvase.setProducto(productoEnvase);
                     detalleEnvase.setCantidad(envMvt.cantidad());
                     detalleEnvase.setPrecioUnitario(precioUnitarioEnvase);
+                    detalleEnvase.setEsEnvaseVendido(true);
                     detalleRepository.save(detalleEnvase);
 
                     BigDecimal importeLineaEnvase = precioUnitarioEnvase.multiply(BigDecimal.valueOf(envMvt.cantidad()));
@@ -797,10 +799,13 @@ public class PedidoServiceImplement implements PedidoService {
 
                 // FASE 4B-2A: Orden de bloqueo: Pedido (ya bloqueado) → Productos → Lotes PEPS
                 List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
-                Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detalles);
+                List<DetallePedido> detallesContenido = detalles.stream()
+                        .filter(detalle -> !Boolean.TRUE.equals(detalle.getEsEnvaseVendido()))
+                        .toList();
+                Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detallesContenido);
                 Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsDetalles);
 
-                for (DetallePedido detalle : detalles) {
+                for (DetallePedido detalle : detallesContenido) {
                     Long idProd = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
                     if (idProd == null) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
@@ -883,23 +888,27 @@ public class PedidoServiceImplement implements PedidoService {
     private void anularPedidoPendienteConReversion(Pedido pedido) {
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
         Map<Long, BigDecimal> reservasPorProducto = new java.util.HashMap<>();
+        Map<Long, Integer> vaciosAReponerPorProducto = new java.util.HashMap<>();
         for (DetallePedido detalle : detalles) {
             Long idProducto = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
             if (idProducto == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");
             }
-            reservasPorProducto.merge(idProducto, BigDecimal.valueOf(detalle.getCantidad()), BigDecimal::add);
+            if (Boolean.TRUE.equals(detalle.getEsEnvaseVendido())) {
+                vaciosAReponerPorProducto.merge(idProducto, detalle.getCantidad(), Math::addExact);
+            } else {
+                reservasPorProducto.merge(idProducto, BigDecimal.valueOf(detalle.getCantidad()), BigDecimal::add);
+            }
         }
 
         List<Long> idsProductosPrestamos = controlEnvaseRepository.findProductoIdsByPedidoId(pedido.getId());
         Set<Long> idsProductosAnulacion = new LinkedHashSet<>(reservasPorProducto.keySet());
+        idsProductosAnulacion.addAll(vaciosAReponerPorProducto.keySet());
         idsProductosAnulacion.addAll(idsProductosPrestamos);
         Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsProductosAnulacion);
 
         List<com.gas.sistema_gas.Model.ControlEnvase> controlesEnvase = controlEnvaseRepository
                 .findByPedido_IdForUpdate(pedido.getId());
-        Map<Long, Integer> pendientesPorProducto = new java.util.HashMap<>();
-
         for (com.gas.sistema_gas.Model.ControlEnvase control : controlesEnvase) {
             int cantidadPrestada = control.getCantidadPrestada() != null ? control.getCantidadPrestada() : 0;
             int cantidadDevuelta = control.getCantidadDevuelta() != null ? control.getCantidadDevuelta() : 0;
@@ -915,7 +924,7 @@ public class PedidoServiceImplement implements PedidoService {
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                             "El producto del préstamo pendiente no fue bloqueado");
                 }
-                pendientesPorProducto.merge(idProducto, pendiente, Integer::sum);
+                vaciosAReponerPorProducto.merge(idProducto, pendiente, Math::addExact);
             }
         }
 
@@ -935,10 +944,10 @@ public class PedidoServiceImplement implements PedidoService {
             productoRepository.save(producto);
         }
 
-        for (Map.Entry<Long, Integer> entry : pendientesPorProducto.entrySet()) {
+        for (Map.Entry<Long, Integer> entry : vaciosAReponerPorProducto.entrySet()) {
             Producto producto = productosBloqueados.get(entry.getKey());
             int stockVaciosActual = producto.getStockVacios() != null ? producto.getStockVacios() : 0;
-            producto.setStockVacios(stockVaciosActual + entry.getValue());
+            producto.setStockVacios(Math.addExact(stockVaciosActual, entry.getValue()));
             productoRepository.save(producto);
         }
 
@@ -957,10 +966,13 @@ public class PedidoServiceImplement implements PedidoService {
         List<DetallePedido> detalles = detalleRepository.findByPedido_Id(pedido.getId());
 
         // FASE 4B-2A: Bloquear todos los productos únicos en una sola llamada
-        Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detalles);
+        List<DetallePedido> detallesContenido = detalles.stream()
+                .filter(detalle -> !Boolean.TRUE.equals(detalle.getEsEnvaseVendido()))
+                .toList();
+        Set<Long> idsDetalles = extraerIdsDeDetallesPedido(detallesContenido);
         Map<Long, Producto> productosBloqueados = bloquearProductosPorIds(idsDetalles);
 
-        for (DetallePedido detalle : detalles) {
+        for (DetallePedido detalle : detallesContenido) {
             Long idProd = detalle.getProducto() != null ? detalle.getProducto().getId() : null;
             if (idProd == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Detalle sin producto asociado");

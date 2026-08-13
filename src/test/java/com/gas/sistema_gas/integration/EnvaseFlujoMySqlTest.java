@@ -564,6 +564,102 @@ class EnvaseFlujoMySqlTest {
     }
 
     @Test
+    void ventaEnvaseDomicilio_debeConsumirSoloContenidoYMantenerVaciosAlEntregar() {
+        prepararInventarioParaPrestamo(5, 3);
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(
+                crearPedidoMovimientoDomicilio("VENTA"), usuarioId);
+        Pedido pedidoCreado = pedidoRepository.findById(respuesta.idPedido()).orElseThrow();
+        List<DetallePedido> detallesCreados = detallePedidoRepository.findByPedido_Id(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("PENDIENTE", pedidoCreado.getEstadoPedido()),
+                () -> assertEquals(4, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(0, BigDecimal.ONE.compareTo(
+                        productoRepository.findById(productoId).orElseThrow().getStockReservado())),
+                () -> assertEquals(0, new BigDecimal("3").compareTo(stockActualLotes())),
+                () -> assertEquals(2, detallesCreados.size()),
+                () -> assertEquals(1, detallesCreados.stream()
+                        .filter(detalle -> Boolean.TRUE.equals(detalle.getEsEnvaseVendido())).count()),
+                () -> assertEquals(0, controlEnvaseRepository.findByPedido_Id(respuesta.idPedido()).size())
+        );
+
+        pedidoService.updateEstadoPedido(respuesta.idPedido(), "ACEPTADO");
+        pedidoService.updateEstadoPedido(respuesta.idPedido(), "CARGADO");
+
+        assertAll(
+                () -> assertEquals(0, new BigDecimal("2").compareTo(stockActualLotes())),
+                () -> assertEquals(0, BigDecimal.ZERO.compareTo(
+                        productoRepository.findById(productoId).orElseThrow().getStockReservado())),
+                () -> assertEquals(4, productoRepository.findById(productoId).orElseThrow().getStockVacios())
+        );
+
+        pedidoService.updateEstadoPedido(respuesta.idPedido(), "EN_CAMINO");
+        pedidoService.updateEstadoPedido(respuesta.idPedido(), "EN_DOMICILIO");
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                respuesta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null);
+
+        assertAll(
+                () -> assertEquals("ENTREGADO",
+                        pedidoRepository.findById(respuesta.idPedido()).orElseThrow().getEstadoPedido()),
+                () -> assertEquals(0, new BigDecimal("2").compareTo(stockActualLotes())),
+                () -> assertEquals(4, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(0, controlEnvaseRepository.findByPedido_Id(respuesta.idPedido()).size()),
+                () -> assertTrue(detallePedidoRepository.findByPedido_Id(respuesta.idPedido()).stream()
+                        .allMatch(detalle -> Integer.valueOf(0).equals(detalle.getCantidadCanje())))
+        );
+    }
+
+    @Test
+    void anularVentaEnvaseDomicilio_debeRestaurarVaciosPorProductoSinDuplicar() {
+        prepararInventarioParaPrestamo(8, 5);
+        Long productoDosId = crearSegundoProductoConLote(9, 4);
+        PedidoDTO.Create pedidoVenta = new PedidoDTO.Create(
+                null, clienteId, null, "Cliente Envase Test", null, null, null, empleadoId, usuarioId,
+                null, null, null, null, "DOMICILIO", null, List.of(),
+                List.of(
+                        new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null),
+                        new PedidoDTO.DetalleCreate(productoDosId, 2, new BigDecimal("10.00"), null)),
+                "VENTA",
+                List.of(
+                        new PedidoDTO.EnvaseMovimientoCreate(productoId, 3, new BigDecimal("10.00"), null, null, null),
+                        new PedidoDTO.EnvaseMovimientoCreate(productoDosId, 4, new BigDecimal("10.00"), null, null, null)));
+
+        PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(pedidoVenta, usuarioId);
+        assertAll(
+                () -> assertEquals(5, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(5, productoRepository.findById(productoDosId).orElseThrow().getStockVacios()),
+                () -> assertEquals(0, BigDecimal.ONE.compareTo(
+                        productoRepository.findById(productoId).orElseThrow().getStockReservado())),
+                () -> assertEquals(0, new BigDecimal("2").compareTo(
+                        productoRepository.findById(productoDosId).orElseThrow().getStockReservado()))
+        );
+
+        pedidoService.deleteOrder(respuesta.idPedido());
+
+        assertAll(
+                () -> assertEquals("ANULADO",
+                        pedidoRepository.findById(respuesta.idPedido()).orElseThrow().getEstadoPedido()),
+                () -> assertEquals(8, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(9, productoRepository.findById(productoDosId).orElseThrow().getStockVacios()),
+                () -> assertEquals(0, BigDecimal.ZERO.compareTo(
+                        productoRepository.findById(productoId).orElseThrow().getStockReservado())),
+                () -> assertEquals(0, BigDecimal.ZERO.compareTo(
+                        productoRepository.findById(productoDosId).orElseThrow().getStockReservado())),
+                () -> assertEquals(0, new BigDecimal("5").compareTo(stockActualLotes())),
+                () -> assertEquals(0, controlEnvaseRepository.findByPedido_Id(respuesta.idPedido()).size())
+        );
+
+        ResponseStatusException repetida = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.deleteOrder(respuesta.idPedido()));
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, repetida.getStatusCode()),
+                () -> assertEquals(8, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
+                () -> assertEquals(9, productoRepository.findById(productoDosId).orElseThrow().getStockVacios())
+        );
+    }
+
+    @Test
     void prestamoExplicitoConCantidadPrestadaLegada_noDebeDuplicarDeuda() {
         String rucUnico = String.format("20%09d", Math.floorMod(System.nanoTime(), 1_000_000_000L));
         transactionTemplate.executeWithoutResult(status -> {
