@@ -782,6 +782,68 @@ class PedidoServiceImplementTest {
     }
 
     @Test
+    void createOrder_DOMICILIO_conIdMetodoPago_rechazaAntesDePersistir() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, "", "Juan", "Av. Test 123", "referencia", "999999999",
+                1L, 1L, 2L, null, "obs", "PENDIENTE", "DOMICILIO", null,
+                List.of(), List.of(new PedidoDTO.DetalleCreate(1L, 1, new BigDecimal("10.00"), 0)),
+                "NINGUNO", List.of());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Los pedidos a domicilio no pueden registrar pagos al momento de su creación",
+                exception.getReason());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(clienteRepository, never()).save(any(Cliente.class));
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
+    }
+
+    @Test
+    void createOrder_tipoVentaNulo_conIdMetodoPago_rechazaComoDomicilio() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, "", "Juan", "Av. Test 123", "referencia", "999999999",
+                1L, 1L, 2L, null, "obs", "PENDIENTE", null, null,
+                List.of(), List.of(new PedidoDTO.DetalleCreate(1L, 1, new BigDecimal("10.00"), 0)),
+                "NINGUNO", List.of());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Los pedidos a domicilio no pueden registrar pagos al momento de su creación",
+                exception.getReason());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
+    }
+
+    @Test
+    void createOrder_DOMICILIO_conPagosMultiples_rechazaAntesDePersistir() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, "", "Juan", "Av. Test 123", "referencia", "999999999",
+                1L, 1L, null, null, "obs", "PENDIENTE", "DOMICILIO", null,
+                List.of(
+                        new PedidoDTO.PagoCreate(1L, new BigDecimal("5.00"), null),
+                        new PedidoDTO.PagoCreate(2L, new BigDecimal("5.00"), "op-yape")),
+                List.of(new PedidoDTO.DetalleCreate(1L, 1, new BigDecimal("10.00"), 0)),
+                "NINGUNO", List.of());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(clienteRepository, never()).save(any(Cliente.class));
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(correlativoService, never()).incrementarYObtenerCodigo(any(), any());
+    }
+
+    @Test
     void createOrder_canjeDomicilio_persisteCantidadPendienteSinIncrementarVacios() {
         PedidoDTO.Create createDto = new PedidoDTO.Create(
                 null, 1L, "Juan", "999999999", "Av. Test 123", "referencia",

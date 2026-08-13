@@ -233,6 +233,15 @@ public class PedidoServiceImplement implements PedidoService {
             );
         }
 
+        boolean esDomicilio = createDto.tipoVenta() == null
+                || "DOMICILIO".equalsIgnoreCase(createDto.tipoVenta());
+        boolean contienePagos = createDto.idMetodoPago() != null
+                || (createDto.pagos() != null && !createDto.pagos().isEmpty());
+        if (esDomicilio && contienePagos) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los pedidos a domicilio no pueden registrar pagos al momento de su creación");
+        }
+
         boolean hayDetallesGas = createDto.detalles() != null && !createDto.detalles().isEmpty();
         boolean hayEnvaseVenta = createDto.envaseMovimientos() != null 
             && "VENTA".equalsIgnoreCase(createDto.tipoMovimientoEnvase())
