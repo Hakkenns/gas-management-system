@@ -10,6 +10,7 @@ import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.IncidenciaRepository;
 import com.gas.sistema_gas.Repository.MotoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.RespuestaIncidenciaRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
@@ -43,10 +44,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/incidencias")
 public class IncidenciaController {
 
+    private static final String MENSAJE_PAGO_REQUIERE_REEMBOLSO =
+            "El pedido tiene pagos registrados y requiere un reembolso antes de poder cancelarse";
+
     private final IncidenciaRepository incidenciaRepository;
     private final RespuestaIncidenciaRepository respuestaIncidenciaRepository;
     private final EmpleadoRepository empleadoRepository;
     private final PedidoRepository pedidoRepository;
+    private final PedidoPagoRepository pedidoPagoRepository;
     private final MotoRepository motoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AsignacionMotoRepository asignacionMotoRepository;
@@ -60,6 +65,7 @@ public class IncidenciaController {
                                 RespuestaIncidenciaRepository respuestaIncidenciaRepository,
                                 EmpleadoRepository empleadoRepository,
                                 PedidoRepository pedidoRepository,
+                                PedidoPagoRepository pedidoPagoRepository,
                                 MotoRepository motoRepository,
                                 UsuarioRepository usuarioRepository,
                                 AsignacionMotoRepository asignacionMotoRepository,
@@ -72,6 +78,7 @@ public class IncidenciaController {
         this.respuestaIncidenciaRepository = respuestaIncidenciaRepository;
         this.empleadoRepository = empleadoRepository;
         this.pedidoRepository = pedidoRepository;
+        this.pedidoPagoRepository = pedidoPagoRepository;
         this.motoRepository = motoRepository;
         this.usuarioRepository = usuarioRepository;
         this.asignacionMotoRepository = asignacionMotoRepository;
@@ -267,6 +274,11 @@ public class IncidenciaController {
         if (incidenciaRechazo == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "No existe un rechazo pendiente para confirmar"));
+        }
+
+        if (pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(idPedido, BigDecimal.ZERO)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", MENSAJE_PAGO_REQUIERE_REEMBOLSO));
         }
 
         Empleado empleadoAnterior = pedido.getEmpleado();
@@ -753,6 +765,11 @@ public class IncidenciaController {
         if (!"CLIENTE_AUSENTE".equals(estadoPedido)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", "El pedido no está en estado CLIENTE_AUSENTE"));
+        }
+
+        if (pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(pedidoId, BigDecimal.ZERO)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", MENSAJE_PAGO_REQUIERE_REEMBOLSO));
         }
 
         // 5. devolverStockDePedido

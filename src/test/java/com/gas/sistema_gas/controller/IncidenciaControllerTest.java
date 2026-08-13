@@ -40,6 +40,7 @@ import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.IncidenciaRepository;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.RespuestaIncidenciaRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
@@ -64,6 +65,9 @@ class IncidenciaControllerTest {
 
     @Mock
     private PedidoRepository pedidoRepository;
+
+    @Mock
+    private PedidoPagoRepository pedidoPagoRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -185,6 +189,29 @@ class IncidenciaControllerTest {
         InOrder inOrder = inOrder(inventarioLoteService, pedidoRepository);
         inOrder.verify(inventarioLoteService).devolverStockDePedido(1L);
         inOrder.verify(pedidoRepository).save(pedido);
+    }
+
+    @Test
+    void confirmarRechazo_conPagoPositivo_retorna409_sinDevolverStockNiCambiarEstados() {
+        Pedido pedido = pedido(1L, "EN_REVISION");
+        pedido.setEstadoPago("PAGADO");
+        Incidencia incidencia = incidencia(10L, "RECHAZO_POST_LLEGADA", "PENDIENTE", pedido);
+
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(incidenciaRepository.findByPedidoIdForUpdate(1L)).thenReturn(List.of(incidencia));
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(1L, BigDecimal.ZERO)).thenReturn(true);
+
+        ResponseEntity<?> response = incidenciaController.confirmarRechazo(Map.of("idPedido", 1L), session());
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("El pedido tiene pagos registrados y requiere un reembolso antes de poder cancelarse", body.get("message"));
+        assertEquals("EN_REVISION", pedido.getEstadoPedido());
+        assertEquals("PAGADO", pedido.getEstadoPago());
+        assertEquals("PENDIENTE", incidencia.getEstado());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+        verify(incidenciaRepository, never()).save(any(Incidencia.class));
     }
 
     // PRUEBA: confirmarRechazo bloquea Pedido antes de Incidencias
@@ -393,6 +420,30 @@ class IncidenciaControllerTest {
         InOrder inOrder = inOrder(inventarioLoteService, incidenciaRepository);
         inOrder.verify(inventarioLoteService).devolverStockDePedido(1L);
         inOrder.verify(incidenciaRepository).save(incidencia);
+    }
+
+    @Test
+    void marcarComoRevisado_conPagoPositivo_retorna409_sinDevolverStockNiCerrarIncidencia() {
+        Pedido pedido = pedido(1L, "CLIENTE_AUSENTE");
+        pedido.setEstadoPago("CREDITO");
+        Incidencia incidencia = incidencia(10L, "CLIENTE_AUSENTE", "PENDIENTE", pedido);
+
+        when(incidenciaRepository.findById(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(incidenciaRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(incidencia));
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(1L, BigDecimal.ZERO)).thenReturn(true);
+
+        ResponseEntity<?> response = incidenciaController.marcarComoRevisado(10L, session());
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("El pedido tiene pagos registrados y requiere un reembolso antes de poder cancelarse", body.get("message"));
+        assertEquals("CLIENTE_AUSENTE", pedido.getEstadoPedido());
+        assertEquals("CREDITO", pedido.getEstadoPago());
+        assertEquals("PENDIENTE", incidencia.getEstado());
+        verify(inventarioLoteService, never()).devolverStockDePedido(any());
+        verify(incidenciaRepository, never()).save(any(Incidencia.class));
+        verify(respuestaIncidenciaRepository, never()).save(any());
     }
 
     // PRUEBA: marcarComoRevisado bloquea Pedido antes de Incidencia

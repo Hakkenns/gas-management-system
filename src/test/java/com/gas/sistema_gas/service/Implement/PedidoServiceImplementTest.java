@@ -331,6 +331,24 @@ class PedidoServiceImplementTest {
         verify(inventarioLoteRepository, never()).save(any());
     }
 
+    @Test
+    void deleteOrder_conPagoPositivo_lanzaConflict_sinRevertirInventario() {
+        Pedido pedido = pedido(101L, "PENDIENTE");
+
+        when(pedidoRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(pedido));
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(101L, BigDecimal.ZERO)).thenReturn(true);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.deleteOrder(101L));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals("El pedido tiene pagos registrados y requiere un reembolso antes de poder cancelarse", ex.getReason());
+        assertEquals("PENDIENTE", pedido.getEstadoPedido());
+        verify(detalleRepository, never()).findByPedido_Id(any());
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+    }
+
     // ---------- PRUEBA 2: deleteOrder sobre CARGADO ----------
 
     @Test
@@ -411,6 +429,45 @@ class PedidoServiceImplementTest {
 
         // NUNCA consultar ni guardar InventarioLote
         verify(inventarioLoteRepository, never()).save(any());
+    }
+
+    @Test
+    void updateEstadoPedido_aAnuladoConPagoPositivo_lanzaConflict_sinCambios() {
+        Pedido pedido = pedido(102L, "PENDIENTE");
+
+        when(pedidoRepository.findByIdForUpdate(102L)).thenReturn(Optional.of(pedido));
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(102L, BigDecimal.ZERO)).thenReturn(true);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(102L, "ANULADO"));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals("PENDIENTE", pedido.getEstadoPedido());
+        verify(detalleRepository, never()).findByPedido_Id(any());
+        verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
+    }
+
+    @Test
+    void updateEstadoPedido_aRechazadoOCanceladoConPagoPositivo_lanzaConflict() {
+        Pedido rechazado = pedido(103L, "EN_DOMICILIO");
+        Pedido cancelado = pedido(104L, "EN_DOMICILIO");
+
+        when(pedidoRepository.findByIdForUpdate(103L)).thenReturn(Optional.of(rechazado));
+        when(pedidoRepository.findByIdForUpdate(104L)).thenReturn(Optional.of(cancelado));
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(103L, BigDecimal.ZERO)).thenReturn(true);
+        when(pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(104L, BigDecimal.ZERO)).thenReturn(true);
+
+        ResponseStatusException rechazo = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(103L, "RECHAZADO"));
+        ResponseStatusException cancelacion = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.updateEstadoPedido(104L, "CANCELADO"));
+
+        assertEquals(HttpStatus.CONFLICT, rechazo.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, cancelacion.getStatusCode());
+        assertEquals("EN_DOMICILIO", rechazado.getEstadoPedido());
+        assertEquals("EN_DOMICILIO", cancelado.getEstadoPedido());
+        verify(pedidoRepository, never()).save(any(Pedido.class));
     }
 
     // ---------- PRUEBA 6: Reserva insuficiente ----------

@@ -834,6 +834,45 @@ public class InventarioConcurrenciaMySqlTest {
 
     @Test
     @Timeout(30)
+    void pagoYRechazoSimultaneos_mismoPedido_noDejanRechazoConPago() throws Exception {
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", 1), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+        PedidoPagoYapeDTO pago = new PedidoPagoYapeDTO(
+                creado.idPedido(), idMetodoPago, new BigDecimal("10.00"), "");
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> {
+                    pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
+                    return null;
+                },
+                () -> {
+                    pedidoService.updateEstadoPedido(creado.idPedido(), "RECHAZADO");
+                    return null;
+                }
+        );
+
+        ResultadoConcurrente<Void> cobro = par.primero();
+        ResultadoConcurrente<Void> rechazo = par.segundo();
+        assertNoLockingError(cobro.error());
+        assertNoLockingError(rechazo.error());
+
+        int exitos = (cobro.exitoso() ? 1 : 0) + (rechazo.exitoso() ? 1 : 0);
+        assertEquals(1, exitos, "Solo pago o rechazo debe prosperar");
+
+        Pedido pedidoFinal = pedidoRepository.findById(creado.idPedido()).orElseThrow();
+        int pagos = pedidoPagoRepository.findByPedido_Id(creado.idPedido()).size();
+        if (cobro.exitoso()) {
+            assertEquals("ENTREGADO", pedidoFinal.getEstadoPedido());
+            assertEquals(1, pagos, "La entrega cobrada debe conservar un único pago");
+        } else {
+            assertTrue(rechazo.exitoso(), "Si el cobro falla, el rechazo debe ser la única operación exitosa");
+            assertEquals("RECHAZADO", pedidoFinal.getEstadoPedido());
+            assertEquals(0, pagos, "Un pedido rechazado no debe conservar pagos");
+        }
+    }
+
+    @Test
+    @Timeout(30)
     void dosPedidosCanjeMismoProducto_conservanAmbosIncrementos() throws Exception {
         transactionTemplate.executeWithoutResult(status -> {
             Producto producto = productoRepository.findById(idProducto).orElseThrow();

@@ -52,6 +52,9 @@ import jakarta.transaction.Transactional;
 @Service
 public class PedidoServiceImplement implements PedidoService {
 
+    private static final String MENSAJE_PAGO_REQUIERE_REEMBOLSO =
+            "El pedido tiene pagos registrados y requiere un reembolso antes de poder cancelarse";
+
     @Autowired
     private PedidoRepository pedidoRepository;
     @Autowired
@@ -763,11 +766,13 @@ public class PedidoServiceImplement implements PedidoService {
             if (!"PENDIENTE".equals(estadoActual)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede cancelarse desde PENDIENTE");
             }
+            validarPedidoSinPagosPositivos(pedido.getId());
         } else if (estadoNormalizado.equals("RECHAZADO") || estadoNormalizado.equals("CANCELADO")) {
             // Estados de incidencia - permitir desde EN_DOMICILIO
             if (!"EN_DOMICILIO".equals(estadoActual)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido solo puede marcarse como " + estadoNormalizado + " desde EN_DOMICILIO");
             }
+            validarPedidoSinPagosPositivos(pedido.getId());
         } else if (estadoNormalizado.equals("CLIENTE_AUSENTE")) {
             // CLIENTE_AUSENTE solo desde EN_DOMICILIO
             if (!"EN_DOMICILIO".equals(estadoActual)) {
@@ -878,8 +883,15 @@ public class PedidoServiceImplement implements PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se puede anular un pedido en estado PENDIENTE");
         }
 
+        validarPedidoSinPagosPositivos(pedido.getId());
         anularPedidoPendienteConReversion(pedido);
         pedidoRepository.save(pedido);
+    }
+
+    private void validarPedidoSinPagosPositivos(Long idPedido) {
+        if (pedidoPagoRepository.existsByPedido_IdAndMontoGreaterThan(idPedido, BigDecimal.ZERO)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, MENSAJE_PAGO_REQUIERE_REEMBOLSO);
+        }
     }
 
     /**
