@@ -447,7 +447,7 @@ public class MotorizadoController {
     public Object pagarYape(@RequestParam("idPedido") Long idPedido,
                             @RequestParam(value = "idMetodo", required = false) Long idMetodo,
                             @RequestParam("montoRecibido") java.math.BigDecimal montoRecibido,
-                            @RequestParam("numOperacion") String numOperacion,
+                             @RequestParam(value = "numOperacion", required = false) String numOperacion,
                             @RequestPart(value = "evidencia", required = false) MultipartFile evidencia,
                             @RequestPart(value = "evidenciaVuelto", required = false) MultipartFile evidenciaVuelto,
                             HttpSession session,
@@ -475,14 +475,6 @@ public class MotorizadoController {
         if (!pedidoService.existsByIdAndEmpleadoId(idPedido, empleadoId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", "Pedido no asignado a este motorizado"));
-        }
-
-        boolean requiereOperacion = idMetodo != null && (idMetodo == 2L || idMetodo == 3L);
-        if (requiereOperacion && (numOperacion == null || numOperacion.isBlank())) {
-            if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(java.util.Map.of("success", false, "message", "Número de operación requerido para Yape/Plin"));
-            }
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número de operación requerido para Yape/Plin");
         }
 
         PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(idPedido, idMetodo, montoRecibido, numOperacion);
@@ -541,6 +533,10 @@ public class MotorizadoController {
                     "message", "Pago registrado correctamente",
                     "totalPagos", pagosGuardados.size()
             ));
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(Map.of("success", false,
+                            "message", e.getReason() != null ? e.getReason() : "Error de negocio"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "message", "Error al procesar el pago: " + e.getMessage()));

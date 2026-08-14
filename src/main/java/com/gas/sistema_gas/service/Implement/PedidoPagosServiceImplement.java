@@ -22,15 +22,16 @@ import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
-import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
+import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.service.PedidoPagosService;
 
 import jakarta.transaction.Transactional;
@@ -42,7 +43,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     private PedidoRepository pedidoRepository;
 
     @Autowired
-    private MetodoPagoRepository metodoPagoRepository;
+    private MetodoPagoService metodoPagoService;
 
     @Autowired
     private PedidoPagoRepository pedidoPagoRepository;
@@ -88,14 +89,8 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             // si por alguna razón no hay pagos pero estado es ENTREGADO, continuar para crear uno
         }
 
-        MetodoPago metodo;
-        if (dto.idMetodo != null) {
-            metodo = metodoPagoRepository.findById(dto.idMetodo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
-        } else {
-            metodo = metodoPagoRepository.findByNombre("Yape")
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago Yape no configurado"));
-        }
+        MetodoPago metodo = metodoPagoService.obtenerActivo(dto.idMetodo);
+        String numOperacion = metodoPagoService.validarYNormalizarNumeroOperacion(metodo, dto.numOperacion);
 
         BigDecimal montoTotal = pedido.getMontoTotal() != null ? pedido.getMontoTotal() : BigDecimal.ZERO;
         BigDecimal montoRecibido = dto.montoRecibido != null ? dto.montoRecibido : BigDecimal.ZERO;
@@ -109,7 +104,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         pago.setPedido(pedido);
         pago.setMetodoPago(metodo);
         pago.setMonto(montoTotal);
-        pago.setNumOperacion(dto.numOperacion);
+        pago.setNumOperacion(numOperacion);
         pago.setVuelto(vuelto);
 
         PedidoPago pagoGuardado = pedidoPagoRepository.save(pago);
@@ -170,7 +165,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
 
         // 1) Validar y resolver TODOS los pagos ANTES de tocar la persistencia.
         //    No se usa continue silencioso: cualquier pago inválido aborta la operación.
-        record PagoResuelto(PagoRegistroDTO dto, MetodoPago metodo) {}
+        record PagoResuelto(PagoRegistroDTO dto, MetodoPago metodo, String numOperacion) {}
         List<PagoResuelto> pagosResueltos = new ArrayList<>();
         for (PagoRegistroDTO pagoDto : dto.pagos) {
             if (pagoDto.idMetodo == null) {
@@ -179,9 +174,10 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             if (pagoDto.monto == null || pagoDto.monto.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto debe ser mayor a cero");
             }
-            MetodoPago metodo = metodoPagoRepository.findById(pagoDto.idMetodo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
-            pagosResueltos.add(new PagoResuelto(pagoDto, metodo));
+            MetodoPago metodo = metodoPagoService.obtenerActivo(pagoDto.idMetodo);
+            String numOperacion = metodoPagoService
+                    .validarYNormalizarNumeroOperacion(metodo, pagoDto.numOperacion);
+            pagosResueltos.add(new PagoResuelto(pagoDto, metodo, numOperacion));
         }
 
         if (pagosResueltos.size() < 2) {
@@ -212,7 +208,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         PagoResuelto pagoEfectivoConVuelto = null;
         if (vueltoTotal.compareTo(BigDecimal.ZERO) > 0) {
             pagoEfectivoConVuelto = pagosResueltos.stream()
-                    .filter(p -> "Efectivo".equalsIgnoreCase(p.metodo.getNombre()))
+                    .filter(p -> TipoFinancieroMetodoPago.EFECTIVO.equals(p.metodo.getTipoFinanciero()))
                     .findFirst()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "No se puede entregar vuelto sin un pago en efectivo"));
@@ -228,11 +224,11 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             }
         }
 
-        // 4) Validaciones completas: recién ahora se puede reemplazar el historial de pagos.
+        // 5) Los pagos registrados son históricos: nunca se borran ni se recrean.
         List<PedidoPago> pagosAnteriores = pedidoPagoRepository.findByPedido(pedido);
         if (!pagosAnteriores.isEmpty()) {
-            pedidoPagoRepository.deleteAll(pagosAnteriores);
-            pedidoPagoRepository.flush();
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El pedido ya tiene pagos registrados y no pueden reemplazarse");
         }
 
         List<PedidoPago> pagosGuardados = new ArrayList<>();
@@ -244,7 +240,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
             PedidoPago pago = new PedidoPago();
             pago.setPedido(pedido);
             pago.setMetodoPago(pagoResuelto.metodo);
-            pago.setNumOperacion(pagoResuelto.dto.numOperacion);
+            pago.setNumOperacion(pagoResuelto.numOperacion);
             if (esEfectivoConVuelto) {
                 // El vuelto se descuenta únicamente del primer pago en Efectivo
                 pago.setMonto(pagoResuelto.dto.monto.subtract(vueltoTotal));

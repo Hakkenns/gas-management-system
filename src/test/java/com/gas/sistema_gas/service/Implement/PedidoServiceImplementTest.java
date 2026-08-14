@@ -39,6 +39,8 @@ import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.Usuario;
+import com.gas.sistema_gas.Model.MetodoPago;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
@@ -51,6 +53,7 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
 @ExtendWith(MockitoExtension.class)
@@ -100,6 +103,9 @@ class PedidoServiceImplementTest {
 
     @Mock
     private MetodoPagoRepository metodoPagoRepository;
+
+    @Mock
+    private MetodoPagoService metodoPagoService;
 
     @Mock
     private ClienteMapper clienteMapper;
@@ -166,6 +172,34 @@ class PedidoServiceImplementTest {
             null, 1L, null, null, "obs", null, "LOCAL", null,
             List.of(), detalles, "NINGUNO", List.of()
         );
+    }
+
+    private PedidoDTO.Create createDtoLocalConPago(Long idMetodo, String numOperacion) {
+        return new PedidoDTO.Create(
+                null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
+                null, 1L, null, null, "obs", null, "LOCAL", null,
+                List.of(new PedidoDTO.PagoCreate(idMetodo, new BigDecimal("100.00"), numOperacion)),
+                List.of(new PedidoDTO.DetalleCreate(1L, 1, null, null)), "NINGUNO", List.of());
+    }
+
+    private void configurarVentaLocal(PedidoDTO.Create createDto) {
+        Producto producto = producto(1L, BigDecimal.ZERO);
+        Pedido pedido = new Pedido();
+        pedido.setTipoVenta("LOCAL");
+        Cliente cliente = new Cliente();
+        cliente.setId(1L);
+        Usuario usuario = new Usuario();
+        usuario.setId(1L);
+        when(pedidoMapper.toEntity(createDto)).thenReturn(pedido);
+        when(correlativoService.incrementarYObtenerCodigo("VENTA_NOTA", "NV001")).thenReturn("NV001");
+        when(clienteRepository.findById(1L)).thenReturn(Optional.of(cliente));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.findAllByIdInForUpdate(List.of(1L))).thenReturn(List.of(producto));
+        when(inventarioLoteRepository.findByProductoIdsForUpdate(List.of(1L)))
+                .thenReturn(List.of(lote(1L, producto, new BigDecimal("50.00"))));
+        when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     // ---------- Pruebas existentes (migradas a findByIdForUpdate) ----------
@@ -1038,6 +1072,42 @@ class PedidoServiceImplementTest {
         inOrder.verify(inventarioLoteService).descontarStockPorPEPS(any(DetallePedido.class));
         // FASE 4B-2A: se bloquea inventario de lotes con findByProductoIdsForUpdate
         verify(inventarioLoteRepository, times(1)).findByProductoIdsForUpdate(List.of(1L));
+    }
+
+    @Test
+    void createOrder_local_metodoInactivo_rechazaSinCrearPedidoPago() {
+        PedidoDTO.Create createDto = createDtoLocalConPago(7L, null);
+        configurarVentaLocal(createDto);
+        when(metodoPagoService.obtenerActivo(7L)).thenThrow(
+                new ResponseStatusException(HttpStatus.CONFLICT, "El método de pago está inactivo"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void createOrder_local_usaTipoFinancieroParaOperacionSinDependerDelNombre() {
+        PedidoDTO.Create createDto = createDtoLocalConPago(8L, null);
+        configurarVentaLocal(createDto);
+        MetodoPago digitalConNombreLibre = new MetodoPago();
+        digitalConNombreLibre.setId(8L);
+        digitalConNombreLibre.setCodigo("BILLETERA_INTERNA");
+        digitalConNombreLibre.setNombre("Cobro móvil interno");
+        digitalConNombreLibre.setEstado(1);
+        digitalConNombreLibre.setTipoFinanciero(TipoFinancieroMetodoPago.DIGITAL);
+        when(metodoPagoService.obtenerActivo(8L)).thenReturn(digitalConNombreLibre);
+        when(metodoPagoService.validarYNormalizarNumeroOperacion(digitalConNombreLibre, null)).thenThrow(
+                new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El número de operación es obligatorio para pagos digitales"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
     }
 
     @Test

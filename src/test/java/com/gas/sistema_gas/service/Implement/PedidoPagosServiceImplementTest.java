@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
@@ -40,6 +42,7 @@ import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
+import com.gas.sistema_gas.service.MetodoPagoService;
 
 @ExtendWith(MockitoExtension.class)
 class PedidoPagosServiceImplementTest {
@@ -51,6 +54,9 @@ class PedidoPagosServiceImplementTest {
     private PedidoRepository pedidoRepository;
 
     @Mock
+    private MetodoPagoService metodoPagoService;
+
+    @Mock(lenient = true)
     private MetodoPagoRepository metodoPagoRepository;
 
     @Mock
@@ -81,7 +87,37 @@ class PedidoPagosServiceImplementTest {
     private MetodoPago metodo(Long id, String nombre) {
         MetodoPago metodo = new MetodoPago();
         metodo.setId(id);
+        metodo.setCodigo(nombre.toUpperCase(java.util.Locale.ROOT));
         metodo.setNombre(nombre);
+        metodo.setEstado(1);
+        metodo.setTipoFinanciero("Efectivo".equalsIgnoreCase(nombre)
+                ? TipoFinancieroMetodoPago.EFECTIVO
+                : TipoFinancieroMetodoPago.DIGITAL);
+        lenient().when(metodoPagoService.obtenerActivo(id)).thenReturn(metodo);
+        lenient().when(metodoPagoService.validarYNormalizarNumeroOperacion(org.mockito.ArgumentMatchers.eq(metodo), any()))
+                .thenAnswer(invocation -> {
+                    String numeroOperacion = invocation.getArgument(1);
+                    String normalizado = numeroOperacion == null ? null : numeroOperacion.trim();
+                    if (normalizado != null && normalizado.isEmpty()) {
+                        normalizado = null;
+                    }
+                    if (TipoFinancieroMetodoPago.EFECTIVO.equals(metodo.getTipoFinanciero())) {
+                        if (normalizado != null) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "El efectivo no admite número de operación");
+                        }
+                        return null;
+                    }
+                    if (normalizado == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "El número de operación es obligatorio para pagos digitales");
+                    }
+                    if (normalizado.length() > 50) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "El número de operación no puede superar 50 caracteres");
+                    }
+                    return normalizado;
+                });
         return metodo;
     }
 
@@ -109,7 +145,7 @@ class PedidoPagosServiceImplementTest {
         MetodoPago yape = metodo(2L, "Yape");
 
         List<PagoRegistroDTO> pagosDto = new ArrayList<>();
-        pagosDto.add(pagoDto(1L, "60.00", "op-efectivo"));
+        pagosDto.add(pagoDto(1L, "60.00", null));
         pagosDto.add(pagoDto(2L, "40.00", "op-yape"));
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, pagosDto);
 
@@ -148,7 +184,7 @@ class PedidoPagosServiceImplementTest {
         MetodoPago yape = metodo(2L, "Yape");
 
         List<PagoRegistroDTO> pagosDto = new ArrayList<>();
-        pagosDto.add(pagoDto(1L, "100.00", "op-efectivo"));
+        pagosDto.add(pagoDto(1L, "100.00", null));
         pagosDto.add(pagoDto(2L, "20.00", "op-yape"));
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, pagosDto);
 
@@ -198,7 +234,7 @@ class PedidoPagosServiceImplementTest {
 
         // 30 Efectivo + 30 Yape = 60 < 100 (dos métodos diferentes)
         List<PagoRegistroDTO> pagosDto = new ArrayList<>();
-        pagosDto.add(pagoDto(1L, "30.00", "op-001"));
+        pagosDto.add(pagoDto(1L, "30.00", null));
         pagosDto.add(pagoDto(2L, "30.00", "op-002"));
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, pagosDto);
 
@@ -357,7 +393,7 @@ class PedidoPagosServiceImplementTest {
 
         // 50 Efectivo + 100 Yape = 150 -> vuelto 50 -> efectivo aplicado 0
         List<PagoRegistroDTO> pagosDto = new ArrayList<>();
-        pagosDto.add(pagoDto(1L, "50.00", "op-efectivo"));
+        pagosDto.add(pagoDto(1L, "50.00", null));
         pagosDto.add(pagoDto(2L, "100.00", "op-yape"));
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, pagosDto);
 
@@ -389,7 +425,7 @@ class PedidoPagosServiceImplementTest {
         MetodoPago yape = metodo(2L, "Yape");
 
         List<PagoRegistroDTO> pagosDto = new ArrayList<>();
-        pagosDto.add(pagoDto(1L, "100.00", "op-efectivo"));
+        pagosDto.add(pagoDto(1L, "100.00", null));
         pagosDto.add(pagoDto(2L, "20.00", "op-yape"));
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, pagosDto);
 
@@ -432,7 +468,7 @@ class PedidoPagosServiceImplementTest {
         MetodoPago efectivo = metodo(1L, "Efectivo");
         MetodoPago yape = metodo(2L, "Yape");
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, List.of(
-                pagoDto(1L, "10.00", "op-efectivo"),
+                pagoDto(1L, "10.00", null),
                 pagoDto(2L, "20.00", "op-yape")));
 
         Producto producto = new Producto();
@@ -486,5 +522,119 @@ class PedidoPagosServiceImplementTest {
         verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
         verify(detallePedidoRepository, never()).findByPedido_Id(any());
         verify(productoRepository, never()).findAllByIdInForUpdate(any());
+    }
+
+    @Test
+    void registrarPagoUnico_idMetodoNulo_rechazaBadRequest() {
+        Pedido pedido = pedido("100.00");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(metodoPagoService.obtenerActivo(null)).thenThrow(
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID del método de pago es obligatorio"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagoYape(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, null, new BigDecimal("100.00"), null),
+                        null, null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void registrarPagoUnico_digitalSinNumeroOperacion_rechazaSinPersistir() {
+        Pedido pedido = pedido("100.00");
+        metodo(2L, "Yape");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagoYape(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 2L, new BigDecimal("100.00"), null),
+                        null, null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void registrarPagoUnico_efectivoConNumeroOperacion_rechazaSinPersistir() {
+        Pedido pedido = pedido("100.00");
+        metodo(1L, "Efectivo");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagoYape(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 1L, new BigDecimal("100.00"), "OP-1"),
+                        null, null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void registrarPagosMultiples_digitalSinNumeroOperacion_rechazaSinPersistir() {
+        Pedido pedido = pedido("100.00");
+        metodo(1L, "Efectivo");
+        metodo(2L, "Yape");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagosMultiples(new ConfirmarEntregaMixtaDTO(1L,
+                        List.of(pagoDto(1L, "50.00", null), pagoDto(2L, "50.00", null))), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void registrarPagosMultiples_efectivoSeDetectaPorTipoFinanciero() {
+        Pedido pedido = pedido("100.00");
+        MetodoPago efectivoConNombreLibre = metodo(1L, "Billetes");
+        efectivoConNombreLibre.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
+        MetodoPago digital = metodo(2L, "Billetera digital");
+        List<PagoRegistroDTO> pagos = List.of(
+                pagoDto(1L, "100.00", null),
+                pagoDto(2L, "20.00", "OP-digital"));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of(), List.of());
+        when(pedidoPagoRepository.save(any(PedidoPago.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<PedidoPago> resultado = pedidoPagosService.registrarPagosMultiples(
+                new ConfirmarEntregaMixtaDTO(1L, pagos), null);
+
+        assertMonto("80.00", resultado.get(0).getMonto());
+        assertMonto("20.00", resultado.get(0).getVuelto());
+    }
+
+    @Test
+    void registrarPagosMultiples_metodoInactivo_rechazaSinPersistir() {
+        Pedido pedido = pedido("100.00");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(metodoPagoService.obtenerActivo(1L)).thenThrow(
+                new ResponseStatusException(HttpStatus.CONFLICT, "El método de pago está inactivo"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagosMultiples(new ConfirmarEntregaMixtaDTO(1L,
+                        List.of(pagoDto(1L, "50.00", null), pagoDto(2L, "50.00", "OP-2"))), null));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void registrarPagosMultiples_pagosExistentes_rechazaSinDeleteRecreate() {
+        Pedido pedido = pedido("100.00");
+        MetodoPago efectivo = metodo(1L, "Efectivo");
+        MetodoPago digital = metodo(2L, "Yape");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of(pagoSimulado("100.00")));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.registrarPagosMultiples(new ConfirmarEntregaMixtaDTO(1L,
+                        List.of(pagoDto(1L, "50.00", null), pagoDto(2L, "50.00", "OP-2"))), null));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).deleteAll(any());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
     }
 }

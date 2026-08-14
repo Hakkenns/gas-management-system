@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.PedidoPago;
@@ -62,6 +64,35 @@ class MotorizadoControllerTest {
         ResponseEntity<?> response = (ResponseEntity<?>) resultado;
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+    }
+
+    @Test
+    void pagarYape_delegaValidacionDeOperacionAlServicioSinUsarIdsFijos() {
+        configurarSesionConEmpleado(7L);
+        when(pedidoService.existsByIdAndEmpleadoId(41L, 7L)).thenReturn(true);
+        PedidoPago pago = new PedidoPago();
+        pago.setId(99L);
+        when(pedidoPagosService.confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any()))
+                .thenReturn(pago);
+
+        Object resultado = controller.pagarYape(41L, 2L, new BigDecimal("10.00"), null,
+                null, null, session, "XMLHttpRequest");
+
+        assertEquals(HttpStatus.OK, ((ResponseEntity<?>) resultado).getStatusCode());
+        verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+    }
+
+    @Test
+    void confirmarEntrega_preservaResponseStatusException() {
+        configurarSesionConEmpleado(7L);
+        when(pedidoService.existsByIdAndEmpleadoId(41L, 7L)).thenReturn(true);
+        when(pedidoPagosService.confirmarEntregaConPagos(any(), any(), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Método de pago inactivo"));
+
+        ResponseEntity<?> response = controller.confirmarEntrega(41L,
+                "[{\"idMetodo\":1,\"monto\":10.00,\"numOperacion\":\"\"}]", null, null, session);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
     }
 
     @Test

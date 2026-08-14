@@ -36,7 +36,6 @@ import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.ClienteRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EmpleadoRepository;
-import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
@@ -45,6 +44,7 @@ import com.gas.sistema_gas.dto.ClienteDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.dto.PedidoDTO.EditResponse;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.service.PedidoService;
 
 import jakarta.transaction.Transactional;
@@ -76,7 +76,7 @@ public class PedidoServiceImplement implements PedidoService {
     @Autowired
     private com.gas.sistema_gas.Repository.EvidenciaRepository evidenciaRepository;
     @Autowired
-    private MetodoPagoRepository metodoPagoRepository;
+    private MetodoPagoService metodoPagoService;
     @Autowired
     private CorrelativoService correlativoService;
     @Autowired
@@ -671,19 +671,9 @@ public class PedidoServiceImplement implements PedidoService {
                 if (pagoDto.monto() == null || pagoDto.monto().compareTo(BigDecimal.ZERO) <= 0) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto de cada pago debe ser mayor a cero");
                 }
-                MetodoPago pagoMetodo = metodoPagoRepository.findById(pagoDto.idMetodoPago())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Método de pago no encontrado"));
-                String numOperacionPago = pagoDto.numOperacion();
-                if (numOperacionPago != null && numOperacionPago.isBlank()) {
-                    numOperacionPago = null;
-                }
-                if (pagoMetodo.getNombre() != null && (
-                        pagoMetodo.getNombre().equalsIgnoreCase("yape") ||
-                        pagoMetodo.getNombre().equalsIgnoreCase("plin")
-                ) && (numOperacionPago == null || numOperacionPago.isEmpty())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "El número de operación es obligatorio para Yape y Plin");
-                }
+                MetodoPago pagoMetodo = metodoPagoService.obtenerActivo(pagoDto.idMetodoPago());
+                String numOperacionPago = metodoPagoService
+                        .validarYNormalizarNumeroOperacion(pagoMetodo, pagoDto.numOperacion());
 
                 PedidoPago pago = new PedidoPago();
                 pago.setPedido(pedidoGuardado);

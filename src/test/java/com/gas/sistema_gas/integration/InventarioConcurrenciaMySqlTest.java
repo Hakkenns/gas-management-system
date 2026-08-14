@@ -50,6 +50,7 @@ import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.MetodoPago;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Perfil;
@@ -399,7 +400,9 @@ public class InventarioConcurrenciaMySqlTest {
     private Long ensureMetodoPago() {
         return transactionTemplate.execute(status -> {
             MetodoPago metodo = new MetodoPago();
+            metodo.setCodigo("EFECTIVO");
             metodo.setNombre("Efectivo");
+            metodo.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
             metodo.setEstado(1);
             entityManager.persist(metodo);
             return metodo.getId();

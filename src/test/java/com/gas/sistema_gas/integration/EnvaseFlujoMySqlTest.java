@@ -32,6 +32,7 @@ import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.MetodoPago;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.Perfil;
 import com.gas.sistema_gas.Model.Producto;
@@ -164,15 +165,19 @@ class EnvaseFlujoMySqlTest {
             empleado.setEstado(1);
             entityManager.persist(empleado);
 
-            MetodoPago efectivo = metodoPagoRepository.findByNombre("Efectivo").orElseGet(() -> {
+            MetodoPago efectivo = metodoPagoRepository.findByCodigo("EFECTIVO").orElseGet(() -> {
                 MetodoPago metodo = new MetodoPago();
+                metodo.setCodigo("EFECTIVO");
                 metodo.setNombre("Efectivo");
+                metodo.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
                 metodo.setEstado(1);
                 return metodoPagoRepository.saveAndFlush(metodo);
             });
-            MetodoPago yape = metodoPagoRepository.findByNombre("Yape").orElseGet(() -> {
+            MetodoPago yape = metodoPagoRepository.findByCodigo("YAPE").orElseGet(() -> {
                 MetodoPago metodo = new MetodoPago();
+                metodo.setCodigo("YAPE");
                 metodo.setNombre("Yape");
+                metodo.setTipoFinanciero(TipoFinancieroMetodoPago.DIGITAL);
                 metodo.setEstado(1);
                 return metodoPagoRepository.saveAndFlush(metodo);
             });
