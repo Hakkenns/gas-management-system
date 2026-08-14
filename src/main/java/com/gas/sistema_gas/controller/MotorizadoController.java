@@ -40,6 +40,7 @@ import com.gas.sistema_gas.dto.EmpleadoDTO;
 import com.gas.sistema_gas.service.EmpleadoService;
 import com.gas.sistema_gas.service.PedidoService;
 import com.gas.sistema_gas.service.UsuarioService;
+import com.gas.sistema_gas.service.MetodoPagoService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -73,6 +74,9 @@ public class MotorizadoController {
 
     @Autowired
     private EmpleadoService empleadoService;
+
+    @Autowired
+    private MetodoPagoService metodoPagoService;
 
     @GetMapping
     public String root(HttpSession session) {
@@ -407,6 +411,7 @@ public class MotorizadoController {
         }
 
         model.addAttribute("empleadoId", empleadoId);
+        model.addAttribute("metodosPago", metodoPagoService.listActive());
         return "repartidor/detalle";
     }
 

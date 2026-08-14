@@ -205,13 +205,14 @@ $(function() {
 
     // Mostrar/ocultar número de operación según método de pago
     $('#select-metodo').on('change', function() {
-        const metodo = $(this).val();
-        if (metodo === 'YAPE' || metodo === 'PLIN') {
+        const tipoFinanciero = $('#select-metodo option:selected').data('tipo-financiero');
+        if (tipoFinanciero === 'DIGITAL') {
             $('#row-num-operacion').show();
             $('#input-num-operacion').prop('required', true);
         } else {
             $('#row-num-operacion').hide();
             $('#input-num-operacion').prop('required', false);
+            $('#input-num-operacion').val('');
         }
     });
 
@@ -825,9 +826,11 @@ $(function() {
     // Agregar pago
     $('#btn-agregar-pago').on('click', function() {
         const metodoId = $('#select-metodo').val();
-        const metodoNombre = $('#select-metodo option:selected').text();
+        const metodoOption = $('#select-metodo option:selected');
+        const metodoNombre = metodoOption.text();
+        const tipoFinanciero = metodoOption.data('tipo-financiero');
         const monto = parseMoney($('#input-monto-pago').val());
-        const numOperacion = $('#input-num-operacion').val();
+        const numOperacion = tipoFinanciero === 'DIGITAL' ? $('#input-num-operacion').val().trim() : '';
 
         if (!metodoId || monto <= 0) {
             Swal.fire({
@@ -840,11 +843,11 @@ $(function() {
             return;
         }
 
-        if ((metodoNombre === 'YAPE' || metodoNombre === 'PLIN') && !numOperacion) {
+        if (tipoFinanciero === 'DIGITAL' && !numOperacion) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Número de operación requerido',
-                text: 'Ingrese el número de operación para Yape/Plin.',
+                text: 'Ingrese el número de operación para el método digital.',
                 confirmButtonText: 'Entendido',
                 confirmButtonColor: '#3085d6'
             });
@@ -860,6 +863,7 @@ $(function() {
         `);
         tr.data('idMetodoPago', metodoId);
         tr.data('metodo', metodoNombre);
+        tr.data('tipoFinanciero', tipoFinanciero);
         tr.data('monto', monto);
         tr.data('numOperacion', numOperacion);
 
@@ -987,7 +991,8 @@ $(function() {
             fechaLimitePago: $('#input-fecha-limite').val() || null,
             idEmpleado: $('#select-motorizado').val() ? Number($('#select-motorizado').val()) : null,
             idMetodoPago: $('#select-metodo').val() ? Number($('#select-metodo').val()) : null,
-            numOperacion: $('#input-num-operacion').val(),
+            numOperacion: $('#select-metodo option:selected').data('tipo-financiero') === 'DIGITAL'
+                ? $('#input-num-operacion').val().trim() : null,
             estadoPedido: $('#select-estado-pedido').val(),
             observaciones: $('#input-observaciones').val(),
             detalles: [],

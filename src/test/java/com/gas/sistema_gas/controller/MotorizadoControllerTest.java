@@ -18,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.ui.ExtendedModelMap;
+import org.springframework.ui.Model;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.Empleado;
@@ -25,8 +27,12 @@ import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
+import com.gas.sistema_gas.dto.MetodoPagoDTO;
+import com.gas.sistema_gas.dto.PedidoDTO;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.service.PedidoPagosService;
 import com.gas.sistema_gas.service.PedidoService;
+import com.gas.sistema_gas.service.MetodoPagoService;
 
 import jakarta.servlet.http.HttpSession;
 
@@ -38,6 +44,9 @@ class MotorizadoControllerTest {
 
     @Mock
     private PedidoPagosService pedidoPagosService;
+
+    @Mock
+    private MetodoPagoService metodoPagoService;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -93,6 +102,29 @@ class MotorizadoControllerTest {
                 "[{\"idMetodo\":1,\"monto\":10.00,\"numOperacion\":\"\"}]", null, null, session);
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+    }
+
+    @Test
+    void detalle_pedidoAsignado_agregaMetodosPagoActivosAlModelo() {
+        configurarSesionConEmpleado(7L);
+        PedidoDTO.SimpleResponse pedido = new PedidoDTO.SimpleResponse(
+                41L, null, null, null, null, 7L, null, null, null, null,
+                null, null, null, null, null, List.of());
+        PedidoDTO.EditResponse editData = new PedidoDTO.EditResponse(
+                41L, null, null, null, null, null, null, null, 7L, null,
+                null, null, null, List.of(), List.of());
+        when(pedidoService.findByIdAndEmpleadoId(41L, 7L)).thenReturn(pedido);
+        when(pedidoService.getEditData(41L)).thenReturn(editData);
+        List<MetodoPagoDTO.Response> metodos = List.of(
+                new MetodoPagoDTO.Response(8L, "BILLETERA", "Billetera", TipoFinancieroMetodoPago.DIGITAL, 1));
+        when(metodoPagoService.listActive()).thenReturn(metodos);
+
+        Model model = new ExtendedModelMap();
+        String vista = controller.detalle(41L, null, model, session);
+
+        assertEquals("repartidor/detalle", vista);
+        assertEquals(metodos, model.getAttribute("metodosPago"));
+        verify(metodoPagoService).listActive();
     }
 
     @Test

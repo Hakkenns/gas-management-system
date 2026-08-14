@@ -169,26 +169,13 @@
                     <div id="pago-unico-container">
                         <p class="text-muted font-weight-bold text-xs mb-2">MÉTODOS DISPONIBLES</p>
                         <div class="row no-gutters">
-                            <div class="col-4 px-1 mb-2">
-                                <div class="pay-method" data-method="Yape" data-id="2" onclick="seleccionarMetodo(this)">
-                                    <img src="/img/YAPE.png" alt="Yape" height="30" style="object-fit: contain;">
-                                    <br><span class="font-weight-bold text-sm">Yape</span><br>
-                                    <small class="text-success font-weight-bold"
-                                           th:text="${pedido != null and pedido.montoTotal != null ? 'S/ ' + #numbers.formatDecimal(pedido.montoTotal, 1, 2) : 'S/ 0.00'}"></small>
-                                </div>
-                            </div>
-                            <div class="col-4 px-1 mb-2">
-                                <div class="pay-method" data-method="Plin" data-id="3" onclick="seleccionarMetodo(this)">
-                                    <img src="/img/PLIN.png" alt="Plin" height="30" class="mb-2" style="object-fit: contain;">
-                                    <br><span class="font-weight-bold text-sm">Plin</span><br>
-                                    <small class="text-success font-weight-bold"
-                                           th:text="${pedido != null and pedido.montoTotal != null ? 'S/ ' + #numbers.formatDecimal(pedido.montoTotal, 1, 2) : 'S/ 0.00'}"></small>
-                                </div>
-                            </div>
-                            <div class="col-4 px-1 mb-2">
-                                <div class="pay-method" data-method="Efectivo" data-id="1" onclick="seleccionarMetodo(this)">
-                                    <img src="/img/EFECTIVO.png" alt="Efectivo" height="40" class="mb-2" style="object-fit: contain;">
-                                    <br><span class="font-weight-bold text-sm">Efectivo</span><br>
+                            <div class="col-4 px-1 mb-2" th:each="metodo : ${metodosPago}">
+                                <div class="pay-method" th:attr="data-method=${metodo.nombre},data-id=${metodo.id},data-codigo=${metodo.codigo},data-tipo-financiero=${metodo.tipoFinanciero}" onclick="seleccionarMetodo(this)">
+                                    <img th:if="${metodo.codigo == 'YAPE'}" src="/img/YAPE.png" th:alt="${metodo.nombre}" height="30" style="object-fit: contain;">
+                                    <img th:if="${metodo.codigo == 'PLIN'}" src="/img/PLIN.png" th:alt="${metodo.nombre}" height="30" class="mb-2" style="object-fit: contain;">
+                                    <img th:if="${metodo.codigo == 'EFECTIVO'}" src="/img/EFECTIVO.png" th:alt="${metodo.nombre}" height="40" class="mb-2" style="object-fit: contain;">
+                                    <i th:unless="${metodo.codigo == 'YAPE' or metodo.codigo == 'PLIN' or metodo.codigo == 'EFECTIVO'}" class="fas fa-credit-card fa-2x mb-2 text-success"></i>
+                                    <br><span class="font-weight-bold text-sm" th:text="${metodo.nombre}"></span><br>
                                     <small class="text-success font-weight-bold"
                                            th:text="${pedido != null and pedido.montoTotal != null ? 'S/ ' + #numbers.formatDecimal(pedido.montoTotal, 1, 2) : 'S/ 0.00'}"></small>
                                 </div>
@@ -405,6 +392,7 @@
         const ORDER_STATUS_KEY = 'fastfuel-order-status';
         let selectedMetodo = '';
         let selectedMetodoId = null;
+        let selectedTipoFinanciero = '';
         let currentTipoPago = 'unico';
         let mixedRows = [];
 
@@ -417,25 +405,28 @@
             return Number.isFinite(total) ? total : 0;
         }
 
-        function crearFilaMixto(id = null, metodo = 'Efectivo') {
-            return {
-                id: id ?? Date.now() + Math.floor(Math.random() * 1000),
-                metodo: metodo,
-                monto: '',
-                operacion: '',
-                evidenciaAdjunta: false
-            };
+        function getMetodosPagoActivos() {
+            return Array.from(document.querySelectorAll('.pay-method')).map(element => ({
+                id: Number(element.dataset.id), codigo: element.dataset.codigo || '',
+                nombre: element.dataset.method || '', tipoFinanciero: element.dataset.tipoFinanciero || ''
+            }));
+        }
+
+        function crearFilaMixto(id = null, metodoId = null) {
+            const metodo = getMetodosPagoActivos().find(item => item.id === metodoId) || getMetodosPagoActivos()[0];
+            return { id: id ?? Date.now() + Math.floor(Math.random() * 1000), metodoId: metodo ? metodo.id : null,
+                codigo: metodo ? metodo.codigo : '', nombre: metodo ? metodo.nombre : '',
+                tipoFinanciero: metodo ? metodo.tipoFinanciero : '', monto: '', operacion: '', evidenciaAdjunta: false };
         }
 
         function getMetodosDisponiblesParaFila(idActual) {
-            const usados = mixedRows
-                .filter(item => item.id !== idActual)
-                .map(item => item.metodo);
-            return ['Efectivo', 'Yape', 'Plin', 'Transferencia'].filter(method => !usados.includes(method));
+            const usados = mixedRows.filter(item => item.id !== idActual).map(item => item.metodoId);
+            return getMetodosPagoActivos().filter(method => !usados.includes(method.id));
         }
 
         function inicializarFilasMixto() {
-            mixedRows = [crearFilaMixto(1, 'Efectivo'), crearFilaMixto(2, 'Yape')];
+            const metodos = getMetodosPagoActivos();
+            mixedRows = metodos.slice(0, 2).map((metodo, index) => crearFilaMixto(index + 1, metodo.id));
             renderFilasMixto();
         }
 
@@ -464,8 +455,9 @@
                 }
 
                 const methods = getMetodosDisponiblesParaFila(row.id);
-                if (!methods.includes(row.metodo)) {
-                    row.metodo = methods.length > 0 ? methods[0] : 'Efectivo';
+                if (!methods.some(method => method.id === row.metodoId)) {
+                    const metodo = methods[0];
+                    if (metodo) Object.assign(row, { metodoId: metodo.id, codigo: metodo.codigo, nombre: metodo.nombre, tipoFinanciero: metodo.tipoFinanciero });
                 }
                 const allowDelete = mixedRows.length === 3 && index === mixedRows.length - 1;
                 const rowMarkup = `
@@ -477,19 +469,19 @@
                         <div class="row align-items-start">
                             <div class="col-7 pr-2">
                                 <div class="d-flex align-items-center w-100">
-                                    ${['Yape', 'Plin'].includes(row.metodo) ? `<button type="button" class="btn btn-outline-success btn-sm mr-2" onclick="abrirModalQrMixto('${row.metodo}')"><i class="fas fa-eye"></i></button>` : ''}
+                                    ${row.codigo === 'YAPE' || row.codigo === 'PLIN' ? `<button type="button" class="btn btn-outline-success btn-sm mr-2" onclick="abrirModalQrMixto('${row.codigo}')"><i class="fas fa-eye"></i></button>` : ''}
                                     <select class="form-control border-light bg-light flex-fill" onchange="cambiarMetodoMixto(${row.id}, this.value)">
-                                        ${['Efectivo', 'Yape', 'Plin', 'Transferencia'].map(method => {
-                                        const disabled = methods.includes(method) ? '' : 'disabled';
-                                        const selected = row.metodo === method ? 'selected' : '';
-                                        return `<option value="${method}" ${selected} ${disabled}>${method}</option>`;
+                                        ${getMetodosPagoActivos().map(method => {
+                                        const disabled = methods.some(item => item.id === method.id) ? '' : 'disabled';
+                                        const selected = row.metodoId === method.id ? 'selected' : '';
+                                        return `<option value="${method.id}" ${selected} ${disabled}>${method.nombre}</option>`;
                                     }).join('')}
                                     </select>
                                 </div>
                             </div>
                             <div class="col-5 pl-2">
                                 <input type="number" class="form-control border-light bg-light" min="0" step="0.01" placeholder="Monto" value="${row.monto}" oninput="cambiarMontoMixto(${row.id}, this.value)">
-                                ${['Yape', 'Plin'].includes(row.metodo) ? `
+                                ${row.tipoFinanciero === 'DIGITAL' ? `
                                     <div class="mt-2">
                                         <label class="text-muted text-xs mb-1">Nº de operación</label>
                                         <input type="text" class="form-control border-light bg-light" value="${row.operacion}" placeholder="Ingrese número de operación" oninput="cambiarOperacionMixto(${row.id}, this.value)">
@@ -499,7 +491,7 @@
                         </div>
                         <div class="mixto-evidence-wrapper mt-2">
                             <label class="upload-evidence-box w-100 py-3 ${row.evidenciaAdjunta ? 'is-valid' : ''}" id="evidenceLabel_${row.id}">
-                                <div class="text-muted text-xs mb-2">EVIDENCIA ${row.metodo.toUpperCase()}</div>
+                                <div class="text-muted text-xs mb-2">EVIDENCIA ${row.nombre.toUpperCase()}</div>
                                 <div id="evidenceIcon_${row.id}" style="${row.evidenciaAdjunta ? 'display:none;' : ''}"><i class="fas fa-camera fa-2x mb-2"></i></div>
                                 <img id="evidencePreview_${row.id}" class="preview-image" src="" alt="preview" style="${row.evidenciaAdjunta ? '' : 'display:none;'}">
                                 <div class="small" id="evidenceText_${row.id}">${row.evidenciaAdjunta ? 'Imagen adjunta: OK' : 'Tocar para subir imagen'}</div>
@@ -522,29 +514,19 @@
             const phone = document.getElementById('modalQrMixtoPhone');
             if (!modal || !image || !phone) return;
             image.src = '/img/QRYAPE.jpeg';
-            phone.textContent = metodo === 'Plin' ? '+51 987 654 321' : '+51 999 999 999';
+            phone.textContent = metodo === 'PLIN' ? '+51 987 654 321' : '+51 999 999 999';
             $(modal).modal('show');
         }
 
-        function cambiarMetodoMixto(id, metodo) {
+        function cambiarMetodoMixto(id, metodoId) {
             const row = mixedRows.find(item => item.id === id);
             if (!row) return;
-
-            const usadosPorOtros = mixedRows.filter(item => item.id !== id).some(item => item.metodo === metodo);
-            if (usadosPorOtros) {
-                const disponible = getMetodosDisponiblesParaFila(id)[0] || 'Efectivo';
-                row.metodo = disponible;
-            } else {
-                row.metodo = metodo;
-            }
-
-            if (row.metodo !== 'Efectivo' && row.metodo !== 'Yape' && row.metodo !== 'Plin' && row.metodo !== 'Transferencia') {
-                row.metodo = 'Efectivo';
-            }
-            if (row.metodo === 'Efectivo') {
-                row.evidenciaAdjunta = false;
-                row.operacion = '';
-            }
+            const metodo = getMetodosDisponiblesParaFila(id).find(item => item.id === Number(metodoId));
+            if (!metodo) return;
+            Object.assign(row, { metodoId: metodo.id, codigo: metodo.codigo, nombre: metodo.nombre, tipoFinanciero: metodo.tipoFinanciero });
+            row.evidenciaAdjunta = false;
+            row.operacion = '';
+            document.getElementById('mixtoRow_' + id)?.remove();
             renderFilasMixto();
         }
 
@@ -641,8 +623,8 @@
         function agregarFilaMixto() {
             if (mixedRows.length >= 3) return;
             const metodosDisponibles = getMetodosDisponiblesParaFila(null);
-            const metodoPredeterminado = metodosDisponibles.length > 0 ? metodosDisponibles[0] : 'Efectivo';
-            mixedRows.push(crearFilaMixto(null, metodoPredeterminado));
+            const metodoPredeterminado = metodosDisponibles.length > 0 ? metodosDisponibles[0] : null;
+            if (metodoPredeterminado) mixedRows.push(crearFilaMixto(null, metodoPredeterminado.id));
             renderFilasMixto();
             actualizarEstadoBotonMixto();
         }
@@ -811,6 +793,7 @@
             if (tipo === 'unico') {
                 selectedMetodo = '';
                 selectedMetodoId = null;
+                selectedTipoFinanciero = '';
                 document.querySelectorAll('.pay-method').forEach(el => el.classList.remove('active'));
                 const panel = document.getElementById('payment-detail-panel');
                 if (panel) panel.style.display = 'none';
@@ -838,6 +821,9 @@
         }
 
         function mostrarPanelPago(metodo) {
+            const activeMethod = document.querySelector('.pay-method.active');
+            const tipoFinanciero = activeMethod?.dataset.tipoFinanciero || '';
+            const codigo = activeMethod?.dataset.codigo || '';
             const panel = document.getElementById('payment-detail-panel');
             const digitalPanel = document.getElementById('single-digital-panel');
             const efectivoPanel = document.getElementById('single-efectivo-panel');
@@ -854,13 +840,19 @@
             const evidenceText = document.getElementById('evidenceMetodoText');
             const evidenceInput = document.getElementById('evidenciaMetodoInput');
 
-            if (metodo === 'Yape' || metodo === 'Plin') {
+            if (tipoFinanciero === 'DIGITAL') {
                 panel.style.display = 'block';
                 digitalPanel.style.display = 'block';
                 efectivoPanel.style.display = 'none';
                 label.textContent = metodo;
-                qrImage.src = '/img/QRYAPE.jpeg';
-                phoneNumber.textContent = metodo === 'Yape' ? '+51 999 999 999' : '+51 987 654 321';
+                const qrEspecifico = codigo === 'YAPE' || codigo === 'PLIN';
+                if (qrImage) {
+                    qrImage.style.display = qrEspecifico ? '' : 'none';
+                    qrImage.src = '/img/QRYAPE.jpeg';
+                }
+                phoneNumber.textContent = qrEspecifico
+                    ? (codigo === 'PLIN' ? '+51 987 654 321' : '+51 999 999 999')
+                    : 'QR fallback genÃ©rico';
                 if (montoInput) montoInput.value = '';
                 if (numeroOperacionContainer) numeroOperacionContainer.style.display = 'block';
                 if (numeroOperacionInput) numeroOperacionInput.value = '';
@@ -868,7 +860,7 @@
                 if (confirmarVueltoCheckbox) confirmarVueltoCheckbox.checked = false;
                 if (evidenceVueltoContainer) evidenceVueltoContainer.style.display = 'none';
                 if (bloqueVuelto) bloqueVuelto.style.display = 'none';
-            } else if (metodo === 'Efectivo') {
+            } else if (tipoFinanciero === 'EFECTIVO') {
                 panel.style.display = 'block';
                 digitalPanel.style.display = 'none';
                 efectivoPanel.style.display = 'block';
@@ -924,6 +916,7 @@
             element.classList.add('active');
             selectedMetodo = element.dataset.method || element.textContent.trim();
             selectedMetodoId = parseInt(element.dataset.id || '0', 10) || null;
+            selectedTipoFinanciero = element.dataset.tipoFinanciero || '';
             mostrarPanelPago(selectedMetodo);
         }
 
@@ -954,9 +947,8 @@
                 const pagosList = mixedRows
                     .filter(row => parseFloat(row.monto) > 0)
                     .map(row => {
-                        const metodoId = row.metodo === 'Efectivo' ? 1 : row.metodo === 'Yape' ? 2 : row.metodo === 'Plin' ? 3 : 0;
                         return {
-                            idMetodo: metodoId,
+                            idMetodo: row.metodoId,
                             monto: parseFloat(row.monto),
                             numOperacion: row.operacion || '',
                             vuelto: 0
@@ -1025,10 +1017,13 @@
                     Swal.fire({ title: 'Atención', text: 'Selecciona un método de pago antes de confirmar.', icon: 'warning' });
                     return;
                 }
-                const requiresOperacion = metodoLabel === 'Yape' || metodoLabel === 'Plin';
-                const numeroOperacion = document.getElementById('numeroOperacionInput')?.value || '';
+                const activeMethod = document.querySelector('.pay-method.active');
+                const tipoFinanciero = activeMethod?.dataset.tipoFinanciero || selectedTipoFinanciero;
+                const numeroOperacion = tipoFinanciero === 'DIGITAL'
+                    ? (document.getElementById('numeroOperacionInput')?.value || '').trim() : '';
+                const requiresOperacion = tipoFinanciero === 'DIGITAL';
                 if (requiresOperacion && !numeroOperacion.trim()) {
-                    Swal.fire({ title: 'Atención', text: 'El número de operación es obligatorio para Yape y Plin.', icon: 'warning' });
+                    Swal.fire({ title: 'Atención', text: 'El número de operación es obligatorio para pagos digitales.', icon: 'warning' });
                     return;
                 }
                 try {
