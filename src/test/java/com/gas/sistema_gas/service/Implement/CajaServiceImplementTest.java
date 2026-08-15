@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,8 +26,12 @@ import com.gas.sistema_gas.Model.CanalFondos;
 import com.gas.sistema_gas.Model.EstadoSesionCaja;
 import com.gas.sistema_gas.Model.MovimientoCaja;
 import com.gas.sistema_gas.Model.OrigenMovimiento;
+import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.SentidoMovimiento;
 import com.gas.sistema_gas.Model.SesionCaja;
+import com.gas.sistema_gas.Model.MetodoPago;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
@@ -69,7 +74,7 @@ class CajaServiceImplementTest {
     }
 
     private void configurarUsuarioYCajaPrincipal() {
-        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(usuario));
+        org.mockito.Mockito.lenient().when(usuarioRepository.findById(10L)).thenReturn(Optional.of(usuario));
         when(cajaRepository.findByCodigoForUpdate(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
                 .thenReturn(Optional.of(cajaPrincipal));
     }
@@ -109,6 +114,35 @@ class CajaServiceImplementTest {
 
     private void configurarGuardadoCierre() {
         when(sesionCajaRepository.save(any(SesionCaja.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private SesionCaja configurarSesionAbiertaParaIngresos() {
+        configurarUsuarioYCajaPrincipal();
+        SesionCaja sesion = new SesionCaja();
+        sesion.setId(20L);
+        sesion.setCaja(cajaPrincipal);
+        sesion.setEstado(EstadoSesionCaja.ABIERTA);
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.of(sesion));
+        org.mockito.Mockito.lenient().when(movimientoCajaRepository.findByPedidoPagoForUpdate(any(PedidoPago.class)))
+                .thenReturn(Optional.empty());
+        return sesion;
+    }
+
+    private PedidoPago pagoLocal(Long id, TipoFinancieroMetodoPago tipo, String monto) {
+        Pedido pedido = new Pedido();
+        pedido.setId(40L);
+        pedido.setCodigo("NV001-0040");
+        pedido.setTipoVenta("LOCAL");
+        MetodoPago metodo = new MetodoPago();
+        metodo.setId(id + 100L);
+        metodo.setTipoFinanciero(tipo);
+        PedidoPago pago = new PedidoPago();
+        pago.setId(id);
+        pago.setPedido(pedido);
+        pago.setMetodoPago(metodo);
+        pago.setMonto(new BigDecimal(monto));
+        return pago;
     }
 
     @Test
@@ -288,12 +322,18 @@ class CajaServiceImplementTest {
     @Test
     void cerrarCaja_usuarioInexistente_rechazaSinCerrarSesion() {
         when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
+        when(cajaRepository.findByCodigoForUpdate(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        SesionCaja sesion = new SesionCaja();
+        sesion.setCaja(cajaPrincipal);
+        sesion.setEstado(EstadoSesionCaja.ABIERTA);
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.of(sesion));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> cajaService.cerrarCaja(99L, new BigDecimal("100.00"), null));
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-        verify(cajaRepository, never()).findByCodigoForUpdate(any());
         verify(sesionCajaRepository, never()).save(any());
     }
 
@@ -333,5 +373,127 @@ class CajaServiceImplementTest {
 
         assertEquals("Fondo inicial\nCierre: Arqueo correcto", sesion.getObservaciones());
         verify(sesionCajaRepository).save(sesion);
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_efectivo_creaIngresoFisicoTrazable() {
+        SesionCaja sesion = configurarSesionAbiertaParaIngresos();
+        PedidoPago pago = pagoLocal(41L, TipoFinancieroMetodoPago.EFECTIVO, "35.00");
+
+        cajaService.registrarIngresosVentaLocal(List.of(pago), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository).save(captor.capture());
+        MovimientoCaja movimiento = captor.getValue();
+        assertEquals(SentidoMovimiento.INGRESO, movimiento.getSentido());
+        assertEquals(OrigenMovimiento.VENTA, movimiento.getOrigen());
+        assertEquals(CanalFondos.CAJA_FISICA, movimiento.getCanalFondos());
+        assertEquals(0, pago.getMonto().compareTo(movimiento.getMonto()));
+        assertEquals(pago, movimiento.getPedidoPago());
+        assertEquals(pago.getMetodoPago(), movimiento.getMetodoPago());
+        assertEquals(sesion, movimiento.getSesionCaja());
+        assertEquals(usuario, movimiento.getUsuarioResponsable());
+        assertEquals("NV001-0040", movimiento.getReferencia());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_digital_asociaLaMismaSesionSinAfectarCanalFisico() {
+        SesionCaja sesion = configurarSesionAbiertaParaIngresos();
+        PedidoPago pago = pagoLocal(42L, TipoFinancieroMetodoPago.DIGITAL, "60.00");
+
+        cajaService.registrarIngresosVentaLocal(List.of(pago), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository).save(captor.capture());
+        assertEquals(CanalFondos.DIGITAL_NEGOCIO, captor.getValue().getCanalFondos());
+        assertEquals(sesion, captor.getValue().getSesionCaja());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_mixto_creaUnMovimientoPorPago() {
+        configurarSesionAbiertaParaIngresos();
+        PedidoPago efectivo = pagoLocal(43L, TipoFinancieroMetodoPago.EFECTIVO, "40.00");
+        PedidoPago digital = pagoLocal(44L, TipoFinancieroMetodoPago.DIGITAL, "60.00");
+
+        cajaService.registrarIngresosVentaLocal(List.of(efectivo, digital), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        List<MovimientoCaja> movimientos = captor.getAllValues();
+
+        assertEquals(2, movimientos.size(), "Debe crear exactamente dos movimientos");
+        assertEquals(CanalFondos.CAJA_FISICA, movimientos.get(0).getCanalFondos());
+        assertEquals(0, new BigDecimal("40.00").compareTo(movimientos.get(0).getMonto()));
+        assertEquals(efectivo, movimientos.get(0).getPedidoPago());
+        assertEquals(CanalFondos.DIGITAL_NEGOCIO, movimientos.get(1).getCanalFondos());
+        assertEquals(0, new BigDecimal("60.00").compareTo(movimientos.get(1).getMonto()));
+        assertEquals(digital, movimientos.get(1).getPedidoPago());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_sinSesion_rechazaSinGuardarMovimientos() {
+        configurarUsuarioYCajaPrincipal();
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaLocal(
+                        List.of(pagoLocal(45L, TipoFinancieroMetodoPago.EFECTIVO, "10.00")), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_pagoDuplicado_rechazaSinGuardarMovimientos() {
+        configurarSesionAbiertaParaIngresos();
+        PedidoPago pago = pagoLocal(46L, TipoFinancieroMetodoPago.EFECTIVO, "10.00");
+        when(movimientoCajaRepository.findByPedidoPagoForUpdate(pago))
+                .thenReturn(Optional.of(new MovimientoCaja()));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaLocal(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_listaConSegundoDuplicado_noGuardaElPrimero() {
+        configurarSesionAbiertaParaIngresos();
+        PedidoPago primero = pagoLocal(47L, TipoFinancieroMetodoPago.EFECTIVO, "10.00");
+        PedidoPago segundo = pagoLocal(48L, TipoFinancieroMetodoPago.DIGITAL, "20.00");
+        when(movimientoCajaRepository.findByPedidoPagoForUpdate(segundo))
+                .thenReturn(Optional.of(new MovimientoCaja()));
+
+        assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaLocal(List.of(primero, segundo), 10L));
+
+        verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_sinTipoFinanciero_rechazaSinGuardarMovimientos() {
+        configurarSesionAbiertaParaIngresos();
+        PedidoPago pago = pagoLocal(49L, TipoFinancieroMetodoPago.EFECTIVO, "10.00");
+        pago.getMetodoPago().setTipoFinanciero(null);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaLocal(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarIngresosVentaLocal_montoNoPositivo_rechazaSinGuardarMovimientos() {
+        configurarSesionAbiertaParaIngresos();
+        PedidoPago pago = pagoLocal(50L, TipoFinancieroMetodoPago.EFECTIVO, "0.00");
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaLocal(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).save(any());
     }
 }

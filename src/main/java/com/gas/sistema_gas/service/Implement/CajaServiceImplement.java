@@ -3,6 +3,7 @@ package com.gas.sistema_gas.service.Implement;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,8 +15,11 @@ import com.gas.sistema_gas.Model.CanalFondos;
 import com.gas.sistema_gas.Model.EstadoSesionCaja;
 import com.gas.sistema_gas.Model.MovimientoCaja;
 import com.gas.sistema_gas.Model.OrigenMovimiento;
+import com.gas.sistema_gas.Model.Pedido;
+import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.SentidoMovimiento;
 import com.gas.sistema_gas.Model.SesionCaja;
+import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
@@ -102,9 +106,6 @@ public class CajaServiceImplement implements CajaService {
     public CajaDTO.CierreResponse cerrarCaja(Long usuarioId, BigDecimal montoDeclarado, String observaciones) {
         BigDecimal montoDeclaradoNormalizado = normalizarMontoDeclarado(montoDeclarado);
 
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
-
         Caja caja = cajaRepository.findByCodigoForUpdate(CODIGO_CAJA_PRINCIPAL)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "La Caja principal no esta configurada"));
@@ -116,6 +117,9 @@ public class CajaServiceImplement implements CajaService {
         SesionCaja sesion = sesionCajaRepository.findByCajaAndEstadoForUpdate(caja, EstadoSesionCaja.ABIERTA)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "La Caja principal no tiene una sesion abierta"));
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
         BigDecimal efectivoEsperado = normalizarMonto(movimientoCajaRepository.calcularSaldoPorSesionYCanal(
                 sesion,
@@ -148,6 +152,73 @@ public class CajaServiceImplement implements CajaService {
                 sesionGuardada.getMontoDeclaradoCierre(),
                 sesionGuardada.getDiferenciaCierre(),
                 sesionGuardada.getEstado().name());
+    }
+
+    @Override
+    @Transactional
+    public void registrarIngresosVentaLocal(List<PedidoPago> pagos, Long usuarioId) {
+        if (pagos == null || pagos.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Debe registrar al menos un pago de venta local");
+        }
+
+        // El orden Caja -> SesionCaja debe coincidir con abrir/cerrar Caja para evitar deadlocks.
+        Caja caja = cajaRepository.findByCodigoForUpdate(CODIGO_CAJA_PRINCIPAL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "La Caja principal no esta configurada"));
+        if (!Boolean.TRUE.equals(caja.getActiva())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La Caja principal esta inactiva");
+        }
+
+        SesionCaja sesion = sesionCajaRepository.findByCajaAndEstadoForUpdate(caja, EstadoSesionCaja.ABIERTA)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "La Caja principal no tiene una sesion abierta"));
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        // Validar por completo antes de escribir: una lista con un pago duplicado no deja movimientos parciales.
+        for (PedidoPago pago : pagos) {
+            validarPagoVentaLocal(pago);
+            if (movimientoCajaRepository.findByPedidoPagoForUpdate(pago).isPresent()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "El pago de la venta local ya tiene un movimiento de Caja");
+            }
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        for (PedidoPago pago : pagos) {
+            Pedido pedido = pago.getPedido();
+            MovimientoCaja movimiento = new MovimientoCaja();
+            movimiento.setCaja(caja);
+            movimiento.setSesionCaja(sesion);
+            movimiento.setFechaHora(ahora);
+            movimiento.setSentido(SentidoMovimiento.INGRESO);
+            movimiento.setOrigen(OrigenMovimiento.VENTA);
+            movimiento.setCanalFondos(pago.getMetodoPago().getTipoFinanciero() == TipoFinancieroMetodoPago.EFECTIVO
+                    ? CanalFondos.CAJA_FISICA
+                    : CanalFondos.DIGITAL_NEGOCIO);
+            movimiento.setMonto(pago.getMonto());
+            movimiento.setMetodoPago(pago.getMetodoPago());
+            movimiento.setPedidoPago(pago);
+            movimiento.setUsuarioResponsable(usuario);
+            movimiento.setReferencia(pedido.getCodigo());
+            movimiento.setDescripcion("Ingreso por venta local " + pedido.getCodigo());
+            movimientoCajaRepository.save(movimiento);
+        }
+    }
+
+    private void validarPagoVentaLocal(PedidoPago pago) {
+        if (pago == null || pago.getId() == null || pago.getPedido() == null
+                || pago.getMetodoPago() == null || pago.getMetodoPago().getTipoFinanciero() == null
+                || pago.getMonto() == null || pago.getMonto().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El pago de venta local no tiene datos financieros validos");
+        }
+        if (!"LOCAL".equalsIgnoreCase(pago.getPedido().getTipoVenta())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Solo los pagos de ventas locales pueden ingresar a Caja");
+        }
     }
 
     private BigDecimal normalizarMontoDeclarado(BigDecimal montoDeclarado) {

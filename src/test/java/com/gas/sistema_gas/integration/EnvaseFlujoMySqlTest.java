@@ -336,7 +336,7 @@ class EnvaseFlujoMySqlTest {
                     null,
                     null,
                     "LOCAL",
-                    null,
+                    LocalDateTime.now().plusDays(1),
                     List.of(),
                     List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                     "PRESTAMO",
@@ -434,7 +434,7 @@ class EnvaseFlujoMySqlTest {
                 null,
                 null,
                 "LOCAL",
-                null,
+                LocalDateTime.now().plusDays(1),
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                 "VENTA",
@@ -539,7 +539,7 @@ class EnvaseFlujoMySqlTest {
                     null,
                     null,
                     "LOCAL",
-                    null,
+                    LocalDateTime.now().plusDays(1),
                     List.of(),
                     List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                     "VENTA",
@@ -736,7 +736,7 @@ class EnvaseFlujoMySqlTest {
                 null,
                 null,
                 "LOCAL",
-                null,
+                LocalDateTime.now().plusDays(1),
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
                 "PRESTAMO",
@@ -833,7 +833,7 @@ class EnvaseFlujoMySqlTest {
                 null,
                 null,
                 "LOCAL",
-                null,
+                LocalDateTime.now().plusDays(1),
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
                 "NINGUNO",
@@ -923,7 +923,7 @@ class EnvaseFlujoMySqlTest {
                 null,
                 null,
                 "LOCAL",
-                null,
+                LocalDateTime.now().plusDays(1),
                 List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
                 null,
@@ -1093,7 +1093,7 @@ class EnvaseFlujoMySqlTest {
 
         PedidoDTO.SimpleResponse respuesta = pedidoService.createOrder(new PedidoDTO.Create(
                 null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
-                null, null, null, null, "LOCAL", null, List.of(),
+                null, null, null, null, "LOCAL", LocalDateTime.now().plusDays(1), List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), 1)),
                 null, List.of()), usuarioId);
         ControlEnvase prestamo = unicoPrestamo(respuesta.idPedido());
@@ -1372,7 +1372,7 @@ class EnvaseFlujoMySqlTest {
     private PedidoDTO.Create crearPedidoPrestamo(String fechaLimiteDevolucion, String tipoPrestamo) {
         return new PedidoDTO.Create(
                 null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
-                null, null, null, null, "LOCAL", null, List.of(),
+                null, null, null, null, "LOCAL", LocalDateTime.now().plusDays(1), List.of(),
                 List.of(new PedidoDTO.DetalleCreate(productoId, 1, new BigDecimal("10.00"), null)),
                 "PRESTAMO",
                 List.of(new PedidoDTO.EnvaseMovimientoCreate(
@@ -1382,7 +1382,7 @@ class EnvaseFlujoMySqlTest {
     private PedidoDTO.Create crearPedidoCanje(int cantidad, List<PedidoDTO.PagoCreate> pagos) {
         return new PedidoDTO.Create(
                 null, clienteId, null, "Cliente Envase Test", null, null, null, null, usuarioId,
-                null, null, null, null, "LOCAL", null, pagos,
+                null, null, null, null, "LOCAL", LocalDateTime.now().plusDays(1), pagos,
                 List.of(new PedidoDTO.DetalleCreate(productoId, cantidad, new BigDecimal("10.00"), null)),
                 "CANJE",
                 List.of(new PedidoDTO.EnvaseMovimientoCreate(productoId, cantidad, null, null, null, null)));

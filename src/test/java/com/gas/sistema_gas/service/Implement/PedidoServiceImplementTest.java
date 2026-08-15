@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,6 +54,7 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.CajaService;
 import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.dto.PedidoDTO;
 
@@ -106,6 +108,9 @@ class PedidoServiceImplementTest {
 
     @Mock
     private MetodoPagoService metodoPagoService;
+
+    @Mock
+    private CajaService cajaService;
 
     @Mock
     private ClienteMapper clienteMapper;
@@ -169,7 +174,7 @@ class PedidoServiceImplementTest {
     private PedidoDTO.Create createDtoLocal(List<PedidoDTO.DetalleCreate> detalles) {
         return new PedidoDTO.Create(
             null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
-            null, 1L, null, null, "obs", null, "LOCAL", null,
+            null, 1L, null, null, "obs", null, "LOCAL", LocalDateTime.now().plusDays(1),
             List.of(), detalles, "NINGUNO", List.of()
         );
     }
@@ -200,6 +205,13 @@ class PedidoServiceImplementTest {
                 .thenReturn(List.of(lote(1L, producto, new BigDecimal("50.00"))));
         when(detalleRepository.save(any(DetallePedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productoRepository.save(any(Producto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(pedidoPagoRepository.save(any(PedidoPago.class))).thenAnswer(invocation -> {
+            PedidoPago pago = invocation.getArgument(0);
+            pago.setId(50L);
+            return pago;
+        });
+        lenient().when(pedidoPagoRepository.findByPedido_Id(any())).thenReturn(List.of());
+        lenient().when(pedidoMapper.toSimpleResponse(any(Pedido.class))).thenReturn(simpleResponse(1L, "ENTREGADO"));
     }
 
     // ---------- Pruebas existentes (migradas a findByIdForUpdate) ----------
@@ -1108,6 +1120,86 @@ class PedidoServiceImplementTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
         verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+    }
+
+    @Test
+    void createOrder_LOCAL_pagada_registraLosPagosPersistidosEnCaja() {
+        PedidoDTO.Create createDto = createDtoLocalConPago(7L, null);
+        configurarVentaLocal(createDto);
+        MetodoPago efectivo = new MetodoPago();
+        efectivo.setId(7L);
+        efectivo.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
+        when(metodoPagoService.obtenerActivo(7L)).thenReturn(efectivo);
+        when(metodoPagoService.validarYNormalizarNumeroOperacion(efectivo, null)).thenReturn(null);
+
+        pedidoService.createOrder(createDto, 1L);
+
+        verify(cajaService).registrarIngresosVentaLocal(argThat(pagos -> pagos.size() == 1
+                && pagos.get(0).getId().equals(50L)
+                && pagos.get(0).getMetodoPago() == efectivo), eq(1L));
+    }
+
+    @Test
+    void createOrder_LOCAL_creditoSinPagos_noRegistraCaja() {
+        PedidoDTO.Create createDto = createDtoLocal(List.of(new PedidoDTO.DetalleCreate(1L, 1, null, null)));
+        configurarVentaLocal(createDto);
+
+        pedidoService.createOrder(createDto, 1L);
+
+        verify(cajaService, never()).registrarIngresosVentaLocal(any(), any());
+    }
+
+    @Test
+    void createOrder_LOCAL_sinPagoNiCredito_rechaza() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
+                null, 1L, null, null, "obs", null, "LOCAL", null,
+                List.of(), List.of(new PedidoDTO.DetalleCreate(1L, 1, null, null)), "NINGUNO", List.of());
+        configurarVentaLocal(createDto);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Una venta local sin pago debe registrarse como credito", exception.getReason());
+        verify(cajaService, never()).registrarIngresosVentaLocal(any(), any());
+    }
+
+    @Test
+    void createOrder_LOCAL_abonoParcialCredito_registraAbonoEnCaja() {
+        PedidoDTO.Create createDto = new PedidoDTO.Create(
+                null, 1L, null, "Juan", "Av Test 123", "ref", "999999999",
+                null, 1L, null, null, "obs", null, "LOCAL", LocalDateTime.now().plusDays(1),
+                List.of(new PedidoDTO.PagoCreate(7L, new BigDecimal("40.00"), null)),
+                List.of(new PedidoDTO.DetalleCreate(1L, 1, null, null)), "NINGUNO", List.of());
+        configurarVentaLocal(createDto);
+        MetodoPago efectivo = new MetodoPago();
+        efectivo.setId(7L);
+        efectivo.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
+        when(metodoPagoService.obtenerActivo(7L)).thenReturn(efectivo);
+        when(metodoPagoService.validarYNormalizarNumeroOperacion(efectivo, null)).thenReturn(null);
+
+        pedidoService.createOrder(createDto, 1L);
+
+        verify(cajaService).registrarIngresosVentaLocal(any(), eq(1L));
+    }
+
+    @Test
+    void createOrder_LOCAL_siCajaFalla_propagalaExcepcion() {
+        PedidoDTO.Create createDto = createDtoLocalConPago(7L, null);
+        configurarVentaLocal(createDto);
+        MetodoPago efectivo = new MetodoPago();
+        efectivo.setId(7L);
+        efectivo.setTipoFinanciero(TipoFinancieroMetodoPago.EFECTIVO);
+        when(metodoPagoService.obtenerActivo(7L)).thenReturn(efectivo);
+        when(metodoPagoService.validarYNormalizarNumeroOperacion(efectivo, null)).thenReturn(null);
+        ResponseStatusException fallaCaja = new ResponseStatusException(HttpStatus.CONFLICT, "Caja cerrada");
+        doThrow(fallaCaja).when(cajaService).registrarIngresosVentaLocal(any(), eq(1L));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoService.createOrder(createDto, 1L));
+
+        assertEquals(fallaCaja, exception);
     }
 
     @Test

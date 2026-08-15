@@ -25,6 +25,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.gas.sistema_gas.Mapper.PedidoMapper;
 import com.gas.sistema_gas.Mapper.ClienteMapper;
 import com.gas.sistema_gas.Model.Cliente;
+
+import jakarta.transaction.Transactional;
 import com.gas.sistema_gas.Model.DetallePedido;
 import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
@@ -44,10 +46,9 @@ import com.gas.sistema_gas.dto.ClienteDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.dto.PedidoDTO.EditResponse;
 import com.gas.sistema_gas.service.CorrelativoService;
+import com.gas.sistema_gas.service.CajaService;
 import com.gas.sistema_gas.service.MetodoPagoService;
 import com.gas.sistema_gas.service.PedidoService;
-
-import jakarta.transaction.Transactional;
 
 @Service
 public class PedidoServiceImplement implements PedidoService {
@@ -79,6 +80,8 @@ public class PedidoServiceImplement implements PedidoService {
     private MetodoPagoService metodoPagoService;
     @Autowired
     private CorrelativoService correlativoService;
+    @Autowired
+    private CajaService cajaService;
     @Autowired
     private com.gas.sistema_gas.Repository.ControlEnvaseRepository controlEnvaseRepository;
     @Autowired
@@ -660,6 +663,7 @@ public class PedidoServiceImplement implements PedidoService {
         }
 
         BigDecimal totalPagos = BigDecimal.ZERO;
+        List<PedidoPago> pagosGuardados = new ArrayList<>();
         if (!pagosDto.isEmpty()) {
             for (PedidoDTO.PagoCreate pagoDto : pagosDto) {
                 if (pagoDto == null) {
@@ -680,7 +684,8 @@ public class PedidoServiceImplement implements PedidoService {
                 pago.setMetodoPago(pagoMetodo);
                 pago.setMonto(pagoDto.monto());
                 pago.setNumOperacion(numOperacionPago);
-                pedidoPagoRepository.save(pago);
+                PedidoPago pagoGuardado = pedidoPagoRepository.save(pago);
+                pagosGuardados.add(pagoGuardado);
 
                 totalPagos = totalPagos.add(pagoDto.monto());
             }
@@ -708,11 +713,20 @@ public class PedidoServiceImplement implements PedidoService {
                 pedidoGuardado.setEstadoPago("CREDITO");
             }
         } else {
+            if ("LOCAL".equalsIgnoreCase(pedidoGuardado.getTipoVenta())
+                    && pedidoGuardado.getFechaLimitePago() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Una venta local sin pago debe registrarse como credito");
+            }
             if (pedidoGuardado.getFechaLimitePago() != null) {
                 pedidoGuardado.setEstadoPago("CREDITO");
             } else {
                 pedidoGuardado.setEstadoPago("PENDIENTE");
             }
+        }
+
+        if ("LOCAL".equalsIgnoreCase(pedidoGuardado.getTipoVenta()) && !pagosGuardados.isEmpty()) {
+            cajaService.registrarIngresosVentaLocal(pagosGuardados, idUsuarioLogueado);
         }
 
         return mapToSimpleResponse(pedidoRepository.save(pedidoGuardado));
