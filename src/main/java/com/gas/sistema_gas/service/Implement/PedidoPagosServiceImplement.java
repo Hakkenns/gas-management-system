@@ -23,15 +23,18 @@ import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
+import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.MetodoPagoService;
+import com.gas.sistema_gas.service.CajaService;
 import com.gas.sistema_gas.service.PedidoPagosService;
 
 import jakarta.transaction.Transactional;
@@ -56,6 +59,12 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
 
     @Autowired
     private ProductoRepository productoRepository;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private CajaService cajaService;
 
     @Value("${app.evidencias.dir:src/main/resources/static/imagenes-sistema}")
     private String evidenciasDir;
@@ -304,19 +313,21 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Override
     @Transactional
     public List<PedidoPago> confirmarEntregaConPagos(ConfirmarEntregaMixtaDTO dto,
-            List<MultipartFile> evidencias, MultipartFile evidenciaVuelto) {
+            List<MultipartFile> evidencias, MultipartFile evidenciaVuelto, Long usuarioResponsableId) {
         if (dto == null || dto.idPedido == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido");
         }
 
         Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        validarActorResponsable(pedido, usuarioResponsableId);
         if ("ENTREGADO".equalsIgnoreCase(pedido.getEstadoPedido())) {
             return pedidoPagoRepository.findByPedido(pedido);
         }
         validarPedidoListoParaEntrega(pedido);
 
         List<PedidoPago> pagosGuardados = registrarPagosMultiples(dto, evidencias, evidenciaVuelto);
+        cajaService.registrarIngresosVentaDomicilio(pagosGuardados, usuarioResponsableId);
         procesarCanjeDomicilioPendiente(pedido);
         return pagosGuardados;
     }
@@ -324,13 +335,14 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
     @Override
     @Transactional
     public PedidoPago confirmarEntregaPagoUnico(PedidoPagoYapeDTO dto, MultipartFile evidencia,
-            MultipartFile evidenciaVuelto) {
+            MultipartFile evidenciaVuelto, Long usuarioResponsableId) {
         if (dto == null || dto.idPedido == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pedido inválido");
         }
 
         Pedido pedido = pedidoRepository.findByIdForUpdate(dto.idPedido)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        validarActorResponsable(pedido, usuarioResponsableId);
         if ("ENTREGADO".equalsIgnoreCase(pedido.getEstadoPedido())) {
             return pedidoPagoRepository.findByPedido(pedido).stream().findFirst()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
@@ -339,6 +351,7 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
         validarPedidoListoParaEntrega(pedido);
 
         PedidoPago pago = registrarPagoYape(dto, evidencia, evidenciaVuelto);
+        cajaService.registrarIngresosVentaDomicilio(List.of(pago), usuarioResponsableId);
         procesarCanjeDomicilioPendiente(pedido);
         return pago;
     }
@@ -348,6 +361,20 @@ public class PedidoPagosServiceImplement implements PedidoPagosService {
                 || !"EN_DOMICILIO".equalsIgnoreCase(pedido.getEstadoPedido())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El pedido debe estar EN_DOMICILIO para confirmar la entrega");
+        }
+    }
+
+    private void validarActorResponsable(Pedido pedido, Long usuarioResponsableId) {
+        if (usuarioResponsableId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Usuario responsable inválido");
+        }
+        Usuario usuario = usuarioRepository.findById(usuarioResponsableId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        if (usuario.getEmpleado() == null || usuario.getEmpleado().getId() == null
+                || pedido.getEmpleado() == null || pedido.getEmpleado().getId() == null
+                || !usuario.getEmpleado().getId().equals(pedido.getEmpleado().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "El usuario no corresponde al motorizado asignado");
         }
     }
 

@@ -65,14 +65,14 @@ class MotorizadoControllerTest {
         PedidoPago pago = new PedidoPago();
         pago.setId(99L);
         when(pedidoPagosService.confirmarEntregaPagoUnico(
-                any(PedidoPagoYapeDTO.class), any(), any())).thenReturn(pago);
+                any(PedidoPagoYapeDTO.class), any(), any(), eq(5L))).thenReturn(pago);
 
         Object resultado = controller.pagarYape(41L, 1L, new BigDecimal("10.00"), "",
                 null, null, session, "XMLHttpRequest");
 
         ResponseEntity<?> response = (ResponseEntity<?>) resultado;
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+        verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any(), eq(5L));
     }
 
     @Test
@@ -81,21 +81,21 @@ class MotorizadoControllerTest {
         when(pedidoService.existsByIdAndEmpleadoId(41L, 7L)).thenReturn(true);
         PedidoPago pago = new PedidoPago();
         pago.setId(99L);
-        when(pedidoPagosService.confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any()))
+        when(pedidoPagosService.confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any(), eq(5L)))
                 .thenReturn(pago);
 
         Object resultado = controller.pagarYape(41L, 2L, new BigDecimal("10.00"), null,
                 null, null, session, "XMLHttpRequest");
 
         assertEquals(HttpStatus.OK, ((ResponseEntity<?>) resultado).getStatusCode());
-        verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+        verify(pedidoPagosService).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any(), eq(5L));
     }
 
     @Test
     void confirmarEntrega_preservaResponseStatusException() {
         configurarSesionConEmpleado(7L);
         when(pedidoService.existsByIdAndEmpleadoId(41L, 7L)).thenReturn(true);
-        when(pedidoPagosService.confirmarEntregaConPagos(any(), any(), any()))
+        when(pedidoPagosService.confirmarEntregaConPagos(any(), any(), any(), eq(5L)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Método de pago inactivo"));
 
         ResponseEntity<?> response = controller.confirmarEntrega(41L,
@@ -137,7 +137,7 @@ class MotorizadoControllerTest {
 
         ResponseEntity<?> response = (ResponseEntity<?>) resultado;
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        verify(pedidoPagosService, never()).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+        verify(pedidoPagosService, never()).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any(), any());
     }
 
     @Test
@@ -150,7 +150,7 @@ class MotorizadoControllerTest {
 
         ResponseEntity<?> response = (ResponseEntity<?>) resultado;
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        verify(pedidoPagosService, never()).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any());
+        verify(pedidoPagosService, never()).confirmarEntregaPagoUnico(any(PedidoPagoYapeDTO.class), any(), any(), any());
     }
 
     private void configurarSesionConEmpleado(Long empleadoId) {

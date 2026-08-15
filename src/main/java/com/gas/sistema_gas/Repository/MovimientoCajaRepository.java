@@ -25,6 +25,8 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
             """)
     Optional<MovimientoCaja> findByPedidoPagoForUpdate(@Param("pedidoPago") PedidoPago pedidoPago);
 
+    Optional<MovimientoCaja> findByPedidoPago(PedidoPago pedidoPago);
+
     @Query("""
             SELECT COALESCE(SUM(
                 CASE

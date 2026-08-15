@@ -1,6 +1,7 @@
 package com.gas.sistema_gas.service.Implement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.List;
 
@@ -19,10 +21,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.Caja;
 import com.gas.sistema_gas.Model.CanalFondos;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.EstadoSesionCaja;
 import com.gas.sistema_gas.Model.MovimientoCaja;
 import com.gas.sistema_gas.Model.OrigenMovimiento;
@@ -35,6 +39,7 @@ import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.SesionCajaRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.CajaDTO;
@@ -50,6 +55,9 @@ class CajaServiceImplementTest {
 
     @Mock
     private MovimientoCajaRepository movimientoCajaRepository;
+
+    @Mock
+    private PedidoPagoRepository pedidoPagoRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -143,6 +151,38 @@ class CajaServiceImplementTest {
         pago.setMetodoPago(metodo);
         pago.setMonto(new BigDecimal(monto));
         return pago;
+    }
+
+    private PedidoPago pagoDomicilio(Long id, TipoFinancieroMetodoPago tipo, String monto, Long idPedido) {
+        Pedido pedido = new Pedido();
+        pedido.setId(idPedido);
+        pedido.setCodigo("NV001-" + idPedido);
+        pedido.setTipoVenta("DOMICILIO");
+        Empleado empleado = new Empleado();
+        empleado.setId(70L);
+        pedido.setEmpleado(empleado);
+        MetodoPago metodo = new MetodoPago();
+        metodo.setId(id + 100L);
+        metodo.setTipoFinanciero(tipo);
+        PedidoPago pago = new PedidoPago();
+        pago.setId(id);
+        pago.setPedido(pedido);
+        pago.setMetodoPago(metodo);
+        pago.setMonto(new BigDecimal(monto));
+        return pago;
+    }
+
+    private void configurarRegistroDomicilio(List<PedidoPago> pagos) {
+        when(cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        org.mockito.Mockito.lenient().when(usuarioRepository.findById(10L)).thenReturn(Optional.of(usuario));
+        List<PedidoPago> ordenados = pagos.stream()
+                .sorted(java.util.Comparator.comparing(PedidoPago::getId))
+                .toList();
+        List<Long> ids = ordenados.stream().map(PedidoPago::getId).toList();
+        when(pedidoPagoRepository.findAllByIdInForUpdate(ids)).thenReturn(ordenados);
+        org.mockito.Mockito.lenient().when(movimientoCajaRepository.findByPedidoPago(any(PedidoPago.class)))
+                .thenReturn(Optional.empty());
     }
 
     @Test
@@ -495,5 +535,222 @@ class CajaServiceImplementTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
         verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_efectivo_creaCustodiaSinSesion() {
+        PedidoPago pago = pagoDomicilio(61L, TipoFinancieroMetodoPago.EFECTIVO, "30.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+
+        cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository).saveAndFlush(captor.capture());
+        MovimientoCaja movimiento = captor.getValue();
+        assertEquals(SentidoMovimiento.INGRESO, movimiento.getSentido());
+        assertEquals(OrigenMovimiento.VENTA, movimiento.getOrigen());
+        assertEquals(CanalFondos.CUSTODIA_MOTORIZADO, movimiento.getCanalFondos());
+        assertEquals(0, pago.getMonto().compareTo(movimiento.getMonto()));
+        assertEquals(pago.getPedido().getEmpleado(), movimiento.getEmpleadoCustodio());
+        assertEquals(null, movimiento.getSesionCaja());
+        verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_digital_creaIngresoDigitalSinCustodio() {
+        PedidoPago pago = pagoDomicilio(62L, TipoFinancieroMetodoPago.DIGITAL, "30.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+
+        cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository).saveAndFlush(captor.capture());
+        assertEquals(CanalFondos.DIGITAL_NEGOCIO, captor.getValue().getCanalFondos());
+        assertEquals(null, captor.getValue().getSesionCaja());
+        assertEquals(null, captor.getValue().getEmpleadoCustodio());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_mixto_creaUnMovimientoPorPago() {
+        PedidoPago efectivo = pagoDomicilio(63L, TipoFinancieroMetodoPago.EFECTIVO, "20.00", 81L);
+        PedidoPago digital = pagoDomicilio(64L, TipoFinancieroMetodoPago.DIGITAL, "30.00", 81L);
+        configurarRegistroDomicilio(List.of(digital, efectivo));
+
+        cajaService.registrarIngresosVentaDomicilio(List.of(digital, efectivo), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository, org.mockito.Mockito.times(2)).saveAndFlush(captor.capture());
+        List<MovimientoCaja> movimientos = captor.getAllValues();
+        assertEquals(2, movimientos.size());
+
+        MovimientoCaja movimientoEfectivo = movimientos.stream()
+                .filter(movimiento -> movimiento.getPedidoPago() == efectivo)
+                .findFirst()
+                .orElseThrow();
+        MovimientoCaja movimientoDigital = movimientos.stream()
+                .filter(movimiento -> movimiento.getPedidoPago() == digital)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1L, movimientos.stream()
+                .filter(movimiento -> movimiento.getPedidoPago() == efectivo)
+                .count());
+        assertEquals(1L, movimientos.stream()
+                .filter(movimiento -> movimiento.getPedidoPago() == digital)
+                .count());
+
+        assertEquals(CanalFondos.CUSTODIA_MOTORIZADO, movimientoEfectivo.getCanalFondos());
+        assertSame(efectivo, movimientoEfectivo.getPedidoPago());
+        assertSame(efectivo.getMetodoPago(), movimientoEfectivo.getMetodoPago());
+        assertEquals(0, efectivo.getMonto().compareTo(movimientoEfectivo.getMonto()));
+        assertSame(efectivo.getPedido().getEmpleado(), movimientoEfectivo.getEmpleadoCustodio());
+        assertEquals(null, movimientoEfectivo.getSesionCaja());
+        assertEquals(SentidoMovimiento.INGRESO, movimientoEfectivo.getSentido());
+        assertEquals(OrigenMovimiento.VENTA, movimientoEfectivo.getOrigen());
+
+        assertEquals(CanalFondos.DIGITAL_NEGOCIO, movimientoDigital.getCanalFondos());
+        assertSame(digital, movimientoDigital.getPedidoPago());
+        assertSame(digital.getMetodoPago(), movimientoDigital.getMetodoPago());
+        assertEquals(0, digital.getMonto().compareTo(movimientoDigital.getMonto()));
+        assertEquals(null, movimientoDigital.getEmpleadoCustodio());
+        assertEquals(null, movimientoDigital.getSesionCaja());
+        assertEquals(SentidoMovimiento.INGRESO, movimientoDigital.getSentido());
+        assertEquals(OrigenMovimiento.VENTA, movimientoDigital.getOrigen());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_pagoInvalido_rechazaSinGuardar() {
+        PedidoPago pago = pagoDomicilio(65L, TipoFinancieroMetodoPago.EFECTIVO, "0.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_tipoNulo_rechazaSinGuardar() {
+        PedidoPago pago = pagoDomicilio(66L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        pago.getMetodoPago().setTipoFinanciero(null);
+        configurarRegistroDomicilio(List.of(pago));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_pedidoNoDomicilio_rechazaSinGuardar() {
+        PedidoPago pago = pagoDomicilio(67L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        pago.getPedido().setTipoVenta("LOCAL");
+        configurarRegistroDomicilio(List.of(pago));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_pedidoSinEmpleado_rechazaSinGuardar() {
+        PedidoPago pago = pagoDomicilio(67L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        pago.getPedido().setEmpleado(null);
+        configurarRegistroDomicilio(List.of(pago));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_pagoDuplicado_rechazaSinGuardar() {
+        PedidoPago pago = pagoDomicilio(68L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+        when(movimientoCajaRepository.findByPedidoPago(pago)).thenReturn(Optional.of(new MovimientoCaja()));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+        verify(movimientoCajaRepository, never()).findByPedidoPagoForUpdate(any());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_uniquePedidoPago_traduceAConflict() {
+        PedidoPago pago = pagoDomicilio(73L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+        org.hibernate.exception.ConstraintViolationException constraintViolation =
+                new org.hibernate.exception.ConstraintViolationException(
+                        "Violacion de uk_movimiento_caja_pedido_pago",
+                        new SQLException("Constraint uk_movimiento_caja_pedido_pago", "23000", 1062),
+                        "uk_movimiento_caja_pedido_pago");
+        DataIntegrityViolationException integrityException =
+                new DataIntegrityViolationException("No se pudo insertar MovimientoCaja", constraintViolation);
+        when(movimientoCajaRepository.saveAndFlush(any(MovimientoCaja.class))).thenThrow(integrityException);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(null, exception.getCause());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_otraIntegridad_noLaTraduceAConflict() {
+        PedidoPago pago = pagoDomicilio(74L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        configurarRegistroDomicilio(List.of(pago));
+        org.hibernate.exception.ConstraintViolationException constraintViolation =
+                new org.hibernate.exception.ConstraintViolationException(
+                        "Violacion de otra restriccion",
+                        new SQLException("Constraint uk_otra_restriccion", "23000", 1062),
+                        "uk_otra_restriccion");
+        DataIntegrityViolationException integrityException =
+                new DataIntegrityViolationException("No se pudo insertar MovimientoCaja", constraintViolation);
+        when(movimientoCajaRepository.saveAndFlush(any(MovimientoCaja.class))).thenThrow(integrityException);
+
+        DataIntegrityViolationException propagada = assertThrows(DataIntegrityViolationException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+
+        assertSame(integrityException, propagada);
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_cajaInexistenteOInactiva_rechaza() {
+        PedidoPago pago = pagoDomicilio(69L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        when(cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL)).thenReturn(Optional.empty());
+
+        ResponseStatusException inexistente = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+        assertEquals(HttpStatus.NOT_FOUND, inexistente.getStatusCode());
+
+        cajaPrincipal.setActiva(false);
+        when(cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        ResponseStatusException inactiva = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(pago), 10L));
+        assertEquals(HttpStatus.CONFLICT, inactiva.getStatusCode());
+    }
+
+    @Test
+    void registrarIngresosVentaDomicilio_idsDuplicadosOPedidosDistintos_rechazaSinGuardar() {
+        PedidoPago duplicado = pagoDomicilio(70L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        ResponseStatusException idsDuplicados = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(duplicado, duplicado), 10L));
+        assertEquals(HttpStatus.BAD_REQUEST, idsDuplicados.getStatusCode());
+
+        PedidoPago primero = pagoDomicilio(71L, TipoFinancieroMetodoPago.EFECTIVO, "10.00", 81L);
+        PedidoPago segundo = pagoDomicilio(72L, TipoFinancieroMetodoPago.DIGITAL, "10.00", 82L);
+        configurarRegistroDomicilio(List.of(primero, segundo));
+        ResponseStatusException pedidosDistintos = assertThrows(ResponseStatusException.class,
+                () -> cajaService.registrarIngresosVentaDomicilio(List.of(primero, segundo), 10L));
+        assertEquals(HttpStatus.BAD_REQUEST, pedidosDistintos.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
     }
 }

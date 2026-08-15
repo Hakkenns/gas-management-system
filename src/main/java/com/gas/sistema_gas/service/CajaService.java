@@ -13,4 +13,6 @@ public interface CajaService {
     CajaDTO.CierreResponse cerrarCaja(Long usuarioId, BigDecimal montoDeclarado, String observaciones);
 
     void registrarIngresosVentaLocal(List<PedidoPago> pagos, Long usuarioId);
+
+    void registrarIngresosVentaDomicilio(List<PedidoPago> pagos, Long usuarioResponsableId);
 }

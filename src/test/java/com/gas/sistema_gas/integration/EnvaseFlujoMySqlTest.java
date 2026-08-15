@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.gas.sistema_gas.SistemaGasApplication;
 import com.gas.sistema_gas.Model.Categoria;
+import com.gas.sistema_gas.Model.Caja;
 import com.gas.sistema_gas.Model.Cliente;
 import com.gas.sistema_gas.Model.ControlEnvase;
 import com.gas.sistema_gas.Model.Correlativo;
@@ -40,6 +41,7 @@ import com.gas.sistema_gas.Model.Proveedor;
 import com.gas.sistema_gas.Model.Rubro;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.ClienteRepository;
+import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.ControlEnvaseRepository;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
@@ -50,6 +52,7 @@ import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.service.PedidoService;
 import com.gas.sistema_gas.service.PedidoPagosService;
 import com.gas.sistema_gas.service.EnvaseService;
+import com.gas.sistema_gas.service.Implement.CajaServiceImplement;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
@@ -72,6 +75,9 @@ class EnvaseFlujoMySqlTest {
 
     @Autowired
     private ClienteRepository clienteRepository;
+
+    @Autowired
+    private CajaRepository cajaRepository;
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -129,6 +135,13 @@ class EnvaseFlujoMySqlTest {
         String sufijoUnico = UUID.randomUUID().toString().substring(0, 8);
 
         transactionTemplate.executeWithoutResult(status -> {
+            Caja cajaPrincipal = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL)
+                    .orElseGet(Caja::new);
+            cajaPrincipal.setCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL);
+            cajaPrincipal.setNombre("Caja principal");
+            cajaPrincipal.setActiva(true);
+            cajaRepository.saveAndFlush(cajaPrincipal);
+
             Perfil perfil = new Perfil();
             perfil.setNombrePerfil("Perfil Envase Test");
             perfil.setEstado(1);
@@ -164,6 +177,7 @@ class EnvaseFlujoMySqlTest {
             empleado.setCorreo("motorizado." + sufijoUnico + "@gmail.com");
             empleado.setEstado(1);
             entityManager.persist(empleado);
+            usuario.setEmpleado(empleado);
 
             MetodoPago efectivo = metodoPagoRepository.findByCodigo("EFECTIVO").orElseGet(() -> {
                 MetodoPago metodo = new MetodoPago();
@@ -602,7 +616,7 @@ class EnvaseFlujoMySqlTest {
         pedidoService.updateEstadoPedido(respuesta.idPedido(), "EN_CAMINO");
         pedidoService.updateEstadoPedido(respuesta.idPedido(), "EN_DOMICILIO");
         pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                respuesta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null);
+                respuesta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null, usuarioId);
 
         assertAll(
                 () -> assertEquals("ENTREGADO",
@@ -1202,8 +1216,8 @@ class EnvaseFlujoMySqlTest {
 
         PedidoPagoYapeDTO pago = new PedidoPagoYapeDTO(
                 respuesta.idPedido(), efectivoId, new BigDecimal("10.00"), "");
-        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
-        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
+        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null, usuarioId);
+        pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null, usuarioId);
 
         Producto producto = productoRepository.findById(productoId).orElseThrow();
         Pedido pedido = pedidoRepository.findById(respuesta.idPedido()).orElseThrow();
@@ -1227,7 +1241,7 @@ class EnvaseFlujoMySqlTest {
                 List.of(
                         new PagoRegistroDTO(efectivoId, new BigDecimal("10.00"), "", BigDecimal.ZERO),
                         new PagoRegistroDTO(yapeId, new BigDecimal("20.00"), "op-yape", BigDecimal.ZERO))),
-                null, null);
+                null, null, usuarioId);
 
         assertAll(
                 () -> assertEquals(7, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
@@ -1251,7 +1265,7 @@ class EnvaseFlujoMySqlTest {
         avanzarHastaDomicilio(respuesta.idPedido());
 
         pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                respuesta.idPedido(), efectivoId, new BigDecimal("50.00"), ""), null, null);
+                respuesta.idPedido(), efectivoId, new BigDecimal("50.00"), ""), null, null, usuarioId);
 
         List<DetallePedido> detalles = detallePedidoRepository.findByPedido_Id(respuesta.idPedido());
         assertAll(
@@ -1270,19 +1284,19 @@ class EnvaseFlujoMySqlTest {
         PedidoDTO.SimpleResponse ninguno = pedidoService.createOrder(crearPedidoMovimientoDomicilio("NINGUNO"), usuarioId);
         avanzarHastaDomicilio(ninguno.idPedido());
         pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                ninguno.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null);
+                ninguno.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null, usuarioId);
         assertEquals(10, productoRepository.findById(productoId).orElseThrow().getStockVacios());
 
         PedidoDTO.SimpleResponse venta = pedidoService.createOrder(crearPedidoMovimientoDomicilio("VENTA"), usuarioId);
         colocarEnDomicilioParaProbarEntrega(venta.idPedido());
         pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                venta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null);
+                venta.idPedido(), efectivoId, new BigDecimal("20.00"), ""), null, null, usuarioId);
         assertEquals(9, productoRepository.findById(productoId).orElseThrow().getStockVacios());
 
         PedidoDTO.SimpleResponse prestamo = pedidoService.createOrder(crearPedidoMovimientoDomicilio("PRESTAMO"), usuarioId);
         avanzarHastaDomicilio(prestamo.idPedido());
         pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                prestamo.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null);
+                prestamo.idPedido(), efectivoId, new BigDecimal("10.00"), ""), null, null, usuarioId);
 
         assertAll(
                 () -> assertEquals(8, productoRepository.findById(productoId).orElseThrow().getStockVacios()),
@@ -1300,7 +1314,7 @@ class EnvaseFlujoMySqlTest {
 
         assertThrows(ArithmeticException.class, () -> pedidoPagosService.confirmarEntregaPagoUnico(
                 new PedidoPagoYapeDTO(respuesta.idPedido(), efectivoId, new BigDecimal("10.00"), ""),
-                null, null));
+                null, null, usuarioId));
 
         assertAll(
                 () -> assertEquals("EN_DOMICILIO",

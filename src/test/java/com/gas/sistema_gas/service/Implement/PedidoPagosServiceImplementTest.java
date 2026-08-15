@@ -29,20 +29,24 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.gas.sistema_gas.Model.Evidencia;
 import com.gas.sistema_gas.Model.DetallePedido;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.Producto;
 import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
+import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.DetallePedidoRepository;
 import com.gas.sistema_gas.Repository.EvidenciaRepository;
 import com.gas.sistema_gas.Repository.MetodoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
+import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.service.MetodoPagoService;
+import com.gas.sistema_gas.service.CajaService;
 
 @ExtendWith(MockitoExtension.class)
 class PedidoPagosServiceImplementTest {
@@ -70,6 +74,12 @@ class PedidoPagosServiceImplementTest {
 
     @Mock
     private ProductoRepository productoRepository;
+
+    @Mock
+    private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private CajaService cajaService;
 
     @InjectMocks
     private PedidoPagosServiceImplement pedidoPagosService;
@@ -129,6 +139,17 @@ class PedidoPagosServiceImplementTest {
         PedidoPago p = new PedidoPago();
         p.setMonto(new BigDecimal(monto));
         return p;
+    }
+
+    private void configurarActorResponsable(Pedido pedido) {
+        Empleado empleado = new Empleado();
+        empleado.setId(70L);
+        pedido.setEmpleado(empleado);
+        pedido.setTipoVenta("DOMICILIO");
+
+        Usuario usuario = new Usuario();
+        usuario.setEmpleado(empleado);
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(usuario));
     }
 
     private void assertMonto(String esperado, BigDecimal actual) {
@@ -464,7 +485,7 @@ class PedidoPagosServiceImplementTest {
     @Test
     void confirmarEntregaMixta_conCanjesPendientesAgrupaProductoYConsumeDetalles() {
         Pedido pedido = pedido("30.00");
-        pedido.setTipoVenta("DOMICILIO");
+        configurarActorResponsable(pedido);
         MetodoPago efectivo = metodo(1L, "Efectivo");
         MetodoPago yape = metodo(2L, "Yape");
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, List.of(
@@ -493,7 +514,7 @@ class PedidoPagosServiceImplementTest {
         when(detallePedidoRepository.findByPedido_Id(1L)).thenReturn(List.of(detalleUno, detalleDos));
         when(productoRepository.findAllByIdInForUpdate(List.of(10L))).thenReturn(List.of(producto));
 
-        List<PedidoPago> resultado = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
+        List<PedidoPago> resultado = pedidoPagosService.confirmarEntregaConPagos(dto, null, null, 5L);
 
         assertEquals(2, resultado.size());
         assertEquals(7, producto.getStockVacios());
@@ -502,26 +523,127 @@ class PedidoPagosServiceImplementTest {
         verify(productoRepository).findAllByIdInForUpdate(List.of(10L));
         verify(productoRepository).save(producto);
         verify(detallePedidoRepository, times(2)).save(any(DetallePedido.class));
+        verify(cajaService).registrarIngresosVentaDomicilio(resultado, 5L);
     }
 
     @Test
     void confirmarEntregaMixta_dosVecesPedidoEntregado_noDuplicaPagosNiCanje() {
         Pedido pedido = pedido("30.00");
         pedido.setEstadoPedido("ENTREGADO");
+        configurarActorResponsable(pedido);
         PedidoPago pagoExistente = pagoSimulado("30.00");
         ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(1L, List.of());
 
         when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
         when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of(pagoExistente));
 
-        List<PedidoPago> primera = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
-        List<PedidoPago> segunda = pedidoPagosService.confirmarEntregaConPagos(dto, null, null);
+        List<PedidoPago> primera = pedidoPagosService.confirmarEntregaConPagos(dto, null, null, 5L);
+        List<PedidoPago> segunda = pedidoPagosService.confirmarEntregaConPagos(dto, null, null, 5L);
 
         assertSame(pagoExistente, primera.get(0));
         assertSame(pagoExistente, segunda.get(0));
         verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
         verify(detallePedidoRepository, never()).findByPedido_Id(any());
         verify(productoRepository, never()).findAllByIdInForUpdate(any());
+        verify(cajaService, never()).registrarIngresosVentaDomicilio(any(), any());
+    }
+
+    @Test
+    void confirmarEntregaPagoUnico_registraIngresoEnCajaAntesDelCanje() {
+        Pedido pedido = pedido("10.00");
+        configurarActorResponsable(pedido);
+        MetodoPago efectivo = metodo(1L, "Efectivo");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(metodoPagoRepository.findById(1L)).thenReturn(Optional.of(efectivo));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of());
+        when(pedidoPagoRepository.save(any(PedidoPago.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PedidoPago resultado = pedidoPagosService.confirmarEntregaPagoUnico(
+                new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 1L, new BigDecimal("10.00"), ""),
+                null, null, 5L);
+
+        verify(cajaService).registrarIngresosVentaDomicilio(List.of(resultado), 5L);
+    }
+
+    @Test
+    void confirmarEntrega_rechazaUsuarioQueNoEsElMotorizadoAntesDeIdempotencia() {
+        Pedido pedido = pedido("10.00");
+        pedido.setEstadoPedido("ENTREGADO");
+        configurarActorResponsable(pedido);
+        Empleado otroEmpleado = new Empleado();
+        otroEmpleado.setId(71L);
+        Usuario otroUsuario = new Usuario();
+        otroUsuario.setEmpleado(otroEmpleado);
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(otroUsuario));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.confirmarEntregaConPagos(
+                        new ConfirmarEntregaMixtaDTO(1L, List.of()), null, null, 5L));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).findByPedido(any(Pedido.class));
+        verify(cajaService, never()).registrarIngresosVentaDomicilio(any(), any());
+    }
+
+    @Test
+    void confirmarEntrega_usuarioSinEmpleado_rechazaAntesDeRegistrarPagoYCanje() {
+        Pedido pedido = pedido("10.00");
+        configurarActorResponsable(pedido);
+        Usuario usuarioSinEmpleado = new Usuario();
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(usuarioSinEmpleado));
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 1L, new BigDecimal("10.00"), ""),
+                        null, null, 5L));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(cajaService, never()).registrarIngresosVentaDomicilio(any(), any());
+        verify(detallePedidoRepository, never()).findByPedido_Id(any());
+    }
+
+    @Test
+    void confirmarEntrega_pedidoSinEmpleado_rechazaAntesDeRegistrarPagoYCanje() {
+        Pedido pedido = pedido("10.00");
+        configurarActorResponsable(pedido);
+        pedido.setEmpleado(null);
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 1L, new BigDecimal("10.00"), ""),
+                        null, null, 5L));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(pedidoPagoRepository, never()).save(any(PedidoPago.class));
+        verify(cajaService, never()).registrarIngresosVentaDomicilio(any(), any());
+        verify(detallePedidoRepository, never()).findByPedido_Id(any());
+    }
+
+    @Test
+    void confirmarEntrega_siCajaFalla_noProcesaCanje() {
+        Pedido pedido = pedido("10.00");
+        configurarActorResponsable(pedido);
+        MetodoPago efectivo = metodo(1L, "Efectivo");
+        when(pedidoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pedido));
+        when(metodoPagoRepository.findById(1L)).thenReturn(Optional.of(efectivo));
+        when(pedidoPagoRepository.findByPedido(pedido)).thenReturn(List.of());
+        when(pedidoPagoRepository.save(any(PedidoPago.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Caja no disponible"))
+                .when(cajaService).registrarIngresosVentaDomicilio(any(), any());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(
+                        new com.gas.sistema_gas.dto.PedidoPagoYapeDTO(1L, 1L, new BigDecimal("10.00"), ""),
+                        null, null, 5L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(detallePedidoRepository, never()).findByPedido_Id(any());
     }
 
     @Test

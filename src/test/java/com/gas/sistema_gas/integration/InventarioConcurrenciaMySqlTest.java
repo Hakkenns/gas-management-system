@@ -19,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,8 @@ import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.InventarioLote;
 import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.MovimientoCaja;
+import com.gas.sistema_gas.Model.OrigenMovimiento;
+import com.gas.sistema_gas.Model.SentidoMovimiento;
 import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
@@ -75,6 +78,8 @@ import com.gas.sistema_gas.Repository.PedidoRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.SesionCajaRepository;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
+import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
+import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
 import com.gas.sistema_gas.service.CompraService;
@@ -92,6 +97,7 @@ import jakarta.persistence.PersistenceContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -415,6 +421,7 @@ public class InventarioConcurrenciaMySqlTest {
             e.setCorreo("motorizado.test@gmail.com");
             e.setEstado(1);
             entityManager.persist(e);
+            entityManager.find(Usuario.class, idUsuario).setEmpleado(e);
             return e.getId();
         });
     }
@@ -732,10 +739,14 @@ public class InventarioConcurrenciaMySqlTest {
     }
 
     private void abrirCajaPrincipal() {
+        abrirCajaPrincipal(BigDecimal.ZERO);
+    }
+
+    private void abrirCajaPrincipal(BigDecimal montoInicial) {
         Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
         caja.setActiva(true);
         cajaRepository.saveAndFlush(caja);
-        cajaService.abrirCaja(idUsuario, BigDecimal.ZERO, "Apertura de prueba");
+        cajaService.abrirCaja(idUsuario, montoInicial, "Apertura de prueba");
     }
 
     private Long crearMetodoDigital() {
@@ -769,6 +780,66 @@ public class InventarioConcurrenciaMySqlTest {
             entityManager.flush();
             return pago.getId();
         });
+    }
+
+    private Long crearPagoDomicilioSinMovimiento(Long idMetodo, String monto) {
+        return transactionTemplate.execute(status -> {
+            Pedido pedido = new Pedido();
+            pedido.setCodigo(String.format("DOM%017d", Math.abs(System.nanoTime()) % 100_000_000_000_000_000L));
+            pedido.setFechaSolicitud(LocalDateTime.now());
+            pedido.setEstadoPedido("EN_DOMICILIO");
+            pedido.setEstadoPago("PENDIENTE");
+            pedido.setSubtotal(new BigDecimal(monto));
+            pedido.setMontoTotal(new BigDecimal(monto));
+            pedido.setCliente(entityManager.find(Cliente.class, idCliente));
+            pedido.setUsuario(entityManager.find(Usuario.class, idUsuario));
+            pedido.setEmpleado(entityManager.find(Empleado.class, idEmpleado));
+            pedido.setTipoVenta("DOMICILIO");
+            entityManager.persist(pedido);
+
+            PedidoPago pago = new PedidoPago();
+            pago.setPedido(pedido);
+            pago.setMetodoPago(entityManager.find(MetodoPago.class, idMetodo));
+            pago.setMonto(new BigDecimal(monto));
+            pago.setVuelto(BigDecimal.ZERO);
+            entityManager.persist(pago);
+            entityManager.flush();
+            return pago.getId();
+        });
+    }
+
+    private MovimientoCaja assertMovimientoDomicilio(PedidoPago pago, CanalFondos canalEsperado,
+            Long idEmpleadoCustodioEsperado) {
+        List<MovimientoCaja> movimientos = movimientoCajaRepository.findAll().stream()
+                .filter(movimiento -> movimiento.getPedidoPago() != null
+                        && pago.getId().equals(movimiento.getPedidoPago().getId()))
+                .toList();
+        assertEquals(1, movimientos.size(), "Cada PedidoPago de domicilio debe tener un unico MovimientoCaja");
+
+        MovimientoCaja movimiento = movimientos.get(0);
+        assertEquals(pago.getId(), movimiento.getPedidoPago().getId());
+        assertEquals(pago.getMetodoPago().getId(), movimiento.getMetodoPago().getId());
+        assertEquals(0, pago.getMonto().compareTo(movimiento.getMonto()));
+        assertEquals(SentidoMovimiento.INGRESO, movimiento.getSentido());
+        assertEquals(OrigenMovimiento.VENTA, movimiento.getOrigen());
+        assertEquals(canalEsperado, movimiento.getCanalFondos());
+        assertNull(movimiento.getSesionCaja());
+        if (idEmpleadoCustodioEsperado == null) {
+            assertNull(movimiento.getEmpleadoCustodio());
+        } else {
+            assertNotNull(movimiento.getEmpleadoCustodio());
+            assertEquals(idEmpleadoCustodioEsperado, movimiento.getEmpleadoCustodio().getId());
+        }
+        return movimiento;
+    }
+
+    private void assertNoDataIntegrityViolation(Throwable error) {
+        Throwable actual = error;
+        while (actual != null) {
+            assertFalse(actual.getClass().getName().contains("DataIntegrityViolation"),
+                    "No se debe usar DataIntegrityViolationException como resultado esperado: " + actual);
+            actual = actual.getCause();
+        }
     }
 
     private PedidoDTO.Create buildPedidoVentaEnvase() {
@@ -900,20 +971,31 @@ public class InventarioConcurrenciaMySqlTest {
                 creado.idPedido(), idMetodoPago, new BigDecimal("10.00"), "");
 
         ParResultados<PedidoPago> par = ejecutarConcurrente(
-                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null),
-                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null));
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null, idUsuario),
+                () -> pedidoPagosService.confirmarEntregaPagoUnico(dto, null, null, idUsuario));
 
         assertTrue(par.primero().exitoso(), "La primera confirmación debe terminar: " + par.primero().error());
         assertTrue(par.segundo().exitoso(), "La segunda confirmación debe terminar: " + par.segundo().error());
         assertNoLockingError(par.primero().error());
         assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
 
         Producto producto = productoRepository.findById(idProducto).orElseThrow();
         DetallePedido detalle = detallePedidoRepository.findByPedido_Id(creado.idPedido()).get(0);
         assertEquals(1, producto.getStockVacios(), "El retorno CANJE debe aplicarse exactamente una vez");
         assertEquals(0, detalle.getCantidadCanje(), "El retorno debe quedar consumido");
-        assertEquals(1, pedidoPagoRepository.findByPedido_Id(creado.idPedido()).size(),
-                "La doble confirmación no debe duplicar pagos");
+        List<PedidoPago> pagosFinales = pedidoPagoRepository.findByPedido_Id(creado.idPedido());
+        assertEquals(1, pagosFinales.size());
+        assertMovimientoDomicilio(pagosFinales.get(0), CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+        assertEquals(1L, movimientoCajaRepository.findAll().stream()
+                .filter(movimiento -> movimiento.getPedidoPago() != null
+                        && movimiento.getCanalFondos() == CanalFondos.CUSTODIA_MOTORIZADO)
+                .count());
+        assertEquals(0L, movimientoCajaRepository.findAll().stream()
+                .filter(movimiento -> movimiento.getPedidoPago() != null
+                        && movimiento.getCanalFondos() == CanalFondos.DIGITAL_NEGOCIO)
+                .count());
     }
 
     @Test
@@ -926,7 +1008,7 @@ public class InventarioConcurrenciaMySqlTest {
 
         ParResultados<Void> par = ejecutarConcurrente(
                 () -> {
-                    pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null);
+                    pedidoPagosService.confirmarEntregaPagoUnico(pago, null, null, idUsuario);
                     return null;
                 },
                 () -> {
@@ -971,9 +1053,9 @@ public class InventarioConcurrenciaMySqlTest {
 
         ParResultados<PedidoPago> par = ejecutarConcurrente(
                 () -> pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                        pedidoUno.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null),
+                        pedidoUno.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null, idUsuario),
                 () -> pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
-                        pedidoDos.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null));
+                        pedidoDos.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null, idUsuario));
 
         assertTrue(par.primero().exitoso(), "El primer pedido debe terminar: " + par.primero().error());
         assertTrue(par.segundo().exitoso(), "El segundo pedido debe terminar: " + par.segundo().error());
@@ -1761,6 +1843,173 @@ public class InventarioConcurrenciaMySqlTest {
         List<InventarioLote> lotesP2 = inventarioLoteRepository.findHistorialCompletoByProductoIdOrderByCreatedAtDesc(idProducto2);
         assertEquals(1, lotesP1.size(), "Producto 1 debe tener exactamente 1 lote");
         assertEquals(1, lotesP2.size(), "Producto 2 debe tener exactamente 1 lote");
+    }
+
+    @Test
+    @Timeout(30)
+    void dosRegistrosDomicilioMismoPedidoPago_permiteExactamenteUno() throws Exception {
+        Long idPago = crearPagoDomicilioSinMovimiento(idMetodoPago, "20.00");
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> transactionTemplate.execute(status -> {
+                    PedidoPago pago = pedidoPagoRepository.findById(idPago).orElseThrow();
+                    cajaService.registrarIngresosVentaDomicilio(List.of(pago), idUsuario);
+                    return null;
+                }),
+                () -> transactionTemplate.execute(status -> {
+                    PedidoPago pago = pedidoPagoRepository.findById(idPago).orElseThrow();
+                    cajaService.registrarIngresosVentaDomicilio(List.of(pago), idUsuario);
+                    return null;
+                }));
+
+        int exitos = (par.primero().exitoso() ? 1 : 0) + (par.segundo().exitoso() ? 1 : 0);
+        assertEquals(1, exitos, "Exactamente un registro financiero de domicilio debe completarse");
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+        assertRechazoConflicto(par.primero().exitoso() ? par.segundo().error() : par.primero().error());
+
+        PedidoPago pagoFinal = pedidoPagoRepository.findById(idPago).orElseThrow();
+        assertMovimientoDomicilio(pagoFinal, CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+    }
+
+    @Test
+    @Timeout(30)
+    void entregaDomicilioEfectivo_sinSesionAbierta_creaCustodia() {
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", 1), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                creado.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null, idUsuario);
+
+        Pedido pedido = pedidoRepository.findById(creado.idPedido()).orElseThrow();
+        List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(creado.idPedido());
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        assertEquals(1, pagos.size());
+        assertMovimientoDomicilio(pagos.get(0), CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+    }
+
+    @Test
+    @Timeout(30)
+    void entregaDomicilioDigital_sinSesionAbierta_creaIngresoDigital() {
+        Long idDigital = crearMetodoDigital();
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", 1), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+
+        pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                creado.idPedido(), idDigital, new BigDecimal("10.00"), "op-digital"), null, null, idUsuario);
+
+        Pedido pedido = pedidoRepository.findById(creado.idPedido()).orElseThrow();
+        List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(creado.idPedido());
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        assertEquals(1, pagos.size());
+        assertMovimientoDomicilio(pagos.get(0), CanalFondos.DIGITAL_NEGOCIO, null);
+        assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
+    }
+
+    @Test
+    @Timeout(30)
+    void entregaDomicilio_noAlteraCierreFisico() {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        Long idDigital = crearMetodoDigital();
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", 5), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+
+        pedidoPagosService.confirmarEntregaConPagos(new ConfirmarEntregaMixtaDTO(creado.idPedido(), List.of(
+                new PagoRegistroDTO(idMetodoPago, new BigDecimal("20.00"), null, BigDecimal.ZERO),
+                new PagoRegistroDTO(idDigital, new BigDecimal("30.00"), "op-mixto", BigDecimal.ZERO))),
+                null, null, idUsuario);
+
+        List<PedidoPago> pagos = pedidoPagoRepository.findByPedido_Id(creado.idPedido());
+        PedidoPago efectivo = pagos.stream().filter(pago -> idMetodoPago.equals(pago.getMetodoPago().getId()))
+                .findFirst().orElseThrow();
+        PedidoPago digital = pagos.stream().filter(pago -> idDigital.equals(pago.getMetodoPago().getId()))
+                .findFirst().orElseThrow();
+        assertMovimientoDomicilio(efectivo, CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+        assertMovimientoDomicilio(digital, CanalFondos.DIGITAL_NEGOCIO, null);
+
+        var cierre = cajaService.cerrarCaja(idUsuario, new BigDecimal("100.00"), null);
+        assertEquals(0, cierre.montoEsperado().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, cierre.diferencia().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @Timeout(30)
+    void entregaDomicilioYCierreCaja_concurrentes_noContaminanArqueo() throws Exception {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", 1), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+        AtomicReference<com.gas.sistema_gas.dto.CajaDTO.CierreResponse> cierre = new AtomicReference<>();
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> {
+                    pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                            creado.idPedido(), idMetodoPago, new BigDecimal("20.00"), ""), null, null, idUsuario);
+                    return null;
+                },
+                () -> {
+                    cierre.set(cajaService.cerrarCaja(idUsuario, new BigDecimal("100.00"), null));
+                    return null;
+                });
+
+        assertTrue(par.primero().exitoso(), "La entrega debe finalizar: " + par.primero().error());
+        assertTrue(par.segundo().exitoso(), "El cierre debe finalizar: " + par.segundo().error());
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+        assertNotNull(cierre.get());
+        assertEquals(0, cierre.get().montoEsperado().compareTo(new BigDecimal("100.00")));
+        assertEquals(0, cierre.get().diferencia().compareTo(BigDecimal.ZERO));
+
+        Pedido pedido = pedidoRepository.findById(creado.idPedido()).orElseThrow();
+        assertEquals("ENTREGADO", pedido.getEstadoPedido());
+        PedidoPago pago = pedidoPagoRepository.findByPedido_Id(creado.idPedido()).get(0);
+        assertMovimientoDomicilio(pago, CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+    }
+
+    @Test
+    @Timeout(30)
+    void entregaDomicilio_cajaInactiva_haceRollbackCompleto() {
+        transactionTemplate.executeWithoutResult(status -> {
+            Producto producto = productoRepository.findById(idProducto).orElseThrow();
+            producto.setRequiereEnvase(true);
+            producto.setStockVacios(0);
+            productoRepository.saveAndFlush(producto);
+        });
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedidoCanjeDomicilio(), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+        Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+        caja.setActiva(false);
+        cajaRepository.saveAndFlush(caja);
+
+        try {
+            ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                    () -> pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                            creado.idPedido(), idMetodoPago, new BigDecimal("10.00"), ""), null, null, idUsuario));
+            assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+            Pedido pedido = pedidoRepository.findById(creado.idPedido()).orElseThrow();
+            DetallePedido detalle = detallePedidoRepository.findByPedido_Id(creado.idPedido()).get(0);
+            assertEquals("EN_DOMICILIO", pedido.getEstadoPedido());
+            assertEquals("PENDIENTE", pedido.getEstadoPago());
+            assertEquals(0, pedidoPagoRepository.findByPedido_Id(creado.idPedido()).size());
+            assertEquals(0L, movimientoCajaRepository.count());
+            assertEquals(1, detalle.getCantidadCanje());
+            assertEquals(0, productoRepository.findById(idProducto).orElseThrow().getStockVacios());
+        } finally {
+            Caja cajaRestaurada = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+            cajaRestaurada.setActiva(true);
+            cajaRepository.saveAndFlush(cajaRestaurada);
+        }
     }
 
     @Test

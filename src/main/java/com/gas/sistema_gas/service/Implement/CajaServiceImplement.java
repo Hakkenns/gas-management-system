@@ -3,9 +3,13 @@ package com.gas.sistema_gas.service.Implement;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,6 +27,7 @@ import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
+import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.SesionCajaRepository;
 import com.gas.sistema_gas.Repository.UsuarioRepository;
 import com.gas.sistema_gas.dto.CajaDTO;
@@ -32,19 +37,23 @@ import com.gas.sistema_gas.service.CajaService;
 public class CajaServiceImplement implements CajaService {
 
     public static final String CODIGO_CAJA_PRINCIPAL = "CAJA_PRINCIPAL";
+    private static final String UK_MOVIMIENTO_CAJA_PEDIDO_PAGO = "uk_movimiento_caja_pedido_pago";
 
     private final CajaRepository cajaRepository;
     private final SesionCajaRepository sesionCajaRepository;
     private final MovimientoCajaRepository movimientoCajaRepository;
+    private final PedidoPagoRepository pedidoPagoRepository;
     private final UsuarioRepository usuarioRepository;
 
     public CajaServiceImplement(CajaRepository cajaRepository,
             SesionCajaRepository sesionCajaRepository,
             MovimientoCajaRepository movimientoCajaRepository,
+            PedidoPagoRepository pedidoPagoRepository,
             UsuarioRepository usuarioRepository) {
         this.cajaRepository = cajaRepository;
         this.sesionCajaRepository = sesionCajaRepository;
         this.movimientoCajaRepository = movimientoCajaRepository;
+        this.pedidoPagoRepository = pedidoPagoRepository;
         this.usuarioRepository = usuarioRepository;
     }
 
@@ -208,6 +217,116 @@ public class CajaServiceImplement implements CajaService {
         }
     }
 
+    @Override
+    @Transactional
+    public void registrarIngresosVentaDomicilio(List<PedidoPago> pagos, Long usuarioResponsableId) {
+        if (pagos == null || pagos.isEmpty() || usuarioResponsableId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los pagos y el usuario responsable son obligatorios");
+        }
+
+        List<Long> idsPagos = new ArrayList<>();
+        Set<Long> idsUnicos = new HashSet<>();
+        for (PedidoPago pago : pagos) {
+            if (pago == null || pago.getId() == null || !idsUnicos.add(pago.getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Los pagos de venta domicilio deben tener IDs únicos");
+            }
+            idsPagos.add(pago.getId());
+        }
+        idsPagos.sort(Long::compareTo);
+
+        Caja caja = cajaRepository.findByCodigo(CODIGO_CAJA_PRINCIPAL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "La Caja principal no esta configurada"));
+        if (!Boolean.TRUE.equals(caja.getActiva())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La Caja principal esta inactiva");
+        }
+
+        List<PedidoPago> pagosBloqueados = pedidoPagoRepository.findAllByIdInForUpdate(idsPagos);
+        if (pagosBloqueados.size() != idsPagos.size()
+                || pagosBloqueados.stream().map(PedidoPago::getId).anyMatch(id -> !idsUnicos.contains(id))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Uno o más pagos de venta domicilio no existen");
+        }
+
+        Usuario usuarioResponsable = usuarioRepository.findById(usuarioResponsableId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        Long idPedido = null;
+        for (PedidoPago pago : pagosBloqueados) {
+            validarPagoVentaDomicilio(pago);
+            if (idPedido == null) {
+                idPedido = pago.getPedido().getId();
+            } else if (!idPedido.equals(pago.getPedido().getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Los pagos de venta domicilio deben pertenecer al mismo pedido");
+            }
+        }
+
+        for (PedidoPago pago : pagosBloqueados) {
+            if (movimientoCajaRepository.findByPedidoPago(pago).isPresent()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "El pago de la venta domicilio ya tiene un movimiento de Caja");
+            }
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        for (PedidoPago pago : pagosBloqueados) {
+            Pedido pedido = pago.getPedido();
+            TipoFinancieroMetodoPago tipoFinanciero = pago.getMetodoPago().getTipoFinanciero();
+            MovimientoCaja movimiento = new MovimientoCaja();
+            movimiento.setCaja(caja);
+            movimiento.setSesionCaja(null);
+            movimiento.setFechaHora(ahora);
+            movimiento.setSentido(SentidoMovimiento.INGRESO);
+            movimiento.setOrigen(OrigenMovimiento.VENTA);
+            movimiento.setMonto(pago.getMonto());
+            movimiento.setMetodoPago(pago.getMetodoPago());
+            movimiento.setPedidoPago(pago);
+            movimiento.setUsuarioResponsable(usuarioResponsable);
+            movimiento.setReferencia(pedido.getCodigo());
+
+            if (tipoFinanciero == TipoFinancieroMetodoPago.EFECTIVO) {
+                movimiento.setCanalFondos(CanalFondos.CUSTODIA_MOTORIZADO);
+                movimiento.setEmpleadoCustodio(pedido.getEmpleado());
+                movimiento.setDescripcion("Ingreso por venta domicilio en custodia " + pedido.getCodigo());
+            } else if (tipoFinanciero == TipoFinancieroMetodoPago.DIGITAL) {
+                movimiento.setCanalFondos(CanalFondos.DIGITAL_NEGOCIO);
+                movimiento.setEmpleadoCustodio(null);
+                movimiento.setDescripcion("Ingreso digital por venta domicilio " + pedido.getCodigo());
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El pago de venta domicilio no tiene un tipo financiero válido");
+            }
+            try {
+                movimientoCajaRepository.saveAndFlush(movimiento);
+            } catch (DataIntegrityViolationException exception) {
+                if (esViolacionMovimientoCajaPedidoPagoUnico(exception)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "El pago de la venta domicilio ya tiene un movimiento de Caja");
+                }
+                throw exception;
+            }
+        }
+    }
+
+    private boolean esViolacionMovimientoCajaPedidoPagoUnico(DataIntegrityViolationException exception) {
+        Throwable actual = exception;
+        while (actual != null) {
+            if (actual instanceof org.hibernate.exception.ConstraintViolationException constraintViolation
+                    && UK_MOVIMIENTO_CAJA_PEDIDO_PAGO.equals(constraintViolation.getConstraintName())) {
+                return true;
+            }
+            if (actual.getMessage() != null
+                    && actual.getMessage().contains(UK_MOVIMIENTO_CAJA_PEDIDO_PAGO)) {
+                return true;
+            }
+            actual = actual.getCause();
+        }
+        return false;
+    }
+
     private void validarPagoVentaLocal(PedidoPago pago) {
         if (pago == null || pago.getId() == null || pago.getPedido() == null
                 || pago.getMetodoPago() == null || pago.getMetodoPago().getTipoFinanciero() == null
@@ -218,6 +337,26 @@ public class CajaServiceImplement implements CajaService {
         if (!"LOCAL".equalsIgnoreCase(pago.getPedido().getTipoVenta())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Solo los pagos de ventas locales pueden ingresar a Caja");
+        }
+    }
+
+    private void validarPagoVentaDomicilio(PedidoPago pago) {
+        if (pago == null || pago.getId() == null || pago.getPedido() == null || pago.getPedido().getId() == null
+                || pago.getMetodoPago() == null || pago.getMetodoPago().getTipoFinanciero() == null
+                || pago.getMonto() == null || pago.getMonto().compareTo(BigDecimal.ZERO) <= 0
+                || pago.getPedido().getEmpleado() == null || pago.getPedido().getEmpleado().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El pago de venta domicilio no tiene datos financieros válidos");
+        }
+        if (!"DOMICILIO".equalsIgnoreCase(pago.getPedido().getTipoVenta())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Solo los pagos de ventas a domicilio pueden ingresar a custodia");
+        }
+        TipoFinancieroMetodoPago tipoFinanciero = pago.getMetodoPago().getTipoFinanciero();
+        if (tipoFinanciero != TipoFinancieroMetodoPago.EFECTIVO
+                && tipoFinanciero != TipoFinancieroMetodoPago.DIGITAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El pago de venta domicilio no tiene un tipo financiero válido");
         }
     }
 

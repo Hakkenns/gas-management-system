@@ -483,7 +483,7 @@ public class MotorizadoController {
         }
 
         PedidoPagoYapeDTO dto = new PedidoPagoYapeDTO(idPedido, idMetodo, montoRecibido, numOperacion);
-        var pago = pedidoPagosService.confirmarEntregaPagoUnico(dto, evidencia, evidenciaVuelto);
+        var pago = pedidoPagosService.confirmarEntregaPagoUnico(dto, evidencia, evidenciaVuelto, usuarioId);
 
         if ("XMLHttpRequest".equalsIgnoreCase(requestedWith)) {
             return ResponseEntity.ok(java.util.Map.of("success", true, "idPago", pago.getId()));
@@ -531,7 +531,7 @@ public class MotorizadoController {
 
             ConfirmarEntregaMixtaDTO dto = new ConfirmarEntregaMixtaDTO(idPedido, pagos);
             List<PedidoPago> pagosGuardados = pedidoPagosService
-                    .confirmarEntregaConPagos(dto, evidencias, evidenciaVuelto);
+                    .confirmarEntregaConPagos(dto, evidencias, evidenciaVuelto, usuarioId);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
