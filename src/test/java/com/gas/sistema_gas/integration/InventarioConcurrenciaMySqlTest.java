@@ -57,6 +57,7 @@ import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.MovimientoCaja;
 import com.gas.sistema_gas.Model.OrigenMovimiento;
 import com.gas.sistema_gas.Model.SentidoMovimiento;
+import com.gas.sistema_gas.Model.SesionCaja;
 import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Pedido;
 import com.gas.sistema_gas.Model.PedidoPago;
@@ -79,6 +80,7 @@ import com.gas.sistema_gas.Repository.ProductoRepository;
 import com.gas.sistema_gas.Repository.SesionCajaRepository;
 import com.gas.sistema_gas.dto.EnvioEnvaseDTO;
 import com.gas.sistema_gas.dto.ConfirmarEntregaMixtaDTO;
+import com.gas.sistema_gas.dto.CajaDTO;
 import com.gas.sistema_gas.dto.PagoRegistroDTO;
 import com.gas.sistema_gas.dto.PedidoDTO;
 import com.gas.sistema_gas.dto.PedidoPagoYapeDTO;
@@ -919,6 +921,111 @@ public class InventarioConcurrenciaMySqlTest {
         pedidoService.updateEstadoPedido(idPedido, "CARGADO");
         pedidoService.updateEstadoPedido(idPedido, "EN_CAMINO");
         pedidoService.updateEstadoPedido(idPedido, "EN_DOMICILIO");
+    }
+
+    private PedidoPago crearCustodiaDomicilioReal(int cantidad) {
+        PedidoDTO.SimpleResponse creado = pedidoService.createOrder(buildPedido("DOMICILIO", cantidad), idUsuario);
+        avanzarHastaDomicilio(creado.idPedido());
+        return pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                creado.idPedido(), idMetodoPago, new BigDecimal(cantidad * 10 + ".00"), ""), null, null, idUsuario);
+    }
+
+    private Long crearEmpleadoSecundario() {
+        return transactionTemplate.execute(status -> {
+            long sufijo = Math.abs(System.nanoTime()) % 100_000_000L;
+            Empleado empleado = new Empleado();
+            empleado.setNombre("Motorizado Secundario");
+            empleado.setDni(String.format("%08d", sufijo));
+            empleado.setTelefono("9" + String.format("%08d", sufijo));
+            empleado.setCorreo("motorizado" + sufijo + "@gmail.com");
+            empleado.setEstado(1);
+            entityManager.persist(empleado);
+            return empleado.getId();
+        });
+    }
+
+    private void crearCustodiaFixture(Long empleadoId, String monto) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+            MovimientoCaja movimiento = new MovimientoCaja();
+            movimiento.setCaja(caja);
+            movimiento.setFechaHora(LocalDateTime.now());
+            movimiento.setSentido(SentidoMovimiento.INGRESO);
+            movimiento.setOrigen(OrigenMovimiento.VENTA);
+            movimiento.setCanalFondos(CanalFondos.CUSTODIA_MOTORIZADO);
+            movimiento.setMonto(new BigDecimal(monto));
+            movimiento.setUsuarioResponsable(entityManager.find(Usuario.class, idUsuario));
+            movimiento.setEmpleadoCustodio(entityManager.find(Empleado.class, empleadoId));
+            movimiento.setReferencia("FIX-CUST-" + empleadoId + "-" + System.nanoTime());
+            movimiento.setDescripcion("Custodia de fixture para liquidación");
+            entityManager.persist(movimiento);
+        });
+    }
+
+    private BigDecimal saldoCustodia(Long empleadoId) {
+        return transactionTemplate.execute(status -> {
+            Empleado empleado = entityManager.find(Empleado.class, empleadoId);
+            BigDecimal saldo = movimientoCajaRepository.calcularSaldoCustodiaPorEmpleado(
+                    empleado,
+                    CanalFondos.CUSTODIA_MOTORIZADO,
+                    SentidoMovimiento.INGRESO,
+                    SentidoMovimiento.EGRESO);
+            return saldo.setScale(2);
+        });
+    }
+
+    private BigDecimal saldoFisicoSesionAbierta() {
+        return transactionTemplate.execute(status -> {
+            Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
+            SesionCaja sesion = entityManager.createQuery(
+                    "SELECT s FROM SesionCaja s WHERE s.caja = :caja AND s.estado = :estado", SesionCaja.class)
+                    .setParameter("caja", caja)
+                    .setParameter("estado", EstadoSesionCaja.ABIERTA)
+                    .getSingleResult();
+            return movimientoCajaRepository.calcularSaldoPorSesionYCanal(
+                    sesion,
+                    CanalFondos.CAJA_FISICA,
+                    SentidoMovimiento.INGRESO,
+                    SentidoMovimiento.EGRESO).setScale(2);
+        });
+    }
+
+    private List<MovimientoCaja> movimientosLiquidacion() {
+        return movimientoCajaRepository.findAll().stream()
+                .filter(movimiento -> movimiento.getOrigen() == OrigenMovimiento.LIQUIDACION_MOTORIZADO)
+                .toList();
+    }
+
+    private void assertParLiquidacion(Long empleadoId, String monto) {
+        List<MovimientoCaja> movimientos = movimientosLiquidacion();
+        MovimientoCaja egreso = movimientos.stream()
+                .filter(movimiento -> movimiento.getSentido() == SentidoMovimiento.EGRESO
+                        && movimiento.getCanalFondos() == CanalFondos.CUSTODIA_MOTORIZADO
+                        && movimiento.getEmpleadoCustodio() != null
+                        && empleadoId.equals(movimiento.getEmpleadoCustodio().getId()))
+                .findFirst().orElseThrow();
+        MovimientoCaja ingreso = movimientos.stream()
+                .filter(movimiento -> movimiento.getSentido() == SentidoMovimiento.INGRESO
+                        && movimiento.getCanalFondos() == CanalFondos.CAJA_FISICA
+                        && egreso.getReferencia().equals(movimiento.getReferencia()))
+                .findFirst().orElseThrow();
+
+        assertEquals(0, egreso.getMonto().compareTo(new BigDecimal(monto)));
+        assertEquals(0, ingreso.getMonto().compareTo(new BigDecimal(monto)));
+        assertEquals(egreso.getReferencia(), ingreso.getReferencia());
+        assertEquals(egreso.getFechaHora(), ingreso.getFechaHora());
+        assertEquals(idUsuario, egreso.getUsuarioResponsable().getId());
+        assertEquals(idUsuario, ingreso.getUsuarioResponsable().getId());
+        assertNull(egreso.getSesionCaja());
+        assertNotNull(ingreso.getSesionCaja());
+        assertEquals(empleadoId, egreso.getEmpleadoCustodio().getId());
+        assertNull(ingreso.getEmpleadoCustodio());
+        assertNull(egreso.getPedidoPago());
+        assertNull(ingreso.getPedidoPago());
+        assertNull(egreso.getMetodoPago());
+        assertNull(ingreso.getMetodoPago());
+        assertNull(egreso.getMovimientoOriginal());
+        assertEquals(egreso.getId(), ingreso.getMovimientoOriginal().getId());
     }
 
     @Test
@@ -2122,5 +2229,179 @@ public class InventarioConcurrenciaMySqlTest {
         Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
         assertEquals(0L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA));
         assertEquals(1L, sesionCajaRepository.countByCajaAndEstado(caja, EstadoSesionCaja.CERRADA));
+    }
+
+    @Test
+    @Timeout(30)
+    void liquidacionCustodia_realMySql_participaEnArqueoFisico() {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        PedidoPago pagoOriginal = crearCustodiaDomicilioReal(5);
+
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(new BigDecimal("50.00")));
+        CajaDTO.LiquidacionResponse liquidacion = cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("50.00"), "Entrega completa"), idUsuario);
+
+        assertEquals(0, liquidacion.saldoAnterior().compareTo(new BigDecimal("50.00")));
+        assertEquals(0, liquidacion.saldoPendiente().compareTo(BigDecimal.ZERO));
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(BigDecimal.ZERO));
+        assertEquals(2, movimientosLiquidacion().size());
+        assertParLiquidacion(idEmpleado, "50.00");
+        assertEquals(0L, movimientoCajaRepository.findAll().stream()
+                .filter(movimiento -> movimiento.getPedidoPago() != null
+                        && pagoOriginal.getId().equals(movimiento.getPedidoPago().getId())
+                        && movimiento.getCanalFondos() == CanalFondos.CAJA_FISICA)
+                .count(), "La venta domicilio original no debe ingresar directamente a Caja física");
+
+        CajaDTO.CierreResponse cierre = cajaService.cerrarCaja(idUsuario, new BigDecimal("150.00"), null);
+        assertEquals(0, cierre.montoEsperado().compareTo(new BigDecimal("150.00")));
+        assertEquals(0, cierre.diferencia().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @Timeout(30)
+    void dosLiquidacionesSimultaneas_mismoMotorizado_permiteExactamenteUna() throws Exception {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        crearCustodiaDomicilioReal(5);
+
+        ParResultados<CajaDTO.LiquidacionResponse> par = ejecutarConcurrente(
+                () -> transactionTemplate.execute(status -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("50.00"), null), idUsuario)),
+                () -> transactionTemplate.execute(status -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("50.00"), null), idUsuario)));
+
+        int exitos = (par.primero().exitoso() ? 1 : 0) + (par.segundo().exitoso() ? 1 : 0);
+        assertEquals(1, exitos, "Exactamente una liquidación debe completarse");
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+        assertRechazoConflicto(par.primero().exitoso() ? par.segundo().error() : par.primero().error());
+
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(BigDecimal.ZERO));
+        assertEquals(2, movimientosLiquidacion().size());
+        assertParLiquidacion(idEmpleado, "50.00");
+        assertEquals(0, saldoFisicoSesionAbierta().compareTo(new BigDecimal("150.00")));
+    }
+
+    @Test
+    @Timeout(30)
+    void ventaEfectivoYLiquidacionSimultaneas_mismoMotorizado_conservanCustodiaNueva() throws Exception {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        crearCustodiaDomicilioReal(5);
+        PedidoDTO.SimpleResponse nuevaVenta = pedidoService.createOrder(buildPedido("DOMICILIO", 2), idUsuario);
+        avanzarHastaDomicilio(nuevaVenta.idPedido());
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> {
+                    cajaService.liquidarCustodiaMotorizado(
+                            new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("50.00"), null), idUsuario);
+                    return null;
+                },
+                () -> {
+                    pedidoPagosService.confirmarEntregaPagoUnico(new PedidoPagoYapeDTO(
+                            nuevaVenta.idPedido(), idMetodoPago, new BigDecimal("20.00"), ""), null, null, idUsuario);
+                    return null;
+                });
+
+        assertTrue(par.primero().exitoso(), "La liquidación debe finalizar: " + par.primero().error());
+        assertTrue(par.segundo().exitoso(), "La venta debe finalizar: " + par.segundo().error());
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+
+        PedidoPago pagoNuevo = pedidoPagoRepository.findByPedido_Id(nuevaVenta.idPedido()).get(0);
+        assertMovimientoDomicilio(pagoNuevo, CanalFondos.CUSTODIA_MOTORIZADO, idEmpleado);
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(new BigDecimal("20.00")));
+        assertEquals(2, movimientosLiquidacion().size());
+        assertParLiquidacion(idEmpleado, "50.00");
+        assertEquals(0, saldoFisicoSesionAbierta().compareTo(new BigDecimal("150.00")));
+    }
+
+    @Test
+    @Timeout(30)
+    void dosMotorizadosDiferentes_liquidanSinCruzarCustodias() throws Exception {
+        Long idEmpleadoSecundario = crearEmpleadoSecundario();
+        crearCustodiaFixture(idEmpleado, "30.00");
+        crearCustodiaFixture(idEmpleadoSecundario, "40.00");
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+
+        ParResultados<CajaDTO.LiquidacionResponse> par = ejecutarConcurrente(
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("30.00"), null), idUsuario),
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(idEmpleadoSecundario, new BigDecimal("40.00"), null), idUsuario));
+
+        assertTrue(par.primero().exitoso(), "La liquidación A debe finalizar: " + par.primero().error());
+        assertTrue(par.segundo().exitoso(), "La liquidación B debe finalizar: " + par.segundo().error());
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(BigDecimal.ZERO));
+        assertEquals(0, saldoCustodia(idEmpleadoSecundario).compareTo(BigDecimal.ZERO));
+        assertEquals(4, movimientosLiquidacion().size());
+        assertParLiquidacion(idEmpleado, "30.00");
+        assertParLiquidacion(idEmpleadoSecundario, "40.00");
+        assertEquals(0, saldoFisicoSesionAbierta().compareTo(new BigDecimal("170.00")));
+    }
+
+    @Test
+    @Timeout(30)
+    void liquidacionYCierreCaja_concurrentes_dejanEstadoFinancieroConsistente() throws Exception {
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+        crearCustodiaDomicilioReal(5);
+        AtomicReference<CajaDTO.CierreResponse> cierre = new AtomicReference<>();
+
+        ParResultados<Void> par = ejecutarConcurrente(
+                () -> {
+                    cajaService.liquidarCustodiaMotorizado(
+                            new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("50.00"), null), idUsuario);
+                    return null;
+                },
+                () -> {
+                    cierre.set(cajaService.cerrarCaja(idUsuario, new BigDecimal("100.00"),
+                            "Cierre concurrente de prueba"));
+                    return null;
+                });
+
+        assertNoLockingError(par.primero().error());
+        assertNoLockingError(par.segundo().error());
+        assertNoDataIntegrityViolation(par.primero().error());
+        assertNoDataIntegrityViolation(par.segundo().error());
+        assertTrue(par.segundo().exitoso(), "El cierre debe finalizar: " + par.segundo().error());
+        assertNotNull(cierre.get());
+
+        if (par.primero().exitoso()) {
+            assertEquals(0, cierre.get().montoEsperado().compareTo(new BigDecimal("150.00")));
+            assertEquals(0, cierre.get().diferencia().compareTo(new BigDecimal("-50.00")));
+            assertEquals(0, saldoCustodia(idEmpleado).compareTo(BigDecimal.ZERO));
+            assertEquals(2, movimientosLiquidacion().size());
+            assertParLiquidacion(idEmpleado, "50.00");
+        } else {
+            assertRechazoConflicto(par.primero().error());
+            assertEquals(0, cierre.get().montoEsperado().compareTo(new BigDecimal("100.00")));
+            assertEquals(0, cierre.get().diferencia().compareTo(BigDecimal.ZERO));
+            assertEquals(0, saldoCustodia(idEmpleado).compareTo(new BigDecimal("50.00")));
+            assertEquals(0, movimientosLiquidacion().size());
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    void liquidacionParcial_realMySql_conservaCustodiaPendiente() {
+        crearCustodiaFixture(idEmpleado, "65.00");
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+
+        CajaDTO.LiquidacionResponse liquidacion = cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("40.00"), null), idUsuario);
+
+        assertEquals(0, liquidacion.saldoAnterior().compareTo(new BigDecimal("65.00")));
+        assertEquals(0, liquidacion.saldoPendiente().compareTo(new BigDecimal("25.00")));
+        assertEquals(0, saldoCustodia(idEmpleado).compareTo(new BigDecimal("25.00")));
+        assertEquals(2, movimientosLiquidacion().size());
+        assertParLiquidacion(idEmpleado, "40.00");
+        assertEquals(0, saldoFisicoSesionAbierta().compareTo(new BigDecimal("140.00")));
     }
 }

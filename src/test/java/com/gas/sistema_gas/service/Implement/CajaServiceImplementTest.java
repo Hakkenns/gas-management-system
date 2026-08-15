@@ -38,6 +38,7 @@ import com.gas.sistema_gas.Model.MetodoPago;
 import com.gas.sistema_gas.Model.TipoFinancieroMetodoPago;
 import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CajaRepository;
+import com.gas.sistema_gas.Repository.EmpleadoRepository;
 import com.gas.sistema_gas.Repository.MovimientoCajaRepository;
 import com.gas.sistema_gas.Repository.PedidoPagoRepository;
 import com.gas.sistema_gas.Repository.SesionCajaRepository;
@@ -60,12 +61,16 @@ class CajaServiceImplementTest {
     private PedidoPagoRepository pedidoPagoRepository;
 
     @Mock
+    private EmpleadoRepository empleadoRepository;
+
+    @Mock
     private UsuarioRepository usuarioRepository;
 
     @InjectMocks
     private CajaServiceImplement cajaService;
 
     private Caja cajaPrincipal;
+    private Empleado empleadoCustodio;
     private Usuario usuario;
 
     @BeforeEach
@@ -75,6 +80,9 @@ class CajaServiceImplementTest {
         cajaPrincipal.setCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL);
         cajaPrincipal.setNombre("Caja principal");
         cajaPrincipal.setActiva(true);
+
+        empleadoCustodio = new Empleado();
+        empleadoCustodio.setId(70L);
 
         usuario = new Usuario();
         usuario.setId(10L);
@@ -158,9 +166,7 @@ class CajaServiceImplementTest {
         pedido.setId(idPedido);
         pedido.setCodigo("NV001-" + idPedido);
         pedido.setTipoVenta("DOMICILIO");
-        Empleado empleado = new Empleado();
-        empleado.setId(70L);
-        pedido.setEmpleado(empleado);
+        pedido.setEmpleado(empleadoCustodio);
         MetodoPago metodo = new MetodoPago();
         metodo.setId(id + 100L);
         metodo.setTipoFinanciero(tipo);
@@ -183,6 +189,39 @@ class CajaServiceImplementTest {
         when(pedidoPagoRepository.findAllByIdInForUpdate(ids)).thenReturn(ordenados);
         org.mockito.Mockito.lenient().when(movimientoCajaRepository.findByPedidoPago(any(PedidoPago.class)))
                 .thenReturn(Optional.empty());
+        if (pagos.stream().anyMatch(pago -> pago.getMetodoPago().getTipoFinanciero()
+                == TipoFinancieroMetodoPago.EFECTIVO)) {
+            org.mockito.Mockito.lenient().when(empleadoRepository.findByIdForUpdate(empleadoCustodio.getId()))
+                    .thenReturn(Optional.of(empleadoCustodio));
+        }
+    }
+
+    private SesionCaja configurarLiquidacion(BigDecimal saldoCustodia) {
+        SesionCaja sesion = new SesionCaja();
+        sesion.setId(20L);
+        sesion.setCaja(cajaPrincipal);
+        sesion.setEstado(EstadoSesionCaja.ABIERTA);
+
+        org.mockito.Mockito.lenient().when(empleadoRepository.findByIdForUpdate(empleadoCustodio.getId()))
+                .thenReturn(Optional.of(empleadoCustodio));
+        org.mockito.Mockito.lenient().when(cajaRepository.findByCodigoForUpdate(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        org.mockito.Mockito.lenient().when(sesionCajaRepository.findByCajaAndEstadoForUpdate(
+                cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.of(sesion));
+        org.mockito.Mockito.lenient().when(movimientoCajaRepository.calcularSaldoCustodiaPorEmpleado(
+                empleadoCustodio,
+                CanalFondos.CUSTODIA_MOTORIZADO,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO)).thenReturn(saldoCustodia);
+        org.mockito.Mockito.lenient().when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
+        org.mockito.Mockito.lenient().when(movimientoCajaRepository.saveAndFlush(any(MovimientoCaja.class)))
+                .thenAnswer(invocation -> {
+            MovimientoCaja movimiento = invocation.getArgument(0);
+            movimiento.setId(movimiento.getSentido() == SentidoMovimiento.EGRESO ? 301L : 302L);
+            return movimiento;
+        });
+        return sesion;
     }
 
     @Test
@@ -553,6 +592,9 @@ class CajaServiceImplementTest {
         assertEquals(0, pago.getMonto().compareTo(movimiento.getMonto()));
         assertEquals(pago.getPedido().getEmpleado(), movimiento.getEmpleadoCustodio());
         assertEquals(null, movimiento.getSesionCaja());
+        org.mockito.InOrder orden = org.mockito.Mockito.inOrder(empleadoRepository, movimientoCajaRepository);
+        orden.verify(empleadoRepository).findByIdForUpdate(70L);
+        orden.verify(movimientoCajaRepository).saveAndFlush(movimiento);
         verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
     }
 
@@ -568,6 +610,7 @@ class CajaServiceImplementTest {
         assertEquals(CanalFondos.DIGITAL_NEGOCIO, captor.getValue().getCanalFondos());
         assertEquals(null, captor.getValue().getSesionCaja());
         assertEquals(null, captor.getValue().getEmpleadoCustodio());
+        verify(empleadoRepository, never()).findByIdForUpdate(any());
     }
 
     @Test
@@ -615,6 +658,7 @@ class CajaServiceImplementTest {
         assertEquals(null, movimientoDigital.getSesionCaja());
         assertEquals(SentidoMovimiento.INGRESO, movimientoDigital.getSentido());
         assertEquals(OrigenMovimiento.VENTA, movimientoDigital.getOrigen());
+        verify(empleadoRepository, org.mockito.Mockito.times(1)).findByIdForUpdate(70L);
     }
 
     @Test
@@ -752,5 +796,208 @@ class CajaServiceImplementTest {
                 () -> cajaService.registrarIngresosVentaDomicilio(List.of(primero, segundo), 10L));
         assertEquals(HttpStatus.BAD_REQUEST, pedidosDistintos.getStatusCode());
         verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_total_creaMovimientosTrazables() {
+        SesionCaja sesion = configurarLiquidacion(new BigDecimal("65.00"));
+        CajaDTO.LiquidacionResponse response = cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(70L, new BigDecimal("65.00"), "Entrega completa"), 10L);
+
+        ArgumentCaptor<MovimientoCaja> captor = ArgumentCaptor.forClass(MovimientoCaja.class);
+        verify(movimientoCajaRepository, org.mockito.Mockito.times(2)).saveAndFlush(captor.capture());
+        MovimientoCaja egreso = captor.getAllValues().get(0);
+        MovimientoCaja ingreso = captor.getAllValues().get(1);
+
+        assertEquals(301L, response.idMovimientoEgresoCustodia());
+        assertEquals(302L, response.idMovimientoIngresoCaja());
+        assertEquals(sesion.getId(), response.idSesionCaja());
+        assertEquals(empleadoCustodio.getId(), response.empleadoCustodioId());
+        assertEquals(0, response.montoLiquidado().compareTo(new BigDecimal("65.00")));
+        assertEquals(0, response.saldoAnterior().compareTo(new BigDecimal("65.00")));
+        assertEquals(0, response.saldoPendiente().compareTo(BigDecimal.ZERO));
+
+        assertEquals(SentidoMovimiento.EGRESO, egreso.getSentido());
+        assertEquals(OrigenMovimiento.LIQUIDACION_MOTORIZADO, egreso.getOrigen());
+        assertEquals(CanalFondos.CUSTODIA_MOTORIZADO, egreso.getCanalFondos());
+        assertEquals(null, egreso.getSesionCaja());
+        assertSame(empleadoCustodio, egreso.getEmpleadoCustodio());
+        assertSame(usuario, egreso.getUsuarioResponsable());
+        assertEquals(null, egreso.getPedidoPago());
+        assertEquals(null, egreso.getMetodoPago());
+        assertEquals(null, egreso.getMovimientoOriginal());
+
+        assertEquals(SentidoMovimiento.INGRESO, ingreso.getSentido());
+        assertEquals(OrigenMovimiento.LIQUIDACION_MOTORIZADO, ingreso.getOrigen());
+        assertEquals(CanalFondos.CAJA_FISICA, ingreso.getCanalFondos());
+        assertSame(sesion, ingreso.getSesionCaja());
+        assertEquals(null, ingreso.getEmpleadoCustodio());
+        assertSame(usuario, ingreso.getUsuarioResponsable());
+        assertEquals(null, ingreso.getPedidoPago());
+        assertEquals(null, ingreso.getMetodoPago());
+        assertSame(egreso, ingreso.getMovimientoOriginal());
+
+        assertEquals(0, egreso.getMonto().compareTo(ingreso.getMonto()));
+        assertEquals(egreso.getFechaHora(), ingreso.getFechaHora());
+        assertEquals(egreso.getReferencia(), ingreso.getReferencia());
+        assertEquals(egreso.getReferencia(), response.referencia());
+        assertEquals(egreso.getFechaHora(), response.fechaHora());
+
+        org.mockito.InOrder orden = org.mockito.Mockito.inOrder(
+                empleadoRepository, cajaRepository, sesionCajaRepository, movimientoCajaRepository, usuarioRepository);
+        orden.verify(empleadoRepository).findByIdForUpdate(70L);
+        orden.verify(cajaRepository).findByCodigoForUpdate(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL);
+        orden.verify(sesionCajaRepository).findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA);
+        orden.verify(movimientoCajaRepository).calcularSaldoCustodiaPorEmpleado(
+                empleadoCustodio, CanalFondos.CUSTODIA_MOTORIZADO,
+                SentidoMovimiento.INGRESO, SentidoMovimiento.EGRESO);
+        orden.verify(usuarioRepository).findById(10L);
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_parcial_conservaSaldoPendiente() {
+        configurarLiquidacion(new BigDecimal("65.00"));
+
+        CajaDTO.LiquidacionResponse response = cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(70L, new BigDecimal("40.00"), null), 10L);
+
+        assertEquals(0, response.saldoAnterior().compareTo(new BigDecimal("65.00")));
+        assertEquals(0, response.montoLiquidado().compareTo(new BigDecimal("40.00")));
+        assertEquals(0, response.saldoPendiente().compareTo(new BigDecimal("25.00")));
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_sinSesionAbierta_rechazaSinGuardar() {
+        configurarLiquidacion(new BigDecimal("65.00"));
+        when(sesionCajaRepository.findByCajaAndEstadoForUpdate(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_saldoCero_rechaza() {
+        configurarLiquidacion(BigDecimal.ZERO);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_montoMayorAlSaldo_rechaza() {
+        configurarLiquidacion(new BigDecimal("20.00"));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("20.01"), null), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_montoCero_rechazaAntesDeConsultar() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, BigDecimal.ZERO, null), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(empleadoRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_montoNegativo_rechazaAntesDeConsultar() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("-1.00"), null), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(empleadoRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_montoConMasDeDosDecimales_rechazaAntesDeConsultar() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("1.001"), null), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(empleadoRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_montoConTresDecimalesCero_rechazaAntesDeConsultar() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("1.000"), null), 10L));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verify(empleadoRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_empleadoInexistente_rechaza() {
+        when(empleadoRepository.findByIdForUpdate(70L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_cajaInactiva_rechazaSinGuardar() {
+        configurarLiquidacion(new BigDecimal("65.00"));
+        cajaPrincipal.setActiva(false);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_usuarioInexistente_rechazaSinGuardar() {
+        configurarLiquidacion(new BigDecimal("65.00"));
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        verify(movimientoCajaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liquidarCustodiaMotorizado_fallaSegundoMovimiento_propagaExcepcion() {
+        configurarLiquidacion(new BigDecimal("65.00"));
+        RuntimeException fallo = new RuntimeException("Fallo al persistir el ingreso físico");
+        when(movimientoCajaRepository.saveAndFlush(any(MovimientoCaja.class)))
+                .thenAnswer(invocation -> {
+                    MovimientoCaja egreso = invocation.getArgument(0);
+                    egreso.setId(301L);
+                    return egreso;
+                })
+                .thenThrow(fallo);
+
+        RuntimeException propagada = assertThrows(RuntimeException.class,
+                () -> cajaService.liquidarCustodiaMotorizado(
+                        new CajaDTO.LiquidacionRequest(70L, new BigDecimal("10.00"), null), 10L));
+
+        assertSame(fallo, propagada);
     }
 }

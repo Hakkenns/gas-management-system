@@ -42,4 +42,26 @@ public class CajaDTO {
             BigDecimal diferencia,
             String estado) {
     }
+
+    public record LiquidacionRequest(
+            @NotNull(message = "El empleado custodio es obligatorio")
+            Long empleadoCustodioId,
+            @NotNull(message = "El monto de liquidación es obligatorio")
+            @DecimalMin(value = "0.01", message = "El monto de liquidación debe ser mayor a cero")
+            @Digits(integer = 10, fraction = 2, message = "El monto de liquidación debe tener como maximo 2 decimales")
+            BigDecimal monto,
+            String observacion) {
+    }
+
+    public record LiquidacionResponse(
+            Long idMovimientoEgresoCustodia,
+            Long idMovimientoIngresoCaja,
+            Long idSesionCaja,
+            Long empleadoCustodioId,
+            BigDecimal montoLiquidado,
+            BigDecimal saldoAnterior,
+            BigDecimal saldoPendiente,
+            LocalDateTime fechaHora,
+            String referencia) {
+    }
 }

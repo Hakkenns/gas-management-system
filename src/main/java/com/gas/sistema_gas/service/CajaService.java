@@ -12,6 +12,8 @@ public interface CajaService {
 
     CajaDTO.CierreResponse cerrarCaja(Long usuarioId, BigDecimal montoDeclarado, String observaciones);
 
+    CajaDTO.LiquidacionResponse liquidarCustodiaMotorizado(CajaDTO.LiquidacionRequest request, Long usuarioCajaId);
+
     void registrarIngresosVentaLocal(List<PedidoPago> pagos, Long usuarioId);
 
     void registrarIngresosVentaDomicilio(List<PedidoPago> pagos, Long usuarioResponsableId);

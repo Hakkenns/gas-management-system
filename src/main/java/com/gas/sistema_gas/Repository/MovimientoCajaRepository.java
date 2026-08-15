@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.gas.sistema_gas.Model.CanalFondos;
+import com.gas.sistema_gas.Model.Empleado;
 import com.gas.sistema_gas.Model.MovimientoCaja;
 import com.gas.sistema_gas.Model.PedidoPago;
 import com.gas.sistema_gas.Model.SentidoMovimiento;
@@ -40,6 +41,23 @@ public interface MovimientoCajaRepository extends JpaRepository<MovimientoCaja, 
               AND m.canalFondos = :canalFondos
             """)
     BigDecimal calcularSaldoPorSesionYCanal(@Param("sesionCaja") SesionCaja sesionCaja,
+            @Param("canalFondos") CanalFondos canalFondos,
+            @Param("ingreso") SentidoMovimiento ingreso,
+            @Param("egreso") SentidoMovimiento egreso);
+
+    @Query("""
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN m.sentido = :ingreso THEN m.monto
+                    WHEN m.sentido = :egreso THEN -m.monto
+                    ELSE 0
+                END
+            ), 0)
+            FROM MovimientoCaja m
+            WHERE m.empleadoCustodio = :empleado
+              AND m.canalFondos = :canalFondos
+            """)
+    BigDecimal calcularSaldoCustodiaPorEmpleado(@Param("empleado") Empleado empleado,
             @Param("canalFondos") CanalFondos canalFondos,
             @Param("ingreso") SentidoMovimiento ingreso,
             @Param("egreso") SentidoMovimiento egreso);
