@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div th:fragment="content" class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="mb-0"><i class="fas fa-cash-register mr-2"></i>Caja</h3>
+        </div>
+
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title">Caja principal</h3>
+            </div>
+            <div class="card-body" id="caja-estado-contenido">
+                <span class="text-muted"><i class="fas fa-spinner fa-spin mr-1"></i>Cargando estado...</span>
+            </div>
+        </div>
+
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title">Custodias pendientes</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Motorizado</th>
+                                <th>Estado empleado</th>
+                                <th class="text-right">Saldo pendiente</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="custodias-pendientes-body">
+                            <tr><td colspan="4" class="text-center text-muted py-4">Cargando custodias...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modal-liquidacion-custodia" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title"><i class="fas fa-hand-holding-usd mr-1"></i>Liquidar custodia</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="liquidacion-empleado-id">
+                        <div class="form-group mb-2">
+                            <label>Motorizado</label>
+                            <input type="text" id="liquidacion-empleado-nombre" class="form-control" readonly>
+                        </div>
+                        <div class="form-group mb-2">
+                            <label>Saldo actual</label>
+                            <input type="text" id="liquidacion-saldo-actual" class="form-control" readonly>
+                        </div>
+                        <div class="form-group mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <label for="liquidacion-monto">Monto a entregar</label>
+                                <button type="button" class="btn btn-link btn-sm p-0" id="btn-liquidar-todo">Liquidar todo</button>
+                            </div>
+                            <input type="number" id="liquidacion-monto" class="form-control" min="0.01" step="0.01" required>
+                            <small class="form-text text-muted">Máximo el saldo mostrado y hasta dos decimales.</small>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label for="liquidacion-observacion">Observación <span class="text-muted">(opcional)</span></label>
+                            <textarea id="liquidacion-observacion" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" id="btn-confirmar-liquidacion">Confirmar liquidación</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:src="@{/assets/js/caja.js}"></script>
+    </div>
+</body>
+</html>

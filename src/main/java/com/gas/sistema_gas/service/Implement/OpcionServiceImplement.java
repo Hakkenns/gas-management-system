@@ -114,6 +114,20 @@ public class OpcionServiceImplement implements OpcionService {
         return buildVentasGroup(opciones);
     }
 
+    @Override
+    @Transactional
+    public boolean tieneAccesoRuta(Long perfilId, String ruta) {
+        if (perfilId == null || ruta == null || ruta.isBlank()) {
+            return false;
+        }
+        if (perfilId.equals(1L)) {
+            return repository.findByRuta(ruta)
+                    .map(opcion -> opcion.getEstado() != null && opcion.getEstado() == 1)
+                    .orElse(false);
+        }
+        return repository.existsActiveByRutaAndPerfilId(ruta, perfilId);
+    }
+
     private List<OpcionDTO.SimpleResponse> buildVentasGroup(List<OpcionDTO.SimpleResponse> opciones) {
         List<OpcionDTO.SimpleResponse> result = new ArrayList<>();
         List<OpcionDTO.SimpleResponse> ventasChildren = new ArrayList<>();

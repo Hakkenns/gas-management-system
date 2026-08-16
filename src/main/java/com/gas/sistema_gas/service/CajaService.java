@@ -14,6 +14,10 @@ public interface CajaService {
 
     CajaDTO.LiquidacionResponse liquidarCustodiaMotorizado(CajaDTO.LiquidacionRequest request, Long usuarioCajaId);
 
+    List<CajaDTO.CustodiaPendienteResponse> listarCustodiasPendientes();
+
+    CajaDTO.EstadoResponse obtenerEstadoCaja();
+
     void registrarIngresosVentaLocal(List<PedidoPago> pagos, Long usuarioId);
 
     void registrarIngresosVentaDomicilio(List<PedidoPago> pagos, Long usuarioResponsableId);

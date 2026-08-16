@@ -1000,4 +1000,43 @@ class CajaServiceImplementTest {
 
         assertSame(fallo, propagada);
     }
+
+    @Test
+    void listarCustodiasPendientes_delegaConsultaAgrupadaSinLocks() {
+        List<CajaDTO.CustodiaPendienteResponse> esperadas = List.of(
+                new CajaDTO.CustodiaPendienteResponse(70L, "Motorizado", new BigDecimal("25.00"), 0));
+        when(movimientoCajaRepository.listarCustodiasPendientes(
+                CanalFondos.CUSTODIA_MOTORIZADO,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO)).thenReturn(esperadas);
+
+        List<CajaDTO.CustodiaPendienteResponse> respuesta = cajaService.listarCustodiasPendientes();
+
+        assertSame(esperadas, respuesta);
+        verify(movimientoCajaRepository).listarCustodiasPendientes(
+                CanalFondos.CUSTODIA_MOTORIZADO,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO);
+    }
+
+    @Test
+    void obtenerEstadoCaja_conSesionAbierta_retornaEstadoDeSoloLectura() {
+        SesionCaja sesion = new SesionCaja();
+        sesion.setId(20L);
+        sesion.setFechaHoraApertura(java.time.LocalDateTime.of(2026, 8, 16, 9, 30));
+        when(cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        when(sesionCajaRepository.findByCajaAndEstado(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.of(sesion));
+
+        CajaDTO.EstadoResponse respuesta = cajaService.obtenerEstadoCaja();
+
+        assertEquals("CAJA_PRINCIPAL", respuesta.codigoCaja());
+        assertEquals(true, respuesta.activa());
+        assertEquals(true, respuesta.sesionAbierta());
+        assertEquals(20L, respuesta.idSesionCaja());
+        assertEquals(sesion.getFechaHoraApertura(), respuesta.fechaHoraApertura());
+        verify(cajaRepository, never()).findByCodigoForUpdate(any());
+        verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
+    }
 }

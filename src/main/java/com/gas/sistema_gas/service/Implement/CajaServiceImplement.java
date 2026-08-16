@@ -255,6 +255,32 @@ public class CajaServiceImplement implements CajaService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<CajaDTO.CustodiaPendienteResponse> listarCustodiasPendientes() {
+        return movimientoCajaRepository.listarCustodiasPendientes(
+                CanalFondos.CUSTODIA_MOTORIZADO,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CajaDTO.EstadoResponse obtenerEstadoCaja() {
+        Caja caja = cajaRepository.findByCodigo(CODIGO_CAJA_PRINCIPAL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "La Caja principal no esta configurada"));
+        SesionCaja sesionAbierta = sesionCajaRepository.findByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA)
+                .orElse(null);
+
+        return new CajaDTO.EstadoResponse(
+                caja.getCodigo(),
+                caja.getActiva(),
+                sesionAbierta != null,
+                sesionAbierta != null ? sesionAbierta.getId() : null,
+                sesionAbierta != null ? sesionAbierta.getFechaHoraApertura() : null);
+    }
+
+    @Override
     @Transactional
     public void registrarIngresosVentaLocal(List<PedidoPago> pagos, Long usuarioId) {
         if (pagos == null || pagos.isEmpty()) {

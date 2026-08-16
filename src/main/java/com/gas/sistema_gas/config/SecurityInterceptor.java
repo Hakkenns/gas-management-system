@@ -39,6 +39,12 @@ public class SecurityInterceptor implements HandlerInterceptor {
         
         // Si no hay sesión o no hay usuario logueado, redirigir a login
         if (session == null || session.getAttribute("usuarioLogueado") == null) {
+            if (requestURI != null && requestURI.startsWith("/api/caja")) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"message\":\"No autenticado\"}");
+                return false;
+            }
             response.sendRedirect(request.getContextPath() + "/login");
             return false;
         }

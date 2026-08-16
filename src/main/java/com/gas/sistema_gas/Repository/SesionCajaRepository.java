@@ -15,6 +15,8 @@ import jakarta.persistence.LockModeType;
 
 public interface SesionCajaRepository extends JpaRepository<SesionCaja, Long> {
 
+    Optional<SesionCaja> findByCajaAndEstado(Caja caja, EstadoSesionCaja estado);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM SesionCaja s WHERE s.caja = :caja AND s.estado = :estado")
     Optional<SesionCaja> findByCajaAndEstadoForUpdate(@Param("caja") Caja caja,

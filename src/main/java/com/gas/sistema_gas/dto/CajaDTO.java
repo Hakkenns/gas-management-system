@@ -64,4 +64,19 @@ public class CajaDTO {
             LocalDateTime fechaHora,
             String referencia) {
     }
+
+    public record CustodiaPendienteResponse(
+            Long empleadoId,
+            String nombreEmpleado,
+            BigDecimal saldoPendiente,
+            Integer estadoEmpleado) {
+    }
+
+    public record EstadoResponse(
+            String codigoCaja,
+            Boolean activa,
+            Boolean sesionAbierta,
+            Long idSesionCaja,
+            LocalDateTime fechaHoraApertura) {
+    }
 }

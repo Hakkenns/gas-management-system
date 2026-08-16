@@ -945,14 +945,19 @@ public class InventarioConcurrenciaMySqlTest {
     }
 
     private void crearCustodiaFixture(Long empleadoId, String monto) {
+        crearMovimientoCajaFixture(empleadoId, monto, CanalFondos.CUSTODIA_MOTORIZADO, SentidoMovimiento.INGRESO);
+    }
+
+    private void crearMovimientoCajaFixture(Long empleadoId, String monto, CanalFondos canalFondos,
+            SentidoMovimiento sentido) {
         transactionTemplate.executeWithoutResult(status -> {
             Caja caja = cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL).orElseThrow();
             MovimientoCaja movimiento = new MovimientoCaja();
             movimiento.setCaja(caja);
             movimiento.setFechaHora(LocalDateTime.now());
-            movimiento.setSentido(SentidoMovimiento.INGRESO);
+            movimiento.setSentido(sentido);
             movimiento.setOrigen(OrigenMovimiento.VENTA);
-            movimiento.setCanalFondos(CanalFondos.CUSTODIA_MOTORIZADO);
+            movimiento.setCanalFondos(canalFondos);
             movimiento.setMonto(new BigDecimal(monto));
             movimiento.setUsuarioResponsable(entityManager.find(Usuario.class, idUsuario));
             movimiento.setEmpleadoCustodio(entityManager.find(Empleado.class, empleadoId));
@@ -2403,5 +2408,40 @@ public class InventarioConcurrenciaMySqlTest {
         assertEquals(2, movimientosLiquidacion().size());
         assertParLiquidacion(idEmpleado, "40.00");
         assertEquals(0, saldoFisicoSesionAbierta().compareTo(new BigDecimal("140.00")));
+    }
+
+    @Test
+    @Timeout(30)
+    void listarCustodiasPendientes_realMySql_incluyeInactivoYExcluyeSaldadasYDigitales() {
+        Long empleadoInactivo = crearEmpleadoSecundario();
+        Long empleadoSaldado = crearEmpleadoSecundario();
+        crearCustodiaFixture(idEmpleado, "65.00");
+        crearCustodiaFixture(empleadoInactivo, "30.00");
+        crearCustodiaFixture(empleadoSaldado, "10.00");
+        crearMovimientoCajaFixture(idEmpleado, "100.00", CanalFondos.DIGITAL_NEGOCIO, SentidoMovimiento.INGRESO);
+        transactionTemplate.executeWithoutResult(status -> {
+            entityManager.find(Empleado.class, empleadoInactivo).setEstado(0);
+        });
+        abrirCajaPrincipal(new BigDecimal("100.00"));
+
+        cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(idEmpleado, new BigDecimal("40.00"), null), idUsuario);
+        cajaService.liquidarCustodiaMotorizado(
+                new CajaDTO.LiquidacionRequest(empleadoSaldado, new BigDecimal("10.00"), null), idUsuario);
+
+        List<CajaDTO.CustodiaPendienteResponse> custodias = cajaService.listarCustodiasPendientes();
+
+        assertEquals(2, custodias.size());
+        CajaDTO.CustodiaPendienteResponse activaParcial = custodias.stream()
+                .filter(custodia -> idEmpleado.equals(custodia.empleadoId()))
+                .findFirst().orElseThrow();
+        CajaDTO.CustodiaPendienteResponse inactiva = custodias.stream()
+                .filter(custodia -> empleadoInactivo.equals(custodia.empleadoId()))
+                .findFirst().orElseThrow();
+        assertEquals(0, activaParcial.saldoPendiente().compareTo(new BigDecimal("25.00")));
+        assertEquals(1, activaParcial.estadoEmpleado());
+        assertEquals(0, inactiva.saldoPendiente().compareTo(new BigDecimal("30.00")));
+        assertEquals(0, inactiva.estadoEmpleado());
+        assertFalse(custodias.stream().anyMatch(custodia -> empleadoSaldado.equals(custodia.empleadoId())));
     }
 }

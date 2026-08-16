@@ -8,6 +8,7 @@ public interface OpcionService {
 
     List<OpcionDTO.SimpleResponse> listAll();
     List<OpcionDTO.SimpleResponse> listByPerfilId(Long perfilId);
+    boolean tieneAccesoRuta(Long perfilId, String ruta);
     OpcionDTO.SimpleResponse createOpcion(OpcionDTO.Create createDto);
     OpcionDTO.SimpleResponse updateOpcion(Long id, OpcionDTO.Update updateDto);
     void deleteOpcion(Long id);
