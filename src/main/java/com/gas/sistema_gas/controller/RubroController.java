@@ -25,11 +25,21 @@ public class RubroController {
 
     @GetMapping
     public String rubros(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloRubros(model, session);
+        model.addAttribute("contenido", "views/rubros");
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoRubros(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloRubros(model, session);
+        return "views/rubros :: content";
+    }
+
+    private void cargarModeloRubros(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("rubros", rubroService.listAll());
-        model.addAttribute("contenido", "views/rubros");
-        return "components/layout";
     }
 
     @GetMapping("/tabla")

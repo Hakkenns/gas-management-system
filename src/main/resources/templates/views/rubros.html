@@ -2,7 +2,7 @@
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
 
 <body>
-    <div th:fragment="content">
+    <div th:fragment="content" data-modulo="rubros" data-page-title="Gestion de Rubros">
 
         <div class="content p-3">
             <h3>
@@ -38,7 +38,7 @@
             </div>
 
             <div id="contenedor-tabla">
-                <table class="table table-bordered table-striped" id="tabla-rubros" th:fragment="tablaRubros">
+                <table class="table table-bordered table-striped" id="tabla-rubros">
                     <thead class="thead-dark">
                         <tr>
                             <th>ID</th>
@@ -48,7 +48,7 @@
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tabla-rubros-body" th:fragment="tablaRubros">
                         <tr th:if="${#lists.isEmpty(rubros)}">
                             <td colspan="5" class="text-center">No hay rubros registrados</td>
                         </tr>

@@ -34,10 +34,17 @@
             script: '/assets/js/proveedores.js',
             titulo: 'Gestion de Proveedores',
             nombre: 'Proveedores'
+        },
+        rubros: {
+            ruta: '/rubros',
+            fragmento: '/rubros/fragment',
+            script: '/assets/js/rubro.js',
+            titulo: 'Gestion de Rubros',
+            nombre: 'Rubros'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
@@ -77,7 +84,8 @@
 
     function actualizarSidebar(ruta) {
         const rutaActiva = ruta === '/' ? '/dashboard' : ruta;
-        document.querySelectorAll('.main-sidebar a.nav-link').forEach(enlace => {
+        const enlaces = Array.from(document.querySelectorAll('.main-sidebar a.nav-link'));
+        enlaces.forEach(enlace => {
             const href = enlace.getAttribute('href');
             let esActivo = false;
             try {
@@ -88,13 +96,29 @@
             enlace.classList.toggle('active', esActivo);
             if (esActivo) {
                 enlace.setAttribute('aria-current', 'page');
-                const grupo = enlace.closest('.nav-treeview');
-                if (grupo) {
-                    const padre = grupo.closest('.has-treeview');
-                    if (padre) padre.classList.add('menu-open');
-                }
             } else {
                 enlace.removeAttribute('aria-current');
+            }
+        });
+
+        document.querySelectorAll('.main-sidebar .nav-item.has-treeview').forEach(grupo => {
+            const submenu = grupo.querySelector('.nav-treeview');
+            const contieneActivo = submenu && Array.from(submenu.querySelectorAll('a.nav-link'))
+                .some(enlace => enlace.getAttribute('aria-current') === 'page');
+
+            grupo.classList.toggle('menu-open', Boolean(contieneActivo));
+            if (submenu) {
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.stop) {
+                    const $submenu = window.jQuery(submenu);
+                    $submenu.stop(true, true);
+                    if (contieneActivo) {
+                        $submenu.slideDown(200);
+                    } else {
+                        $submenu.slideUp(200);
+                    }
+                } else {
+                    submenu.style.display = contieneActivo ? 'block' : 'none';
+                }
             }
         });
     }
@@ -190,6 +214,7 @@
         if (event.button !== 0 || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return false;
         if (enlace.target && enlace.target !== '_self') return false;
         if (enlace.hasAttribute('download')) return false;
+        if (enlace.matches('[data-toggle="treeview"], .has-treeview > .nav-link')) return false;
         const url = new URL(enlace.href, window.location.origin);
         return url.origin === window.location.origin
             && Boolean(moduloPorRuta(url.pathname))

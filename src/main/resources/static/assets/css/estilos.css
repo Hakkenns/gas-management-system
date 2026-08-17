@@ -265,3 +265,22 @@ body.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link p {
 }
 
 /*DESDE AQUI SERA EL ESTILO DE LA ALERTA*/
+
+/* Estado uniforme de navegación parcial en el sidebar oscuro */
+.main-sidebar.sidebar-dark-primary .nav-sidebar .nav-link.active,
+.main-sidebar.sidebar-dark-primary .nav-sidebar .nav-treeview .nav-link.active {
+    background-color: #f1f3f5 !important;
+    color: #343a40 !important;
+    box-shadow: none !important;
+}
+
+.main-sidebar.sidebar-dark-primary .nav-sidebar .nav-link.active i,
+.main-sidebar.sidebar-dark-primary .nav-sidebar .nav-treeview .nav-link.active i {
+    color: inherit !important;
+}
+
+.main-sidebar.sidebar-dark-primary .nav-sidebar .nav-item.has-treeview.menu-open > .nav-link {
+    background-color: #495057 !important;
+    color: #f1f3f5 !important;
+    box-shadow: none !important;
+}

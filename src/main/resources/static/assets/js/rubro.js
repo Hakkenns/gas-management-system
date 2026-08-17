@@ -1,7 +1,25 @@
-$(document).ready(function () {
+window.AppModules = window.AppModules || {};
 
-    // Listener global para capturar clics en la página
-    document.addEventListener("click", function (e) {
+var estadoRubros = {
+    initialized: false,
+    root: null,
+    clickHandler: null,
+    formRubro: null,
+    submitHandler: null,
+    table: null,
+    dataTable: null,
+    resizeHandler: null,
+    lengthSelect: null,
+    lengthHandler: null,
+    searchInput: null,
+    searchHandler: null,
+    drawHandler: null,
+    swipeCleanup: null,
+    editAbortController: null,
+    editRequestId: 0
+};
+
+function manejarClickRubro(e) {
 
         // Abrir modal vacío para crear
         if (e.target.closest("#btn-crear-rubro")) {
@@ -20,16 +38,34 @@ $(document).ready(function () {
         if (e.target.closest(".btn-editar-rubro")) {
             const id = e.target.closest(".btn-editar-rubro").dataset.id;
 
-            fetch(`/rubros/${id}`)
+            if (estadoRubros.editAbortController) estadoRubros.editAbortController.abort();
+            const controller = new AbortController();
+            const requestId = ++estadoRubros.editRequestId;
+            estadoRubros.editAbortController = controller;
+
+            fetch(`/rubros/${id}`, { signal: controller.signal })
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById("modal-titulo-rubro").textContent = "Editar Rubro";
-                    document.getElementById("id-rubro").value = data.id;
-                    document.getElementById("nombre-rubro").value = data.nombre;
-                    document.getElementById("descripcion-rubro").value = data.descripcion;
+                    if (!estadoRubros.initialized || requestId !== estadoRubros.editRequestId) return;
+                    const titulo = document.getElementById("modal-titulo-rubro");
+                    const idRubro = document.getElementById("id-rubro");
+                    const nombre = document.getElementById("nombre-rubro");
+                    const descripcion = document.getElementById("descripcion-rubro");
+                    if (!titulo || !idRubro || !nombre || !descripcion) return;
+                    titulo.textContent = "Editar Rubro";
+                    idRubro.value = data.id;
+                    nombre.value = data.nombre;
+                    descripcion.value = data.descripcion;
                     $("#modal-rubro").modal("show");
                 })
-                .catch(err => console.log("ERROR AL CARGAR DATOS DEL RUBRO:", err));
+                .catch(err => {
+                    if (err.name !== 'AbortError' && estadoRubros.initialized && requestId === estadoRubros.editRequestId) {
+                        console.log("ERROR AL CARGAR DATOS DEL RUBRO:", err);
+                    }
+                })
+                .finally(() => {
+                    if (requestId === estadoRubros.editRequestId) estadoRubros.editAbortController = null;
+                });
         }
 
         // 🟢 NUEVO: Detectar clic en los botones de Activar / Inhabilitar Estado
@@ -37,34 +73,38 @@ $(document).ready(function () {
             const boton = e.target.closest(".btn-estado-rubro");
             const id = boton.dataset.id;
             const nuevoEstado = boton.dataset.estado;
-            RubroCambiarEstado(id, nuevoEstado);
+            cambiarEstadoRubro(id, nuevoEstado);
         }
 
         // Acción eliminar (Lógico -> Pasa a estado 0)
         if (e.target.closest(".btn-eliminar-rubro")) {
             const id = e.target.closest(".btn-eliminar-rubro").dataset.id;
-            RubroEliminar(id);
+            eliminarRubro(id);
         }
-    });
+    }
 
     // Refrescar el fragmento HTML de la tabla sin recargar la página
-    function reloadRubrosTable() {
+function reloadRubrosTable() {
         fetch("/rubros/tabla")
             .then(r => {
                 if (!r.ok) throw new Error("Error cargando tabla de rubros");
                 return r.text();
             })
             .then(html => {
-                const container = document.getElementById("contenedor-tabla");
-                if (container) {
-                    container.innerHTML = html;
+                const lifecycleActivo = estadoRubros.initialized;
+                if (lifecycleActivo) destruirTablaRubros();
+
+                const tbody = document.getElementById('tabla-rubros-body');
+                if (tbody) {
+                    tbody.outerHTML = html;
+                    if (lifecycleActivo) initTablaRubros();
                 }
             })
             .catch(err => console.log("ERROR RECARGANDO TABLA:", err));
     }
 
     // Envío del Formulario vía AJAX
-    $("#form-rubro").on("submit", function (e) {
+    function manejarSubmitRubro(e) {
         e.preventDefault();
 
         const id = document.getElementById("id-rubro").value;
@@ -73,7 +113,7 @@ $(document).ready(function () {
         $.ajax({
             url: url,
             type: "POST",
-            data: $(this).serialize(),
+            data: $(estadoRubros.formRubro).serialize(),
             dataType: "json",
             success: function (resp) {
                 if (resp.status === "OK") {
@@ -88,10 +128,10 @@ $(document).ready(function () {
                 alert("Error interno del servidor al guardar.");
             }
         });
-    });
+    }
 
     // Función para cambiar a estado 0 (Inactivo / Eliminado según tu lógica unificada)
-    function RubroEliminar(id) {
+    function eliminarRubro(id) {
         if (!confirm("¿Deseas eliminar este rubro?")) return;
 
         $.ajax({
@@ -112,7 +152,7 @@ $(document).ready(function () {
     }
 
     // 🟢 NUEVA FUNCIÓN: Cambiar Estado de forma asíncrona (AJAX)
-    function RubroCambiarEstado(id, estado) {
+    function cambiarEstadoRubro(id, estado) {
         const mensaje = estado == 1 ? "¿Deseas activar este rubro?" : "¿Deseas inhabilitar este rubro?";
         if (!confirm(mensaje)) return;
 
@@ -134,17 +174,14 @@ $(document).ready(function () {
         });
     }
 
-});
-
 // Inicialización de DataTables para Rubros
 function initTablaRubros() {
-    if ($.fn.DataTable) {
-        const table = $('#tabla-rubros');
-        if ($.fn.dataTable.isDataTable(table)) {
-            table.DataTable().destroy();
-        }
+    if (!window.jQuery || !$.fn.DataTable) return;
+    const table = $('#tabla-rubros');
+    if (!table.length) return;
+    if ($.fn.dataTable.isDataTable(table)) table.DataTable().destroy();
 
-        const dataTable = table.DataTable({
+    const dataTable = table.DataTable({
             dom: 'rt<"bottom"ip><"clear">',
             paging: true,
             pageLength: 10,
@@ -170,31 +207,29 @@ function initTablaRubros() {
                     next: 'Siguiente'
                 }
             }
-        });
+    });
+    estadoRubros.table = table[0];
+    estadoRubros.dataTable = dataTable;
 
-        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
-            dataTable.columns.adjust().draw();
-        });
+    estadoRubros.resizeHandler = function () { dataTable.columns.adjust().draw(); };
+    $(window).on('resize.rubros', estadoRubros.resizeHandler);
 
-        // Conectar controles personalizados
-        const $lengthSelect = $('#rubros-length');
-        const $searchInput = $('#rubros-search');
+    estadoRubros.lengthSelect = document.getElementById('rubros-length');
+    estadoRubros.searchInput = document.getElementById('rubros-search');
 
-        // Cambiar número de registros por página
-        if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
-                const pageLength = parseInt($(this).val(), 10);
-                dataTable.page.len(pageLength).draw();
-            });
-        }
+    if (estadoRubros.lengthSelect) {
+        estadoRubros.lengthHandler = function () {
+            dataTable.page.len(parseInt(estadoRubros.lengthSelect.value, 10)).draw();
+        };
+        estadoRubros.lengthSelect.addEventListener('change', estadoRubros.lengthHandler);
+    }
 
-        // Búsqueda personalizada
-        if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
-                dataTable.search(this.value).draw();
-            });
-        }
+    if (estadoRubros.searchInput) {
+        estadoRubros.searchHandler = function () {
+            dataTable.search(estadoRubros.searchInput.value).draw();
+        };
+        estadoRubros.searchInput.addEventListener('keyup', estadoRubros.searchHandler);
+    }
 
         // Ocultar controles nativos duplicados de DataTables
         const $wrapper = table.closest('.dataTables_wrapper');
@@ -223,28 +258,86 @@ function initTablaRubros() {
             customPager.setAttribute('aria-label', 'Paginación de rubros');
             pagerRow.appendChild(customPager);
 
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
+            injectCustomPaginationStylesRubros();
+            renderCustomInfoRubros(dataTable, infoBar);
+            renderCustomPaginationRubros(dataTable, customPager);
+            estadoRubros.swipeCleanup = attachSwipePaginationRubros(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
-            });
-        }
+            estadoRubros.drawHandler = function () {
+                renderCustomInfoRubros(dataTable, infoBar);
+                renderCustomPaginationRubros(dataTable, customPager);
+            };
+            dataTable.on('draw.dt.rubros', estadoRubros.drawHandler);
     }
 }
 
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
-        initTablaRubros();
+function destruirTablaRubros() {
+    if (estadoRubros.lengthSelect && estadoRubros.lengthHandler) {
+        estadoRubros.lengthSelect.removeEventListener('change', estadoRubros.lengthHandler);
     }
-});
+    if (estadoRubros.searchInput && estadoRubros.searchHandler) {
+        estadoRubros.searchInput.removeEventListener('keyup', estadoRubros.searchHandler);
+    }
+    if (estadoRubros.resizeHandler && window.jQuery) {
+        $(window).off('resize.rubros', estadoRubros.resizeHandler);
+    }
+    if (estadoRubros.swipeCleanup) estadoRubros.swipeCleanup();
+    if (estadoRubros.dataTable) {
+        if (estadoRubros.drawHandler) estadoRubros.dataTable.off('draw.dt.rubros', estadoRubros.drawHandler);
+        estadoRubros.dataTable.destroy();
+    }
+    estadoRubros.table = null;
+    estadoRubros.dataTable = null;
+    estadoRubros.resizeHandler = null;
+    estadoRubros.lengthSelect = null;
+    estadoRubros.lengthHandler = null;
+    estadoRubros.searchInput = null;
+    estadoRubros.searchHandler = null;
+    estadoRubros.drawHandler = null;
+    estadoRubros.swipeCleanup = null;
+}
+
+function initRubros() {
+    if (estadoRubros.initialized) return;
+    estadoRubros.root = document.querySelector('[data-modulo="rubros"]');
+    if (!estadoRubros.root) return;
+    estadoRubros.clickHandler = manejarClickRubro;
+    estadoRubros.root.addEventListener('click', estadoRubros.clickHandler);
+    estadoRubros.formRubro = document.getElementById('form-rubro');
+    estadoRubros.submitHandler = manejarSubmitRubro;
+    if (estadoRubros.formRubro) estadoRubros.formRubro.addEventListener('submit', estadoRubros.submitHandler);
+    estadoRubros.initialized = true;
+    initTablaRubros();
+}
+
+function destroyRubros() {
+    if (!estadoRubros.initialized) return;
+    if (estadoRubros.root && estadoRubros.clickHandler) {
+        estadoRubros.root.removeEventListener('click', estadoRubros.clickHandler);
+    }
+    if (estadoRubros.formRubro && estadoRubros.submitHandler) {
+        estadoRubros.formRubro.removeEventListener('submit', estadoRubros.submitHandler);
+    }
+    destruirTablaRubros();
+    if (estadoRubros.editAbortController) estadoRubros.editAbortController.abort();
+    estadoRubros.editAbortController = null;
+    estadoRubros.editRequestId += 1;
+    if (window.jQuery && $.fn.modal) $('#modal-rubro').modal('hide');
+    estadoRubros.root = null;
+    estadoRubros.clickHandler = null;
+    estadoRubros.formRubro = null;
+    estadoRubros.submitHandler = null;
+    estadoRubros.initialized = false;
+}
+
+window.AppModules.rubros = {
+    init: initRubros,
+    destroy: destroyRubros,
+    reloadTable: reloadRubrosTable
+};
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
+function injectCustomPaginationStylesRubros() {
     if (document.getElementById('compras-custom-pagination-style')) {
         return;
     }
@@ -320,7 +413,7 @@ function injectCustomPaginationStyles() {
     document.head.appendChild(style);
 }
 
-function renderCustomInfo(dataTable, infoElement) {
+function renderCustomInfoRubros(dataTable, infoElement) {
     const info = dataTable.page.info();
     const totalRecords = info.recordsTotal;
     const start = totalRecords === 0 ? 0 : info.start + 1;
@@ -331,7 +424,7 @@ function renderCustomInfo(dataTable, infoElement) {
         : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
 }
 
-function renderCustomPagination(dataTable, pagerElement) {
+function renderCustomPaginationRubros(dataTable, pagerElement) {
     const info = dataTable.page.info();
     const totalPages = info.pages;
     const currentPage = info.page;
@@ -387,14 +480,15 @@ function renderCustomPagination(dataTable, pagerElement) {
     pagerElement.appendChild(nextButton);
 }
 
-function attachSwipePagination(wrapperElement, dataTable) {
+function attachSwipePaginationRubros(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
+    };
 
-    wrapperElement.addEventListener('touchend', (event) => {
+    const touchEndHandler = (event) => {
+        if (!event.changedTouches.length) return;
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -407,5 +501,13 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+
+    return function () {
+        wrapperElement.removeEventListener('touchstart', touchStartHandler);
+        wrapperElement.removeEventListener('touchend', touchEndHandler);
+    };
 }
