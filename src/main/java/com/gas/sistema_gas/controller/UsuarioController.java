@@ -41,6 +41,19 @@ public class UsuarioController {
 
     @GetMapping
     public String usuarios(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloUsuarios(model, session);
+        model.addAttribute("contenido", "views/usuario");
+
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoUsuarios(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloUsuarios(model, session);
+        return "views/usuario :: content";
+    }
+
+    private void cargarModeloUsuarios(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
 
         // 1. Lista de usuarios para rellenar la grilla principal
@@ -54,9 +67,6 @@ public class UsuarioController {
 
         // 4. Estructura de menú de navegación lateral y layout maestro
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("contenido", "views/usuario");
-
-        return "components/layout";
     }
 
     // GET por ID: retorna JSON para el JS del modal editar

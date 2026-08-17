@@ -3,7 +3,7 @@
 
 <body>
 
-<div th:fragment="content">
+<div th:fragment="content" data-modulo="usuarios" data-page-title="Gestion de Usuarios">
 
     <div class="content p-3">
 
@@ -57,7 +57,7 @@
                 <th>Acciones</th>
             </tr>
             </thead>
-            <tbody id="tabla-usuarios" th:fragment="tablaUsuarios">
+            <tbody id="tabla-usuarios-body" th:fragment="tablaUsuarios">
 
             <!-- VACÍO -->
             <tr th:if="${#lists.isEmpty(usuarios)}">

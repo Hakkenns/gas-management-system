@@ -1,3 +1,23 @@
+window.AppModules = window.AppModules || {};
+
+var estadoUsuarios = {
+    initialized: false,
+    formUsuario: null,
+    submitHandler: null,
+    botonEliminar: null,
+    eliminarHandler: null,
+    table: null,
+    dataTable: null,
+    resizeHandler: null,
+    lengthSelect: null,
+    lengthHandler: null,
+    searchInput: null,
+    searchHandler: null,
+    drawHandler: null,
+    swipeCleanup: null,
+    idUsuarioAEliminar: null
+};
+
 // ─── MOSTRAR / OCULTAR PASSWORD ───────────────────────────────────────────────
 function togglePassword() {
     var input = document.getElementById('input-password');
@@ -83,9 +103,15 @@ function reloadUsuariosTable() {
             return response.text();
         })
         .then(function(html) {
-            var tbody = document.getElementById('tabla-usuarios');
+            var lifecycleActivo = estadoUsuarios.initialized;
+            if (lifecycleActivo) {
+                destruirTablaUsuarios();
+            }
+
+            var tbody = document.getElementById('tabla-usuarios-body');
             if (tbody) {
                 tbody.outerHTML = html;
+                if (lifecycleActivo) initTablaUsuarios();
             }
         })
         .catch(function(error) {
@@ -94,39 +120,37 @@ function reloadUsuariosTable() {
         });
 }
 
-var formUsuario = document.getElementById('form-usuario');
-if (formUsuario) {
-    formUsuario.addEventListener('submit', function(event) {
-        event.preventDefault();
+function manejarSubmitUsuario(event) {
+    event.preventDefault();
 
-        var url = formUsuario.action;
-        var data = new URLSearchParams(new FormData(formUsuario)).toString();
+    var formUsuario = estadoUsuarios.formUsuario;
+    var url = formUsuario.action;
+    var data = new URLSearchParams(new FormData(formUsuario)).toString();
 
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: data
-        })
-        .then(function(response) {
-            return response.json().then(function(body) {
-                if (!response.ok) {
-                    throw new Error(body.message || 'Error guardando usuario.');
-                }
-                return body;
-            });
-        })
-        .then(function(body) {
-            if (body.status === 'OK') {
-                $('#modal-usuario').modal('hide');
-                reloadUsuariosTable();
-            } else {
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: data
+    })
+    .then(function(response) {
+        return response.json().then(function(body) {
+            if (!response.ok) {
                 throw new Error(body.message || 'Error guardando usuario.');
             }
-        })
-        .catch(function(error) {
-            console.error('Error guardando usuario:', error);
-            alert(error.message || 'Error guardando usuario.');
+            return body;
         });
+    })
+    .then(function(body) {
+        if (body.status === 'OK') {
+            $('#modal-usuario').modal('hide');
+            reloadUsuariosTable();
+        } else {
+            throw new Error(body.message || 'Error guardando usuario.');
+        }
+    })
+    .catch(function(error) {
+        console.error('Error guardando usuario:', error);
+        alert(error.message || 'Error guardando usuario.');
     });
 }
 
@@ -165,18 +189,16 @@ function cambiarEstado(id, nuevoEstado) {
 }
 
 // ─── ELIMINAR USUARIO ─────────────────────────────────────────────────────────
-var idUsuarioAEliminar = null;
-
 function eliminarUsuario(id) {
-    idUsuarioAEliminar = id;
+    estadoUsuarios.idUsuarioAEliminar = id;
     $('#modal-eliminar').modal('show');
 }
 
 // Confirmar eliminar desde el modal
-document.getElementById('btn-confirmar-eliminar').addEventListener('click', function() {
-    if (!idUsuarioAEliminar) return;
+function manejarConfirmacionEliminar() {
+    if (!estadoUsuarios.idUsuarioAEliminar) return;
 
-    fetch('/usuarios/' + idUsuarioAEliminar + '/eliminar', {
+    fetch('/usuarios/' + estadoUsuarios.idUsuarioAEliminar + '/eliminar', {
         method: 'POST'
     })
     .then(function(response) {
@@ -190,7 +212,7 @@ document.getElementById('btn-confirmar-eliminar').addEventListener('click', func
     .then(function(body) {
         if (body.status === 'OK') {
             $('#modal-eliminar').modal('hide');
-            idUsuarioAEliminar = null;
+            estadoUsuarios.idUsuarioAEliminar = null;
             reloadUsuariosTable();
         } else {
             throw new Error(body.message || 'Error eliminando usuario.');
@@ -200,17 +222,19 @@ document.getElementById('btn-confirmar-eliminar').addEventListener('click', func
         console.error('Error:', error);
         alert(error.message || 'Error al eliminar el usuario.');
     });
-});
+}
 
 // Inicialización de DataTables para Usuarios
 function initTablaUsuarios() {
-    if ($.fn.DataTable) {
-        const table = $('#tabla-usuarios');
-        if ($.fn.dataTable.isDataTable(table)) {
-            table.DataTable().destroy();
-        }
+    if (!window.jQuery || !$.fn.DataTable) return;
 
-        const dataTable = table.DataTable({
+    const table = $('#tabla-usuarios');
+    if (!table.length) return;
+    if ($.fn.dataTable.isDataTable(table)) {
+        table.DataTable().destroy();
+    }
+
+    const dataTable = table.DataTable({
             dom: 'rt<"bottom"ip><"clear">',
             paging: true,
             pageLength: 10,
@@ -236,36 +260,41 @@ function initTablaUsuarios() {
                     next: 'Siguiente'
                 }
             }
-        });
+    });
 
-        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
-            dataTable.columns.adjust().draw();
-        });
+    estadoUsuarios.table = table[0];
+    estadoUsuarios.dataTable = dataTable;
 
-        // Conectar controles personalizados
-        const $lengthSelect = $('#usuarios-length');
-        const $searchInput = $('#usuarios-search');
+    // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
+    estadoUsuarios.resizeHandler = function () {
+        dataTable.columns.adjust().draw();
+    };
+    $(window).on('resize.usuarios', estadoUsuarios.resizeHandler);
 
-        // Cambiar número de registros por página
-        if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
-                const pageLength = parseInt($(this).val(), 10);
-                dataTable.page.len(pageLength).draw();
-            });
-        }
+    // Conectar controles personalizados
+    estadoUsuarios.lengthSelect = document.getElementById('usuarios-length');
+    estadoUsuarios.searchInput = document.getElementById('usuarios-search');
 
-        // Búsqueda personalizada
-        if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
-                dataTable.search(this.value).draw();
-            });
-        }
+    // Cambiar número de registros por página
+    if (estadoUsuarios.lengthSelect) {
+        estadoUsuarios.lengthHandler = function () {
+            dataTable.page.len(parseInt(estadoUsuarios.lengthSelect.value, 10)).draw();
+        };
+        estadoUsuarios.lengthSelect.addEventListener('change', estadoUsuarios.lengthHandler);
+    }
 
-        // Ocultar controles nativos duplicados de DataTables
-        const $wrapper = table.closest('.dataTables_wrapper');
-        if ($wrapper.length) {
-            const wrapperEl = $wrapper[0];
+    // Búsqueda personalizada
+    if (estadoUsuarios.searchInput) {
+        estadoUsuarios.searchHandler = function () {
+            dataTable.search(estadoUsuarios.searchInput.value).draw();
+        };
+        estadoUsuarios.searchInput.addEventListener('keyup', estadoUsuarios.searchHandler);
+    }
+
+    // Ocultar controles nativos duplicados de DataTables
+    const $wrapper = table.closest('.dataTables_wrapper');
+    if ($wrapper.length) {
+        const wrapperEl = $wrapper[0];
             const paginateContainer = wrapperEl.querySelector('.dataTables_paginate');
             if (paginateContainer) {
                 paginateContainer.style.display = 'none';
@@ -292,22 +321,92 @@ function initTablaUsuarios() {
             injectCustomPaginationStyles();
             renderCustomInfo(dataTable, infoBar);
             renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
+            estadoUsuarios.swipeCleanup = attachSwipePagination(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
+            estadoUsuarios.drawHandler = function () {
                 renderCustomInfo(dataTable, infoBar);
                 renderCustomPagination(dataTable, customPager);
-            });
-        }
+            };
+            dataTable.on('draw.dt.usuarios', estadoUsuarios.drawHandler);
     }
 }
 
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
-        initTablaUsuarios();
+function destruirTablaUsuarios() {
+    if (estadoUsuarios.lengthSelect && estadoUsuarios.lengthHandler) {
+        estadoUsuarios.lengthSelect.removeEventListener('change', estadoUsuarios.lengthHandler);
     }
-});
+    if (estadoUsuarios.searchInput && estadoUsuarios.searchHandler) {
+        estadoUsuarios.searchInput.removeEventListener('keyup', estadoUsuarios.searchHandler);
+    }
+    if (estadoUsuarios.resizeHandler && window.jQuery) {
+        $(window).off('resize.usuarios', estadoUsuarios.resizeHandler);
+    }
+    if (estadoUsuarios.swipeCleanup) estadoUsuarios.swipeCleanup();
+    if (estadoUsuarios.dataTable) {
+        if (estadoUsuarios.drawHandler) {
+            estadoUsuarios.dataTable.off('draw.dt.usuarios', estadoUsuarios.drawHandler);
+        }
+        estadoUsuarios.dataTable.destroy();
+    }
+    estadoUsuarios.table = null;
+    estadoUsuarios.dataTable = null;
+    estadoUsuarios.resizeHandler = null;
+    estadoUsuarios.lengthSelect = null;
+    estadoUsuarios.lengthHandler = null;
+    estadoUsuarios.searchInput = null;
+    estadoUsuarios.searchHandler = null;
+    estadoUsuarios.drawHandler = null;
+    estadoUsuarios.swipeCleanup = null;
+}
+
+function initUsuarios() {
+    if (estadoUsuarios.initialized) return;
+
+    estadoUsuarios.formUsuario = document.getElementById('form-usuario');
+    estadoUsuarios.submitHandler = manejarSubmitUsuario;
+    if (estadoUsuarios.formUsuario) {
+        estadoUsuarios.formUsuario.addEventListener('submit', estadoUsuarios.submitHandler);
+    }
+
+    estadoUsuarios.botonEliminar = document.getElementById('btn-confirmar-eliminar');
+    estadoUsuarios.eliminarHandler = manejarConfirmacionEliminar;
+    if (estadoUsuarios.botonEliminar) {
+        estadoUsuarios.botonEliminar.addEventListener('click', estadoUsuarios.eliminarHandler);
+    }
+
+    estadoUsuarios.initialized = true;
+    initTablaUsuarios();
+}
+
+function destruirModalesUsuarios() {
+    if (window.jQuery && $.fn.modal) {
+        $('#modal-usuario, #modal-eliminar').modal('hide');
+    }
+    estadoUsuarios.idUsuarioAEliminar = null;
+}
+
+function destroyUsuarios() {
+    if (!estadoUsuarios.initialized) return;
+    if (estadoUsuarios.formUsuario && estadoUsuarios.submitHandler) {
+        estadoUsuarios.formUsuario.removeEventListener('submit', estadoUsuarios.submitHandler);
+    }
+    if (estadoUsuarios.botonEliminar && estadoUsuarios.eliminarHandler) {
+        estadoUsuarios.botonEliminar.removeEventListener('click', estadoUsuarios.eliminarHandler);
+    }
+    destruirTablaUsuarios();
+    destruirModalesUsuarios();
+    estadoUsuarios.formUsuario = null;
+    estadoUsuarios.submitHandler = null;
+    estadoUsuarios.botonEliminar = null;
+    estadoUsuarios.eliminarHandler = null;
+    estadoUsuarios.idUsuarioAEliminar = null;
+    estadoUsuarios.initialized = false;
+}
+
+window.AppModules.usuarios = {
+    init: initUsuarios,
+    destroy: destroyUsuarios
+};
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
 function injectCustomPaginationStyles() {
@@ -456,11 +555,11 @@ function renderCustomPagination(dataTable, pagerElement) {
 function attachSwipePagination(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
-
-    wrapperElement.addEventListener('touchend', (event) => {
+    };
+    const touchEndHandler = (event) => {
+        if (!event.changedTouches.length) return;
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -473,5 +572,13 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+
+    return function () {
+        wrapperElement.removeEventListener('touchstart', touchStartHandler);
+        wrapperElement.removeEventListener('touchend', touchEndHandler);
+    };
 }

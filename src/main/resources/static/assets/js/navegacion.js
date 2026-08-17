@@ -4,11 +4,19 @@
             ruta: '/clientes',
             fragmento: '/clientes/fragment',
             script: '/assets/js/clientes.js',
-            titulo: 'Gestion de Clientes'
+            titulo: 'Gestion de Clientes',
+            nombre: 'Clientes'
+        },
+        usuarios: {
+            ruta: '/usuarios',
+            fragmento: '/usuarios/fragment',
+            script: '/assets/js/usuario.js',
+            titulo: 'Gestion de Usuarios',
+            nombre: 'Usuarios'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
@@ -70,8 +78,8 @@
         });
     }
 
-    function cargarScript(config) {
-        if (window.AppModules && window.AppModules[config.modulo || 'clientes']) {
+    function cargarScript(nombreModulo, config) {
+        if (window.AppModules && window.AppModules[nombreModulo]) {
             return Promise.resolve();
         }
         if (promesasScripts[config.script]) return promesasScripts[config.script];
@@ -81,13 +89,13 @@
             script.src = config.script;
             script.async = false;
             script.onload = resolve;
-            script.onerror = () => reject(new Error('No se pudo cargar el modulo de Clientes'));
+            script.onerror = () => reject(new Error('No se pudo cargar el modulo de ' + config.nombre + '.'));
             document.head.appendChild(script);
         });
         return promesasScripts[config.script];
     }
 
-    async function obtenerFragmento(config) {
+    async function obtenerFragmento(nombreModulo, config) {
         const response = await fetch(config.fragmento, {
             credentials: 'same-origin',
             headers: {
@@ -107,30 +115,30 @@
         }
         if (!response.ok) {
             throw Object.assign(new Error(response.status === 403
-                ? 'No tienes permiso para acceder a Clientes.'
-                : 'No se pudo cargar Clientes.'), { status: response.status });
+                ? 'No tienes permiso para acceder a ' + config.nombre + '.'
+                : 'No se pudo cargar ' + config.nombre + '.'), { status: response.status });
         }
 
         const html = await response.text();
         const documento = new DOMParser().parseFromString(html, 'text/html');
-        if (!documento.querySelector('[data-modulo="clientes"]')) {
-            throw Object.assign(new Error('La respuesta no contiene el fragmento de Clientes.'), { status: 500 });
+        if (!documento.querySelector('[data-modulo="' + nombreModulo + '"]')) {
+            throw Object.assign(new Error('La respuesta no contiene el fragmento de ' + config.nombre + '.'), { status: 500 });
         }
         return documento.body.innerHTML;
     }
 
-    async function cargarClientes(pushState) {
-        const config = modulos.clientes;
+    async function cargarModulo(nombreModulo, pushState) {
+        const config = modulos[nombreModulo];
         let html;
         try {
-            html = await obtenerFragmento(config);
-            await cargarScript({ ...config, modulo: 'clientes' });
+            html = await obtenerFragmento(nombreModulo, config);
+            await cargarScript(nombreModulo, config);
         } catch (error) {
             if (error.status === 401) return;
             if (error.status === 403) {
                 mostrarError('Acceso denegado', error.message);
             } else {
-                mostrarError('Error de navegacion', error.message || 'No se pudo cargar Clientes.');
+                mostrarError('Error de navegacion', error.message || ('No se pudo cargar ' + config.nombre + '.'));
             }
             return;
         }
@@ -144,46 +152,53 @@
         limpiarModalesDelContenido();
         contenedor.innerHTML = html;
 
-        const clientes = window.AppModules && window.AppModules.clientes;
-        if (clientes && typeof clientes.init === 'function') clientes.init();
+        const nuevoModulo = window.AppModules && window.AppModules[nombreModulo];
+        if (nuevoModulo && typeof nuevoModulo.init === 'function') nuevoModulo.init();
         actualizarSidebar(config.ruta);
         document.title = config.titulo;
         if (pushState && window.location.pathname !== config.ruta) {
-            window.history.pushState({ modulo: 'clientes' }, '', config.ruta);
+            window.history.pushState({ modulo: nombreModulo }, '', config.ruta);
         }
     }
 
-    function esEnlaceClientesSeguro(event, enlace) {
+    function moduloPorRuta(ruta) {
+        return Object.keys(modulos).find(nombre => modulos[nombre].ruta === ruta);
+    }
+
+    function esEnlaceModuloSeguro(event, enlace) {
         if (event.button !== 0 || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return false;
         if (enlace.target && enlace.target !== '_self') return false;
         if (enlace.hasAttribute('download')) return false;
         const url = new URL(enlace.href, window.location.origin);
         return url.origin === window.location.origin
-            && url.pathname === modulos.clientes.ruta
+            && Boolean(moduloPorRuta(url.pathname))
             && origenesSeguros.has(window.location.pathname);
     }
 
     function inicializarNavegacion() {
         document.addEventListener('click', event => {
             const enlace = event.target instanceof Element ? event.target.closest('a') : null;
-            if (!enlace || !esEnlaceClientesSeguro(event, enlace)) return;
+            if (!enlace || !esEnlaceModuloSeguro(event, enlace)) return;
             event.preventDefault();
-            cargarClientes(true);
+            cargarModulo(moduloPorRuta(new URL(enlace.href, window.location.origin).pathname), true);
         });
 
         window.addEventListener('popstate', () => {
-            if (window.location.pathname === modulos.clientes.ruta) {
-                cargarClientes(false);
+            const nombreModulo = moduloPorRuta(window.location.pathname);
+            if (nombreModulo) {
+                cargarModulo(nombreModulo, false);
             } else {
                 window.location.assign(window.location.href);
             }
         });
 
         const inicial = moduloActual();
-        if (inicial && inicial.dataset.modulo === 'clientes') {
-            const clientes = window.AppModules && window.AppModules.clientes;
-            if (clientes && typeof clientes.init === 'function') clientes.init();
-            document.title = inicial.dataset.pageTitle || modulos.clientes.titulo;
+        if (inicial) {
+            const nombreModulo = inicial.dataset.modulo;
+            const config = modulos[nombreModulo];
+            const modulo = window.AppModules && window.AppModules[nombreModulo];
+            if (config && modulo && typeof modulo.init === 'function') modulo.init();
+            if (config) document.title = inicial.dataset.pageTitle || config.titulo;
         }
         actualizarSidebar(window.location.pathname);
     }
