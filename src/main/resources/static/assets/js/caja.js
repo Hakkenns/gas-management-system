@@ -35,8 +35,8 @@
         const accion = !activa
             ? ''
             : abierta
-                ? `<button type="button" class="btn btn-danger btn-cerrar-caja mt-3"><i class="fas fa-lock mr-1"></i>Cerrar Caja</button>`
-                : `<button type="button" class="btn btn-success btn-abrir-caja mt-3"><i class="fas fa-lock-open mr-1"></i>Abrir Caja</button>`;
+                ? `<button type="button" class="btn btn-info btn-cerrar-caja mt-3"><i class="fas fa-lock mr-1"></i>Cerrar Caja</button>`
+                : `<button type="button" class="btn btn-info btn-abrir-caja mt-3"><i class="fas fa-lock-open mr-1"></i>Abrir Caja</button>`;
         contenedor.innerHTML = `
             <div class="d-flex align-items-center justify-content-between flex-wrap">
                 <div>
@@ -114,7 +114,7 @@
     }
 
     function abrirModalApertura() {
-        document.getElementById('apertura-monto-inicial').value = '';
+        document.getElementById('apertura-monto-inicial').value = '0.00';
         document.getElementById('apertura-observaciones').value = '';
         $('#modal-abrir-caja').modal('show');
     }
