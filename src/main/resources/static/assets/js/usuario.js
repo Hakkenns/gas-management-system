@@ -35,7 +35,7 @@ function togglePassword() {
 }
 
 // ─── ABRIR MODAL NUEVO ────────────────────────────────────────────────────────
-function abrirModalNuevo() {
+function abrirModalNuevoUsuario() {
     document.getElementById('form-usuario').reset();
     document.getElementById('modal-titulo').textContent = 'Nuevo Usuario';
     document.getElementById('form-usuario').action     = '/usuarios';
@@ -53,7 +53,7 @@ function abrirModalNuevo() {
 }
 
 // ─── ABRIR MODAL EDITAR ───────────────────────────────────────────────────────
-function abrirModalEditar(id) {
+function abrirModalEditarUsuario(id) {
     fetch('/usuarios/' + id)
         .then(function(response) {
             if (!response.ok) {
@@ -318,14 +318,14 @@ function initTablaUsuarios() {
             customPager.setAttribute('aria-label', 'Paginación de usuarios');
             pagerRow.appendChild(customPager);
 
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            estadoUsuarios.swipeCleanup = attachSwipePagination(wrapperEl, dataTable);
+            injectCustomPaginationStylesUsuarios();
+            renderCustomInfoUsuarios(dataTable, infoBar);
+            renderCustomPaginationUsuarios(dataTable, customPager);
+            estadoUsuarios.swipeCleanup = attachSwipePaginationUsuarios(wrapperEl, dataTable);
 
             estadoUsuarios.drawHandler = function () {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
+                renderCustomInfoUsuarios(dataTable, infoBar);
+                renderCustomPaginationUsuarios(dataTable, customPager);
             };
             dataTable.on('draw.dt.usuarios', estadoUsuarios.drawHandler);
     }
@@ -405,11 +405,17 @@ function destroyUsuarios() {
 
 window.AppModules.usuarios = {
     init: initUsuarios,
-    destroy: destroyUsuarios
+    destroy: destroyUsuarios,
+    abrirModalNuevo: abrirModalNuevoUsuario,
+    abrirModalEditar: abrirModalEditarUsuario,
+    togglePassword: togglePassword,
+    cambiarEstado: cambiarEstado,
+    eliminarUsuario: eliminarUsuario,
+    reloadTable: reloadUsuariosTable
 };
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
+function injectCustomPaginationStylesUsuarios() {
     if (document.getElementById('compras-custom-pagination-style')) {
         return;
     }
@@ -485,7 +491,7 @@ function injectCustomPaginationStyles() {
     document.head.appendChild(style);
 }
 
-function renderCustomInfo(dataTable, infoElement) {
+function renderCustomInfoUsuarios(dataTable, infoElement) {
     const info = dataTable.page.info();
     const totalRecords = info.recordsTotal;
     const start = totalRecords === 0 ? 0 : info.start + 1;
@@ -496,7 +502,7 @@ function renderCustomInfo(dataTable, infoElement) {
         : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
 }
 
-function renderCustomPagination(dataTable, pagerElement) {
+function renderCustomPaginationUsuarios(dataTable, pagerElement) {
     const info = dataTable.page.info();
     const totalPages = info.pages;
     const currentPage = info.page;
@@ -552,7 +558,7 @@ function renderCustomPagination(dataTable, pagerElement) {
     pagerElement.appendChild(nextButton);
 }
 
-function attachSwipePagination(wrapperElement, dataTable) {
+function attachSwipePaginationUsuarios(wrapperElement, dataTable) {
     let touchStartX = 0;
 
     const touchStartHandler = (event) => {

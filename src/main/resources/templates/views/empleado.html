@@ -3,7 +3,7 @@
 
 <body>
 
-<div th:fragment="content">
+<div th:fragment="content" data-modulo="empleados" data-page-title="Gestion de Empleados">
 
     <div class="content p-3">
 
@@ -18,7 +18,7 @@
         <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
 
         <!-- BOTON NUEVO -->
-        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-empleado" onclick="abrirModalNuevo()">
+        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-empleado" onclick="AppModules.empleados.abrirModalNuevo()">
             <i class="fas fa-plus"></i>
             Nuevo Empleado
         </button>
@@ -57,7 +57,7 @@
                 <th>Acciones</th>
             </tr>
             </thead>
-            <tbody id="tabla-empleados" th:fragment="tablaEmpleados">
+            <tbody id="tabla-empleados-body" th:fragment="tablaEmpleados">
 
             <!-- VACÍO -->
             <tr th:if="${#lists.isEmpty(empleados)}">
@@ -78,14 +78,14 @@
                 <td>
                     <!-- EDITAR -->
                     <button class="btn btn-warning btn-sm"
-                            th:onclick="'abrirModalEditar(' + ${e.id} + ')'"
+                            th:onclick="'AppModules.empleados.abrirModalEditar(' + ${e.id} + ')'"
                             title="Editar Empleado">
                         <i class="fas fa-edit"></i>
                     </button>
 
                     <!-- ELIMINAR -->
                     <button class="btn btn-danger btn-sm"
-                            th:onclick="'eliminarEmpleado(' + ${e.id} + ')'"
+                            th:onclick="'AppModules.empleados.eliminarEmpleado(' + ${e.id} + ')'"
                             title="Eliminar Empleado">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -121,7 +121,7 @@
                                        maxlength="8" pattern="\d{8}" required>
 
                                 <div class="input-group-append">
-                                    <button class="btn btn-info" type="button" id="btn-buscar-dni" onclick="buscarDniApi()">
+                                    <button class="btn btn-info" type="button" id="btn-buscar-dni" onclick="AppModules.empleados.buscarDniApi()">
                                         <span id="icono-buscar"><i class="fas fa-search"></i></span>
                                     </button>
                                 </div>

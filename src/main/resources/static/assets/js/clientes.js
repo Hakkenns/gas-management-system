@@ -100,11 +100,17 @@ function destroyClientes() {
 
 window.AppModules.clientes = {
     init: initClientes,
-    destroy: destroyClientes
+    destroy: destroyClientes,
+    abrirModalNuevo: abrirModalNuevoCliente,
+    abrirModalEditar: abrirModalEditarCliente,
+    verCliente: verCliente,
+    eliminarCliente: eliminarCliente,
+    buscarDniApi: buscarDniApiCliente,
+    reloadTable: reloadClientesTable
 };
 
 // ─── ACCIONES DEL MODAL (NUEVO / EDITAR) ──────────────────────────────────────
-function abrirModalNuevo() {
+function abrirModalNuevoCliente() {
     var form = document.getElementById('form-cliente');
     if (form) form.reset();
 
@@ -119,7 +125,7 @@ function abrirModalNuevo() {
     $('#modal-cliente').modal('show');
 }
 
-function abrirModalEditar(id) {
+function abrirModalEditarCliente(id) {
     fetch('/clientes/' + id)
         .then(response => response.json())
         .then(cliente => {
@@ -209,7 +215,7 @@ function eliminarCliente(id) {
 }
 
 // ─── CONSULTA API DNI (EXTRAÍDA AL SCOPE GLOBAL) ──────────────────────────────
-function buscarDniApi() {
+function buscarDniApiCliente() {
     const dni = document.getElementById('input-dni').value;
 
     if (dni.length !== 8 || isNaN(dni)) {
@@ -356,21 +362,21 @@ function initTablaClientes() {
             customPager.setAttribute('aria-label', 'Paginación de clientes');
             pagerRow.appendChild(customPager);
 
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
+            injectCustomPaginationStylesClientes();
+            renderCustomInfoClientes(dataTable, infoBar);
+            renderCustomPaginationClientes(dataTable, customPager);
+            attachSwipePaginationClientes(wrapperEl, dataTable);
 
             dataTable.on('draw.dt', () => {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
+                renderCustomInfoClientes(dataTable, infoBar);
+                renderCustomPaginationClientes(dataTable, customPager);
             });
         }
     }
 }
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
+function injectCustomPaginationStylesClientes() {
     if (document.getElementById('compras-custom-pagination-style')) {
         return;
     }
@@ -446,7 +452,7 @@ function injectCustomPaginationStyles() {
     document.head.appendChild(style);
 }
 
-function renderCustomInfo(dataTable, infoElement) {
+function renderCustomInfoClientes(dataTable, infoElement) {
     const info = dataTable.page.info();
     const totalRecords = info.recordsTotal;
     const start = totalRecords === 0 ? 0 : info.start + 1;
@@ -457,7 +463,7 @@ function renderCustomInfo(dataTable, infoElement) {
         : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
 }
 
-function renderCustomPagination(dataTable, pagerElement) {
+function renderCustomPaginationClientes(dataTable, pagerElement) {
     const info = dataTable.page.info();
     const totalPages = info.pages;
     const currentPage = info.page;
@@ -513,7 +519,7 @@ function renderCustomPagination(dataTable, pagerElement) {
     pagerElement.appendChild(nextButton);
 }
 
-function attachSwipePagination(wrapperElement, dataTable) {
+function attachSwipePaginationClientes(wrapperElement, dataTable) {
     let touchStartX = 0;
 
     wrapperElement.addEventListener('touchstart', (event) => {

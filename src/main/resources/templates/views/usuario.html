@@ -18,7 +18,7 @@
         <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
 
         <!-- BOTON NUEVO -->
-        <button class="btn btn-info mb-3" onclick="abrirModalNuevo()">
+        <button class="btn btn-info mb-3" onclick="AppModules.usuarios.abrirModalNuevo()">
             <i class="fas fa-plus"></i>
             Nuevo Usuario
         </button>
@@ -78,27 +78,27 @@
                 <td>
                     <!-- EDITAR -->
                     <button class="btn btn-warning btn-sm"
-                            th:onclick="'abrirModalEditar(' + ${u.id} + ')'">
+                            th:onclick="'AppModules.usuarios.abrirModalEditar(' + ${u.id} + ')'">
                         <i class="fas fa-edit"></i>
                     </button>
 
                     <!-- ACTIVAR -->
                     <button class="btn btn-success btn-sm"
                             th:if="${u.estado == 0}"
-                            th:onclick="'cambiarEstado(' + ${u.id} + ', 1)'">
+                            th:onclick="'AppModules.usuarios.cambiarEstado(' + ${u.id} + ', 1)'">
                         <i class="fas fa-check"></i>
                     </button>
 
                     <!-- DESACTIVAR -->
                     <button class="btn btn-secondary btn-sm"
                             th:if="${u.estado == 1}"
-                            th:onclick="'cambiarEstado(' + ${u.id} + ', 0)'">
+                            th:onclick="'AppModules.usuarios.cambiarEstado(' + ${u.id} + ', 0)'">
                         <i class="fas fa-ban"></i>
                     </button>
 
                     <!-- ELIMINAR -->
                     <button class="btn btn-danger btn-sm"
-                            th:onclick="'eliminarUsuario(' + ${u.id} + ')'">
+                            th:onclick="'AppModules.usuarios.eliminarUsuario(' + ${u.id} + ')'">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -170,7 +170,7 @@
                                        placeholder="Dejar vacío para mantener la actual">
                                 <button class="btn btn-outline-secondary"
                                         type="button"
-                                        onclick="togglePassword()">
+                                        onclick="AppModules.usuarios.togglePassword()">
                                     <i class="fas fa-eye" id="icono-password"></i>
                                 </button>
                             </div>

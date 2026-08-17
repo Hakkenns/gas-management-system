@@ -29,11 +29,21 @@ public class EmpleadoController {
     // GET: carga la vista HTML de gestión de empleados
     @GetMapping
     public String empleados(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloEmpleados(model, session);
+        model.addAttribute("contenido", "views/empleado");
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoEmpleados(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloEmpleados(model, session);
+        return "views/empleado :: content";
+    }
+
+    private void cargarModeloEmpleados(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("empleados", empleadoService.listAll());
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("contenido", "views/empleado"); // Ruta: templates/views/empleado.html
-        return "components/layout";
     }
 
     // GET por ID: retorna JSON para el JS del modal editar

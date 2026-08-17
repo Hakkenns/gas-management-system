@@ -1,12 +1,26 @@
-// OBLIGATORIO: Interceptar el formulario cuando se envía
-document.addEventListener("DOMContentLoaded", function() {
-    console.log("Empleados script listo.");
+window.AppModules = window.AppModules || {};
 
-    var formEmpleado = document.getElementById('form-empleado');
-    if (formEmpleado) {
-        formEmpleado.addEventListener('submit', function(event) {
+var estadoEmpleados = {
+    initialized: false,
+    formEmpleado: null,
+    submitHandler: null,
+    table: null,
+    dataTable: null,
+    resizeHandler: null,
+    lengthSelect: null,
+    lengthHandler: null,
+    searchInput: null,
+    searchHandler: null,
+    drawHandler: null,
+    swipeCleanup: null,
+    dniAbortController: null,
+    dniRequestId: 0
+};
+
+function manejarSubmitEmpleado(event) {
             event.preventDefault(); // Detiene la redirección inmediata del HTML
 
+            var formEmpleado = estadoEmpleados.formEmpleado;
             var url = formEmpleado.action;
             var data = new URLSearchParams(new FormData(formEmpleado)).toString();
 
@@ -45,12 +59,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     confirmButtonColor: '#ffc107'
                 });
             });
-        });
-    }
-});
+}
 
 // ─── ACCIONES DEL MODAL ──────────────────────────────────────────────────────
-function abrirModalNuevo() {
+function abrirModalNuevoEmpleado() {
     var form = document.getElementById('form-empleado');
     if (form) form.reset();
 
@@ -63,7 +75,7 @@ function abrirModalNuevo() {
     $('#modal-empleado').modal('show');
 }
 
-function abrirModalEditar(id) {
+function abrirModalEditarEmpleado(id) {
     fetch('/empleados/' + id)
         .then(response => response.json())
         .then(empleado => {
@@ -86,9 +98,14 @@ function reloadEmpleadosTable() {
     fetch('/empleados/tabla')
         .then(response => response.text())
         .then(html => {
-            var tbody = document.getElementById('tabla-employees'); // Revisa si tu ID es 'tabla-empleados' o 'tabla-employees'
-            if (!tbody) tbody = document.getElementById('tabla-empleados');
-            if (tbody) tbody.outerHTML = html;
+            var lifecycleActivo = estadoEmpleados.initialized;
+            if (lifecycleActivo) destruirTablaEmpleados();
+
+            var tbody = document.getElementById('tabla-empleados-body');
+            if (tbody) {
+                tbody.outerHTML = html;
+                if (lifecycleActivo) initTablaEmpleados();
+            }
         });
 }
 
@@ -130,8 +147,10 @@ function eliminarEmpleado(id) {
 }
 
 // ─── CONSULTA API DNI (EXTRAÍDA AL SCOPE GLOBAL) ──────────────────────────────
-function buscarDniApi() {
-    const dni = document.getElementById('input-dni').value;
+function buscarDniApiEmpleado() {
+    const inputDni = document.getElementById('input-dni');
+    if (!inputDni) return;
+    const dni = inputDni.value;
 
     if (dni.length !== 8 || isNaN(dni)) {
         Swal.fire({
@@ -143,17 +162,23 @@ function buscarDniApi() {
     }
 
     const btnBuscar = document.getElementById('btn-buscar-dni');
+    if (!btnBuscar || !estadoEmpleados.initialized) return;
+    if (estadoEmpleados.dniAbortController) estadoEmpleados.dniAbortController.abort();
+    const controller = new AbortController();
+    const requestId = ++estadoEmpleados.dniRequestId;
+    estadoEmpleados.dniAbortController = controller;
     const iconoOriginal = btnBuscar.innerHTML;
     btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     btnBuscar.disabled = true;
 
     // Endpoint proxy local
-    fetch('/empleados/api/consultar-dni/' + dni)
+    fetch('/empleados/api/consultar-dni/' + dni, { signal: controller.signal })
         .then(response => {
             if (!response.ok) throw new Error('No se pudo establecer conexión con el servidor.');
             return response.json();
         })
         .then(res => {
+            if (!estadoEmpleados.initialized || requestId !== estadoEmpleados.dniRequestId) return;
             // Nota: Se valida res.success tal como lo estructuraste
             if (res && res.datos) {
                 const info = res.datos;
@@ -163,35 +188,42 @@ function buscarDniApi() {
                 const primerNombre = listaNombres[0];
                 const nombreFormateado = `${primerNombre} ${info.ape_paterno} ${info.ape_materno}`;
 
-                document.getElementById('input-nombre').value = nombreFormateado;
-                document.getElementById('input-nombre').readOnly = true;
+                const inputNombre = document.getElementById('input-nombre');
+                if (!inputNombre) return;
+                inputNombre.value = nombreFormateado;
+                inputNombre.readOnly = true;
             } else {
                 throw new Error('El DNI ingresado no existe en el padrón o la respuesta no es válida.');
             }
         })
         .catch(error => {
+            if (error.name === 'AbortError') return;
+            if (!estadoEmpleados.initialized || requestId !== estadoEmpleados.dniRequestId) return;
             Swal.fire({
                 title: 'Error de Búsqueda',
                 text: error.message,
                 icon: 'error'
             });
-            document.getElementById('input-nombre').readOnly = false;
+            const inputNombre = document.getElementById('input-nombre');
+            if (inputNombre) inputNombre.readOnly = false;
         })
         .finally(() => {
-            btnBuscar.innerHTML = iconoOriginal;
-            btnBuscar.disabled = false;
+            if (estadoEmpleados.initialized && requestId === estadoEmpleados.dniRequestId && btnBuscar.isConnected) {
+                btnBuscar.innerHTML = iconoOriginal;
+                btnBuscar.disabled = false;
+                estadoEmpleados.dniAbortController = null;
+            }
         });
 }
 
 // Inicialización de DataTables para Empleados
 function initTablaEmpleados() {
-    if ($.fn.DataTable) {
-        const table = $('#tabla-empleados');
-        if ($.fn.dataTable.isDataTable(table)) {
-            table.DataTable().destroy();
-        }
+    if (!window.jQuery || !$.fn.DataTable) return;
+    const table = $('#tabla-empleados');
+    if (!table.length) return;
+    if ($.fn.dataTable.isDataTable(table)) table.DataTable().destroy();
 
-        const dataTable = table.DataTable({
+    const dataTable = table.DataTable({
             dom: 'rt<"bottom"ip><"clear">',
             paging: true,
             pageLength: 10,
@@ -217,36 +249,36 @@ function initTablaEmpleados() {
                     next: 'Siguiente'
                 }
             }
-        });
+    });
+    estadoEmpleados.table = table[0];
+    estadoEmpleados.dataTable = dataTable;
 
-        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
-            dataTable.columns.adjust().draw();
-        });
+    // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
+    estadoEmpleados.resizeHandler = function () { dataTable.columns.adjust().draw(); };
+    $(window).on('resize.empleados', estadoEmpleados.resizeHandler);
 
-        // Conectar controles personalizados
-        const $lengthSelect = $('#empleados-length');
-        const $searchInput = $('#empleados-search');
+    // Conectar controles personalizados
+    estadoEmpleados.lengthSelect = document.getElementById('empleados-length');
+    estadoEmpleados.searchInput = document.getElementById('empleados-search');
 
-        // Cambiar número de registros por página
-        if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
-                const pageLength = parseInt($(this).val(), 10);
-                dataTable.page.len(pageLength).draw();
-            });
-        }
+    if (estadoEmpleados.lengthSelect) {
+        estadoEmpleados.lengthHandler = function () {
+            dataTable.page.len(parseInt(estadoEmpleados.lengthSelect.value, 10)).draw();
+        };
+        estadoEmpleados.lengthSelect.addEventListener('change', estadoEmpleados.lengthHandler);
+    }
 
-        // Búsqueda personalizada
-        if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
-                dataTable.search(this.value).draw();
-            });
-        }
+    if (estadoEmpleados.searchInput) {
+        estadoEmpleados.searchHandler = function () {
+            dataTable.search(estadoEmpleados.searchInput.value).draw();
+        };
+        estadoEmpleados.searchInput.addEventListener('keyup', estadoEmpleados.searchHandler);
+    }
 
-        // Ocultar controles nativos duplicados de DataTables
-        const $wrapper = table.closest('.dataTables_wrapper');
-        if ($wrapper.length) {
-            const wrapperEl = $wrapper[0];
+    // Ocultar controles nativos duplicados de DataTables
+    const $wrapper = table.closest('.dataTables_wrapper');
+    if ($wrapper.length) {
+        const wrapperEl = $wrapper[0];
             const paginateContainer = wrapperEl.querySelector('.dataTables_paginate');
             if (paginateContainer) {
                 paginateContainer.style.display = 'none';
@@ -270,28 +302,89 @@ function initTablaEmpleados() {
             customPager.setAttribute('aria-label', 'Paginación de empleados');
             pagerRow.appendChild(customPager);
 
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
+            injectCustomPaginationStylesEmpleados();
+            renderCustomInfoEmpleados(dataTable, infoBar);
+            renderCustomPaginationEmpleados(dataTable, customPager);
+            estadoEmpleados.swipeCleanup = attachSwipePaginationEmpleados(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
-            });
-        }
+            estadoEmpleados.drawHandler = function () {
+                renderCustomInfoEmpleados(dataTable, infoBar);
+                renderCustomPaginationEmpleados(dataTable, customPager);
+            };
+            dataTable.on('draw.dt.empleados', estadoEmpleados.drawHandler);
     }
 }
 
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
-        initTablaEmpleados();
+function destruirTablaEmpleados() {
+    if (estadoEmpleados.lengthSelect && estadoEmpleados.lengthHandler) {
+        estadoEmpleados.lengthSelect.removeEventListener('change', estadoEmpleados.lengthHandler);
     }
-});
+    if (estadoEmpleados.searchInput && estadoEmpleados.searchHandler) {
+        estadoEmpleados.searchInput.removeEventListener('keyup', estadoEmpleados.searchHandler);
+    }
+    if (estadoEmpleados.resizeHandler && window.jQuery) {
+        $(window).off('resize.empleados', estadoEmpleados.resizeHandler);
+    }
+    if (estadoEmpleados.swipeCleanup) estadoEmpleados.swipeCleanup();
+    if (estadoEmpleados.dataTable) {
+        if (estadoEmpleados.drawHandler) {
+            estadoEmpleados.dataTable.off('draw.dt.empleados', estadoEmpleados.drawHandler);
+        }
+        estadoEmpleados.dataTable.destroy();
+    }
+    estadoEmpleados.table = null;
+    estadoEmpleados.dataTable = null;
+    estadoEmpleados.resizeHandler = null;
+    estadoEmpleados.lengthSelect = null;
+    estadoEmpleados.lengthHandler = null;
+    estadoEmpleados.searchInput = null;
+    estadoEmpleados.searchHandler = null;
+    estadoEmpleados.drawHandler = null;
+    estadoEmpleados.swipeCleanup = null;
+}
+
+function initEmpleados() {
+    if (estadoEmpleados.initialized) return;
+    estadoEmpleados.formEmpleado = document.getElementById('form-empleado');
+    estadoEmpleados.submitHandler = manejarSubmitEmpleado;
+    if (estadoEmpleados.formEmpleado) {
+        estadoEmpleados.formEmpleado.addEventListener('submit', estadoEmpleados.submitHandler);
+    }
+    estadoEmpleados.initialized = true;
+    initTablaEmpleados();
+}
+
+function destroyEmpleados() {
+    if (!estadoEmpleados.initialized) return;
+    if (estadoEmpleados.formEmpleado && estadoEmpleados.submitHandler) {
+        estadoEmpleados.formEmpleado.removeEventListener('submit', estadoEmpleados.submitHandler);
+    }
+    destruirTablaEmpleados();
+    if (estadoEmpleados.dniAbortController) estadoEmpleados.dniAbortController.abort();
+    estadoEmpleados.dniAbortController = null;
+    estadoEmpleados.dniRequestId += 1;
+    if (window.jQuery && $.fn.modal) {
+        $('#modal-empleado, #modal-eliminar-empleado').modal('hide');
+    }
+    const inputNombre = document.getElementById('input-nombre');
+    if (inputNombre) inputNombre.readOnly = false;
+    estadoEmpleados.formEmpleado = null;
+    estadoEmpleados.submitHandler = null;
+    estadoEmpleados.initialized = false;
+}
+
+window.AppModules.empleados = {
+    init: initEmpleados,
+    destroy: destroyEmpleados,
+    abrirModalNuevo: abrirModalNuevoEmpleado,
+    abrirModalEditar: abrirModalEditarEmpleado,
+    eliminarEmpleado: eliminarEmpleado,
+    buscarDniApi: buscarDniApiEmpleado,
+    reloadTable: reloadEmpleadosTable
+};
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
+function injectCustomPaginationStylesEmpleados() {
     if (document.getElementById('compras-custom-pagination-style')) {
         return;
     }
@@ -367,7 +460,7 @@ function injectCustomPaginationStyles() {
     document.head.appendChild(style);
 }
 
-function renderCustomInfo(dataTable, infoElement) {
+function renderCustomInfoEmpleados(dataTable, infoElement) {
     const info = dataTable.page.info();
     const totalRecords = info.recordsTotal;
     const start = totalRecords === 0 ? 0 : info.start + 1;
@@ -378,7 +471,7 @@ function renderCustomInfo(dataTable, infoElement) {
         : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
 }
 
-function renderCustomPagination(dataTable, pagerElement) {
+function renderCustomPaginationEmpleados(dataTable, pagerElement) {
     const info = dataTable.page.info();
     const totalPages = info.pages;
     const currentPage = info.page;
@@ -434,14 +527,15 @@ function renderCustomPagination(dataTable, pagerElement) {
     pagerElement.appendChild(nextButton);
 }
 
-function attachSwipePagination(wrapperElement, dataTable) {
+function attachSwipePaginationEmpleados(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
+    };
 
-    wrapperElement.addEventListener('touchend', (event) => {
+    const touchEndHandler = (event) => {
+        if (!event.changedTouches.length) return;
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -454,5 +548,13 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+
+    return function () {
+        wrapperElement.removeEventListener('touchstart', touchStartHandler);
+        wrapperElement.removeEventListener('touchend', touchEndHandler);
+    };
 }

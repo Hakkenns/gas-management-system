@@ -13,10 +13,17 @@
             script: '/assets/js/usuario.js',
             titulo: 'Gestion de Usuarios',
             nombre: 'Usuarios'
+        },
+        empleados: {
+            ruta: '/empleados',
+            fragmento: '/empleados/fragment',
+            script: '/assets/js/empleados.js',
+            titulo: 'Gestion de Empleados',
+            nombre: 'Empleados'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
