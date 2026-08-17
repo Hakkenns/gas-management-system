@@ -1,4 +1,25 @@
-document.addEventListener("click", function (e) {
+window.AppModules = window.AppModules || {};
+
+var estadoProveedores = {
+    initialized: false,
+    root: null,
+    clickHandler: null,
+    formProveedor: null,
+    submitHandler: null,
+    table: null,
+    dataTable: null,
+    resizeHandler: null,
+    lengthSelect: null,
+    lengthHandler: null,
+    searchInput: null,
+    searchHandler: null,
+    drawHandler: null,
+    swipeCleanup: null,
+    editAbortController: null,
+    editRequestId: 0
+};
+
+function manejarClickProveedor(e) {
     if (e.target.closest("#btn-crear-proveedor")) {
         document.getElementById("form-proveedor").reset();
         document.getElementById("input-id").value = "";
@@ -10,19 +31,40 @@ document.addEventListener("click", function (e) {
         const btn = e.target.closest(".btn-editar-proveedor");
         const id = btn.dataset.id;
 
-        fetch(`/proveedores/${id}`)
+        if (estadoProveedores.editAbortController) estadoProveedores.editAbortController.abort();
+        const controller = new AbortController();
+        const requestId = ++estadoProveedores.editRequestId;
+        estadoProveedores.editAbortController = controller;
+
+        fetch(`/proveedores/${id}`, { signal: controller.signal })
             .then(r => r.json())
             .then(data => {
-                document.getElementById("modal-titulo-proveedor").textContent = "Editar Proveedor";
-                document.getElementById("input-id").value = data.id;
-                document.getElementById("input-ruc").value = data.ruc;
-                document.getElementById("input-nombre").value = data.nombre;
-                document.getElementById("input-telefono").value = data.telefono;
-                document.getElementById("input-correo").value = data.correo;
-                document.getElementById("input-rubro").value = data.idRubro;
+                if (!estadoProveedores.initialized || requestId !== estadoProveedores.editRequestId) return;
+                const modalTitulo = document.getElementById("modal-titulo-proveedor");
+                const inputId = document.getElementById("input-id");
+                const inputRuc = document.getElementById("input-ruc");
+                const inputNombre = document.getElementById("input-nombre");
+                const inputTelefono = document.getElementById("input-telefono");
+                const inputCorreo = document.getElementById("input-correo");
+                const inputRubro = document.getElementById("input-rubro");
+                if (!modalTitulo || !inputId || !inputRuc || !inputNombre || !inputTelefono || !inputCorreo || !inputRubro) return;
+                modalTitulo.textContent = "Editar Proveedor";
+                inputId.value = data.id;
+                inputRuc.value = data.ruc;
+                inputNombre.value = data.nombre;
+                inputTelefono.value = data.telefono;
+                inputCorreo.value = data.correo;
+                inputRubro.value = data.idRubro;
                 $("#modal-proveedor").modal("show");
             })
-            .catch(err => console.error("ERROR JSON PROVEEDOR:", err));
+            .catch(err => {
+                if (err.name !== 'AbortError' && estadoProveedores.initialized && requestId === estadoProveedores.editRequestId) {
+                    console.error("ERROR JSON PROVEEDOR:", err);
+                }
+            })
+            .finally(() => {
+                if (requestId === estadoProveedores.editRequestId) estadoProveedores.editAbortController = null;
+            });
     }
 
     if (e.target.closest(".btn-cambiar-estado")) {
@@ -30,25 +72,24 @@ document.addEventListener("click", function (e) {
         const id = btn.dataset.id;
         const estadoActual = parseInt(btn.dataset.estado, 10);
         const nuevoEstado = estadoActual === 1 ? 0 : 1;
-        ProveedorCambiarEstado(id, nuevoEstado);
+        cambiarEstadoProveedor(id, nuevoEstado);
         e.preventDefault();
     }
 
     if (e.target.closest(".btn-eliminar-proveedor")) {
         const id = e.target.closest(".btn-eliminar-proveedor").dataset.id;
-        ProveedorEliminar(id);
+        eliminarProveedor(id);
         e.preventDefault();
     }
-});
+}
 
 function initTablaProveedores() {
-    if ($.fn.DataTable) {
-        const table = $('#tabla-proveedores');
-        if ($.fn.dataTable.isDataTable(table)) {
-            table.DataTable().destroy();
-        }
+    if (!window.jQuery || !$.fn.DataTable) return;
+    const table = $('#tabla-proveedores');
+    if (!table.length) return;
+    if ($.fn.dataTable.isDataTable(table)) table.DataTable().destroy();
 
-        const dataTable = table.DataTable({
+    const dataTable = table.DataTable({
             dom: 'rt<"bottom"ip><"clear">',
             paging: true,
             pageLength: 10,
@@ -74,31 +115,29 @@ function initTablaProveedores() {
                     next: 'Siguiente'
                 }
             }
-        });
+    });
+    estadoProveedores.table = table[0];
+    estadoProveedores.dataTable = dataTable;
 
-        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
-            dataTable.columns.adjust().draw();
-        });
+    estadoProveedores.resizeHandler = function () { dataTable.columns.adjust().draw(); };
+    $(window).on('resize.proveedores', estadoProveedores.resizeHandler);
 
-        // Conectar controles personalizados
-        const $lengthSelect = $('#proveedores-length');
-        const $searchInput = $('#proveedores-search');
+    estadoProveedores.lengthSelect = document.getElementById('proveedores-length');
+    estadoProveedores.searchInput = document.getElementById('proveedores-search');
 
-        // Cambiar número de registros por página
-        if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
-                const pageLength = parseInt($(this).val(), 10);
-                dataTable.page.len(pageLength).draw();
-            });
-        }
+    if (estadoProveedores.lengthSelect) {
+        estadoProveedores.lengthHandler = function () {
+            dataTable.page.len(parseInt(estadoProveedores.lengthSelect.value, 10)).draw();
+        };
+        estadoProveedores.lengthSelect.addEventListener('change', estadoProveedores.lengthHandler);
+    }
 
-        // Búsqueda personalizada
-        if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
-                dataTable.search(this.value).draw();
-            });
-        }
+    if (estadoProveedores.searchInput) {
+        estadoProveedores.searchHandler = function () {
+            dataTable.search(estadoProveedores.searchInput.value).draw();
+        };
+        estadoProveedores.searchInput.addEventListener('keyup', estadoProveedores.searchHandler);
+    }
 
         // Ocultar controles nativos duplicados de DataTables
         const $wrapper = table.closest('.dataTables_wrapper');
@@ -127,16 +166,16 @@ function initTablaProveedores() {
             customPager.setAttribute('aria-label', 'Paginación de proveedores');
             pagerRow.appendChild(customPager);
 
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
+            injectCustomPaginationStylesProveedores();
+            renderCustomInfoProveedores(dataTable, infoBar);
+            renderCustomPaginationProveedores(dataTable, customPager);
+            estadoProveedores.swipeCleanup = attachSwipePaginationProveedores(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
-            });
-        }
+            estadoProveedores.drawHandler = function () {
+                renderCustomInfoProveedores(dataTable, infoBar);
+                renderCustomPaginationProveedores(dataTable, customPager);
+            };
+            dataTable.on('draw.dt.proveedores', estadoProveedores.drawHandler);
     }
 }
 
@@ -147,27 +186,28 @@ function reloadProveedoresTable() {
             return r.text();
         })
         .then(html => {
-            const container = document.getElementById("contenedor-tabla");
-            if (container) {
-                container.innerHTML = html;
-                initTablaProveedores();
+            const lifecycleActivo = estadoProveedores.initialized;
+            if (lifecycleActivo) destruirTablaProveedores();
+
+            const tbody = document.getElementById('tabla-proveedores-body');
+            if (tbody) {
+                tbody.outerHTML = html;
+                if (lifecycleActivo) initTablaProveedores();
             }
         })
         .catch(err => console.error("ERROR recargando tabla de proveedores:", err));
 }
 
-initTablaProveedores();
-
-$("#form-proveedor").on("submit", function (e) {
+function manejarSubmitProveedor(e) {
     e.preventDefault();
 
-    const btnGuardar = $(this).find('button[type="submit"]');
+    const btnGuardar = $(estadoProveedores.formProveedor).find('button[type="submit"]');
     btnGuardar.prop('disabled', true).text('Guardando...');
 
     $.ajax({
         url: "/proveedores",
         type: "POST",
-        data: $(this).serialize(),
+        data: $(estadoProveedores.formProveedor).serialize(),
         dataType: "json",
         success: function (resp) {
             if (resp.status === "OK") {
@@ -191,9 +231,78 @@ $("#form-proveedor").on("submit", function (e) {
             btnGuardar.prop('disabled', false).text('Guardar');
         }
     });
-});
+}
 
-function ProveedorCambiarEstado(id, estado) {
+function destruirTablaProveedores() {
+    if (estadoProveedores.lengthSelect && estadoProveedores.lengthHandler) {
+        estadoProveedores.lengthSelect.removeEventListener('change', estadoProveedores.lengthHandler);
+    }
+    if (estadoProveedores.searchInput && estadoProveedores.searchHandler) {
+        estadoProveedores.searchInput.removeEventListener('keyup', estadoProveedores.searchHandler);
+    }
+    if (estadoProveedores.resizeHandler && window.jQuery) {
+        $(window).off('resize.proveedores', estadoProveedores.resizeHandler);
+    }
+    if (estadoProveedores.swipeCleanup) estadoProveedores.swipeCleanup();
+    if (estadoProveedores.dataTable) {
+        if (estadoProveedores.drawHandler) {
+            estadoProveedores.dataTable.off('draw.dt.proveedores', estadoProveedores.drawHandler);
+        }
+        estadoProveedores.dataTable.destroy();
+    }
+    estadoProveedores.table = null;
+    estadoProveedores.dataTable = null;
+    estadoProveedores.resizeHandler = null;
+    estadoProveedores.lengthSelect = null;
+    estadoProveedores.lengthHandler = null;
+    estadoProveedores.searchInput = null;
+    estadoProveedores.searchHandler = null;
+    estadoProveedores.drawHandler = null;
+    estadoProveedores.swipeCleanup = null;
+}
+
+function initProveedores() {
+    if (estadoProveedores.initialized) return;
+    estadoProveedores.root = document.querySelector('[data-modulo="proveedores"]');
+    if (!estadoProveedores.root) return;
+    estadoProveedores.clickHandler = manejarClickProveedor;
+    estadoProveedores.root.addEventListener('click', estadoProveedores.clickHandler);
+    estadoProveedores.formProveedor = document.getElementById('form-proveedor');
+    estadoProveedores.submitHandler = manejarSubmitProveedor;
+    if (estadoProveedores.formProveedor) {
+        estadoProveedores.formProveedor.addEventListener('submit', estadoProveedores.submitHandler);
+    }
+    estadoProveedores.initialized = true;
+    initTablaProveedores();
+}
+
+function destroyProveedores() {
+    if (!estadoProveedores.initialized) return;
+    if (estadoProveedores.root && estadoProveedores.clickHandler) {
+        estadoProveedores.root.removeEventListener('click', estadoProveedores.clickHandler);
+    }
+    if (estadoProveedores.formProveedor && estadoProveedores.submitHandler) {
+        estadoProveedores.formProveedor.removeEventListener('submit', estadoProveedores.submitHandler);
+    }
+    destruirTablaProveedores();
+    if (estadoProveedores.editAbortController) estadoProveedores.editAbortController.abort();
+    estadoProveedores.editAbortController = null;
+    estadoProveedores.editRequestId += 1;
+    if (window.jQuery && $.fn.modal) $('#modal-proveedor').modal('hide');
+    estadoProveedores.root = null;
+    estadoProveedores.clickHandler = null;
+    estadoProveedores.formProveedor = null;
+    estadoProveedores.submitHandler = null;
+    estadoProveedores.initialized = false;
+}
+
+window.AppModules.proveedores = {
+    init: initProveedores,
+    destroy: destroyProveedores,
+    reloadTable: reloadProveedoresTable
+};
+
+function cambiarEstadoProveedor(id, estado) {
     $.ajax({
         url: `/proveedores/${id}/estado`,
         type: "POST",
@@ -218,7 +327,7 @@ function ProveedorCambiarEstado(id, estado) {
     });
 }
 
-function ProveedorEliminar(id) {
+function eliminarProveedor(id) {
     if (!confirm("¿Eliminar el proveedor?")) return;
 
     $.ajax({
@@ -245,7 +354,7 @@ function ProveedorEliminar(id) {
 }
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
+function injectCustomPaginationStylesProveedores() {
     if (document.getElementById('compras-custom-pagination-style')) {
         return;
     }
@@ -321,7 +430,7 @@ function injectCustomPaginationStyles() {
     document.head.appendChild(style);
 }
 
-function renderCustomInfo(dataTable, infoElement) {
+function renderCustomInfoProveedores(dataTable, infoElement) {
     const info = dataTable.page.info();
     const totalRecords = info.recordsTotal;
     const start = totalRecords === 0 ? 0 : info.start + 1;
@@ -332,7 +441,7 @@ function renderCustomInfo(dataTable, infoElement) {
         : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
 }
 
-function renderCustomPagination(dataTable, pagerElement) {
+function renderCustomPaginationProveedores(dataTable, pagerElement) {
     const info = dataTable.page.info();
     const totalPages = info.pages;
     const currentPage = info.page;
@@ -388,14 +497,15 @@ function renderCustomPagination(dataTable, pagerElement) {
     pagerElement.appendChild(nextButton);
 }
 
-function attachSwipePagination(wrapperElement, dataTable) {
+function attachSwipePaginationProveedores(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
+    };
 
-    wrapperElement.addEventListener('touchend', (event) => {
+    const touchEndHandler = (event) => {
+        if (!event.changedTouches.length) return;
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -408,5 +518,13 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+
+    return function () {
+        wrapperElement.removeEventListener('touchstart', touchStartHandler);
+        wrapperElement.removeEventListener('touchend', touchEndHandler);
+    };
 }

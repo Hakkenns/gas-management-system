@@ -3,7 +3,7 @@
 
 <body>
 
-    <div th:fragment="content">
+    <div th:fragment="content" data-modulo="proveedores" data-page-title="Gestion de Proveedores">
 
         <div class="content p-3">
 
@@ -42,7 +42,7 @@
             </div>
 
             <div id="contenedor-tabla">
-                <table class="table table-bordered table-striped" id="tabla-proveedores" th:fragment="tablaProveedores">
+                <table class="table table-bordered table-striped" id="tabla-proveedores">
 
                     <thead class="thead-dark">
                         <tr>
@@ -57,7 +57,7 @@
                         </tr>
                     </thead>
 
-                    <tbody>
+                    <tbody id="tabla-proveedores-body" th:fragment="tablaProveedores">
 
                         <tr th:if="${#lists.isEmpty(proveedores)}">
                             <td colspan="8" class="text-center">

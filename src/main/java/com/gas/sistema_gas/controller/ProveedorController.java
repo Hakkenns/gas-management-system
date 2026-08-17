@@ -33,12 +33,22 @@ public class ProveedorController {
 
     @GetMapping
     public String proveedores(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloProveedores(model, session);
+        model.addAttribute("contenido", "views/proveedores");
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoProveedores(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloProveedores(model, session);
+        return "views/proveedores :: content";
+    }
+
+    private void cargarModeloProveedores(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("proveedores", proveedorService.listAll());
         model.addAttribute("rubros", rubroService.listAll());
-        model.addAttribute("contenido", "views/proveedores");
-        return "components/layout";
     }
 
     //Carga asíncrona del fragmento HTML de la tabla

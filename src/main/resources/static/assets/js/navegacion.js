@@ -27,10 +27,17 @@
             script: '/assets/js/motos.js',
             titulo: 'Gestion de Motos',
             nombre: 'Motos'
+        },
+        proveedores: {
+            ruta: '/proveedores',
+            fragmento: '/proveedores/fragment',
+            script: '/assets/js/proveedores.js',
+            titulo: 'Gestion de Proveedores',
+            nombre: 'Proveedores'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
