@@ -20,6 +20,7 @@
     <script th:src="@{/assets/adminlte/plugins/datatables/jquery.dataTables.min.js}"></script>
     <script th:src="@{/assets/adminlte/plugins/datatables-bs4/js/dataTables.bootstrap4.min.js}"></script>
     <script th:src="@{/assets/adminlte/dist/js/adminlte.min.js}"></script>
+    <script th:src="@{/assets/js/navegacion.js}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var sidebar = document.querySelector('.main-sidebar');
@@ -365,7 +366,7 @@
     <div th:replace="components/header :: header"></div>
     <div th:replace="components/sidebar :: sidebar"></div>
 
-    <div class="content-wrapper p-3">
+    <div id="contenido-principal" class="content-wrapper p-3">
         <div th:replace="~{${contenido} :: content}"></div>
     </div>
 

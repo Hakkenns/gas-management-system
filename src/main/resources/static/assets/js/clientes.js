@@ -1,10 +1,21 @@
 // ─── INTERCEPTAR Y PROCESAR EL FORMULARIO AL ENVIAR ───────────────────────────
-document.addEventListener("DOMContentLoaded", function() {
-    console.log("Clientes script listo.");
+window.AppModules = window.AppModules || {};
+var clientesLifecycle = {
+    form: null,
+    submitHandler: null,
+    dataTable: null,
+    resizeHandler: null,
+    initialized: false
+};
+
+function initClientes() {
+    if (clientesLifecycle.initialized) return;
+    clientesLifecycle.initialized = true;
 
     var formCliente = document.getElementById('form-cliente');
     if (formCliente) {
-        formCliente.addEventListener('submit', function(event) {
+        clientesLifecycle.form = formCliente;
+        clientesLifecycle.submitHandler = function(event) {
             event.preventDefault(); // Detiene la redirección inmediata del HTML
 
             var inputDni = document.getElementById('input-dni');
@@ -61,9 +72,36 @@ document.addEventListener("DOMContentLoaded", function() {
                     confirmButtonColor: '#ffc107'
                 });
             });
-        });
+        };
+        formCliente.addEventListener('submit', clientesLifecycle.submitHandler);
     }
-});
+    initTablaClientes();
+}
+
+function destroyClientes() {
+    if (clientesLifecycle.form && clientesLifecycle.submitHandler) {
+        clientesLifecycle.form.removeEventListener('submit', clientesLifecycle.submitHandler);
+    }
+    if (clientesLifecycle.dataTable && $.fn.dataTable.isDataTable('#tabla-clientes')) {
+        clientesLifecycle.dataTable.destroy();
+    }
+    if (clientesLifecycle.resizeHandler) {
+        $(window).off('resize', clientesLifecycle.resizeHandler);
+    }
+    document.querySelectorAll('#contenido-principal .modal.show').forEach(modal => {
+        $('#'+modal.id).modal('hide');
+    });
+    clientesLifecycle.form = null;
+    clientesLifecycle.submitHandler = null;
+    clientesLifecycle.dataTable = null;
+    clientesLifecycle.resizeHandler = null;
+    clientesLifecycle.initialized = false;
+}
+
+window.AppModules.clientes = {
+    init: initClientes,
+    destroy: destroyClientes
+};
 
 // ─── ACCIONES DEL MODAL (NUEVO / EDITAR) ──────────────────────────────────────
 function abrirModalNuevo() {
@@ -125,8 +163,11 @@ function reloadClientesTable() {
     fetch('/clientes/tabla')
         .then(response => response.text())
         .then(html => {
-            var tbody = document.getElementById('tabla-clientes');
-            if (tbody) tbody.outerHTML = html;
+            var tbody = document.getElementById('tabla-clientes-body');
+            if (tbody) {
+                tbody.outerHTML = html;
+                if (clientesLifecycle.initialized) initTablaClientes();
+            }
         });
 }
 
@@ -260,9 +301,14 @@ function initTablaClientes() {
         });
 
         // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
+        if (clientesLifecycle.resizeHandler) {
+            $(window).off('resize', clientesLifecycle.resizeHandler);
+        }
+        clientesLifecycle.dataTable = dataTable;
+        clientesLifecycle.resizeHandler = function () {
             dataTable.columns.adjust().draw();
-        });
+        };
+        $(window).on('resize', clientesLifecycle.resizeHandler);
 
         // Conectar controles personalizados
         const $lengthSelect = $('#clientes-length');
@@ -322,13 +368,6 @@ function initTablaClientes() {
         }
     }
 }
-
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
-        initTablaClientes();
-    }
-});
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
 function injectCustomPaginationStyles() {

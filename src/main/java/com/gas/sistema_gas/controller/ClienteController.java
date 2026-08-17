@@ -29,11 +29,21 @@ public class ClienteController {
     // GET: carga la vista HTML de gestión de clientes incorporada en el Layout general
     @GetMapping
     public String clientes(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloClientes(model, session);
+        model.addAttribute("contenido", "views/cliente"); // Buscará: templates/views/cliente.html
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoClientes(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloClientes(model, session);
+        return "views/cliente :: content";
+    }
+
+    private void cargarModeloClientes(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("clientes", clienteService.listAll());
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("contenido", "views/cliente"); // Buscará: templates/views/cliente.html
-        return "components/layout";
     }
 
     // GET por ID: retorna JSON para poblar los campos del modal de edición en Javascript

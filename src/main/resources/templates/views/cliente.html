@@ -3,7 +3,7 @@
 
 <body>
 
-<div th:fragment="content">
+<div th:fragment="content" data-modulo="clientes" data-page-title="Gestion de Clientes">
 
     <div class="content p-3">
 
@@ -55,7 +55,7 @@
                 <th>Acciones</th>
             </tr>
             </thead>
-            <tbody id="tabla-clientes" th:fragment="tablaClientes">
+            <tbody id="tabla-clientes-body" th:fragment="tablaClientes">
 
             <tr th:if="${#lists.isEmpty(clientes)}">
                 <td colspan="7" class="text-center">No hay clientes registrados.</td>
