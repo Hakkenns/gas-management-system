@@ -66,10 +66,7 @@ public class CajaServiceImplement implements CajaService {
     @Override
     @Transactional
     public CajaDTO.AperturaResponse abrirCaja(Long usuarioId, BigDecimal montoInicial, String observaciones) {
-        if (montoInicial == null || montoInicial.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El monto inicial debe ser mayor o igual a cero");
-        }
+        BigDecimal montoInicialNormalizado = normalizarMontoInicial(montoInicial);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
@@ -102,7 +99,7 @@ public class CajaServiceImplement implements CajaService {
         apertura.setSentido(SentidoMovimiento.INGRESO);
         apertura.setOrigen(OrigenMovimiento.APERTURA);
         apertura.setCanalFondos(CanalFondos.CAJA_FISICA);
-        apertura.setMonto(montoInicial);
+        apertura.setMonto(montoInicialNormalizado);
         apertura.setUsuarioResponsable(usuario);
         apertura.setDescripcion("Apertura de Caja principal");
         MovimientoCaja aperturaGuardada = movimientoCajaRepository.save(apertura);
@@ -112,7 +109,7 @@ public class CajaServiceImplement implements CajaService {
                 aperturaGuardada.getId(),
                 caja.getCodigo(),
                 sesionGuardada.getFechaHoraApertura(),
-                montoInicial,
+                montoInicialNormalizado,
                 sesionGuardada.getEstado().name());
     }
 
@@ -271,13 +268,21 @@ public class CajaServiceImplement implements CajaService {
                         "La Caja principal no esta configurada"));
         SesionCaja sesionAbierta = sesionCajaRepository.findByCajaAndEstado(caja, EstadoSesionCaja.ABIERTA)
                 .orElse(null);
+        BigDecimal efectivoEsperado = sesionAbierta != null
+                ? normalizarMonto(movimientoCajaRepository.calcularSaldoPorSesionYCanal(
+                        sesionAbierta,
+                        CanalFondos.CAJA_FISICA,
+                        SentidoMovimiento.INGRESO,
+                        SentidoMovimiento.EGRESO))
+                : null;
 
         return new CajaDTO.EstadoResponse(
                 caja.getCodigo(),
                 caja.getActiva(),
                 sesionAbierta != null,
                 sesionAbierta != null ? sesionAbierta.getId() : null,
-                sesionAbierta != null ? sesionAbierta.getFechaHoraApertura() : null);
+                sesionAbierta != null ? sesionAbierta.getFechaHoraApertura() : null,
+                efectivoEsperado);
     }
 
     @Override
@@ -497,6 +502,24 @@ public class CajaServiceImplement implements CajaService {
         } catch (ArithmeticException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El monto declarado debe tener como maximo 2 decimales");
+        }
+    }
+
+    private BigDecimal normalizarMontoInicial(BigDecimal montoInicial) {
+        if (montoInicial == null || montoInicial.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El monto inicial debe ser mayor o igual a cero");
+        }
+        if (montoInicial.scale() > 2) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El monto inicial debe tener como maximo 2 decimales");
+        }
+
+        try {
+            return montoInicial.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El monto inicial debe tener como maximo 2 decimales");
         }
     }
 

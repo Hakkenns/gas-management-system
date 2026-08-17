@@ -68,6 +68,56 @@ public class CajaController {
         return ResponseEntity.ok(cajaService.listarCustodiasPendientes());
     }
 
+    @PostMapping("/api/caja/abrir")
+    @ResponseBody
+    public ResponseEntity<?> abrirCaja(
+            @Valid @RequestBody CajaDTO.AperturaRequest request,
+            BindingResult bindingResult,
+            HttpSession session) {
+        ResponseEntity<?> rechazo = rechazarApiSiNoAutorizado(session);
+        if (rechazo != null) {
+            return rechazo;
+        }
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", bindingResult.getAllErrors().get(0).getDefaultMessage()));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        try {
+            return ResponseEntity.ok(cajaService.abrirCaja(
+                    usuarioId, request.montoInicial(), request.observaciones()));
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(Map.of(
+                    "message", e.getReason() != null ? e.getReason() : "Error de negocio"));
+        }
+    }
+
+    @PostMapping("/api/caja/cerrar")
+    @ResponseBody
+    public ResponseEntity<?> cerrarCaja(
+            @Valid @RequestBody CajaDTO.CierreRequest request,
+            BindingResult bindingResult,
+            HttpSession session) {
+        ResponseEntity<?> rechazo = rechazarApiSiNoAutorizado(session);
+        if (rechazo != null) {
+            return rechazo;
+        }
+        if (bindingResult.hasErrors()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", bindingResult.getAllErrors().get(0).getDefaultMessage()));
+        }
+
+        Long usuarioId = (Long) session.getAttribute("usuarioId");
+        try {
+            return ResponseEntity.ok(cajaService.cerrarCaja(
+                    usuarioId, request.montoDeclarado(), request.observaciones()));
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(Map.of(
+                    "message", e.getReason() != null ? e.getReason() : "Error de negocio"));
+        }
+    }
+
     @PostMapping("/api/caja/custodias/liquidar")
     @ResponseBody
     public ResponseEntity<?> liquidarCustodia(

@@ -12,6 +12,7 @@ public class CajaDTO {
     public record AperturaRequest(
             @NotNull(message = "El monto inicial es obligatorio")
             @DecimalMin(value = "0.00", message = "El monto inicial no puede ser negativo")
+            @Digits(integer = 10, fraction = 2, message = "El monto inicial debe tener como maximo 2 decimales")
             BigDecimal montoInicial,
             String observaciones) {
     }
@@ -77,6 +78,7 @@ public class CajaDTO {
             Boolean activa,
             Boolean sesionAbierta,
             Long idSesionCaja,
-            LocalDateTime fechaHoraApertura) {
+            LocalDateTime fechaHoraApertura,
+            BigDecimal efectivoEsperado) {
     }
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -265,7 +266,7 @@ class CajaServiceImplementTest {
         verify(movimientoCajaRepository).save(movimientoCaptor.capture());
         assertEquals(0, BigDecimal.ZERO.compareTo(movimientoCaptor.getValue().getMonto()));
         assertEquals(OrigenMovimiento.APERTURA, movimientoCaptor.getValue().getOrigen());
-        assertEquals(BigDecimal.ZERO, response.montoInicial());
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.montoInicial()));
     }
 
     @Test
@@ -277,6 +278,41 @@ class CajaServiceImplementTest {
         verify(usuarioRepository, never()).findById(any());
         verify(sesionCajaRepository, never()).save(any());
         verify(movimientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    void abrirCaja_montoConMasDeDosDecimales_rechazaAntesDeConsultarRepositorios() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.abrirCaja(10L, new BigDecimal("1.001"), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verifyNoInteractions(cajaRepository, sesionCajaRepository, movimientoCajaRepository,
+                pedidoPagoRepository, empleadoRepository, usuarioRepository);
+    }
+
+    @Test
+    void abrirCaja_montoConTresDecimalesCero_rechazaAntesDeConsultarRepositorios() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> cajaService.abrirCaja(10L, new BigDecimal("1.000"), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        verifyNoInteractions(cajaRepository, sesionCajaRepository, movimientoCajaRepository,
+                pedidoPagoRepository, empleadoRepository, usuarioRepository);
+    }
+
+    @Test
+    void abrirCaja_montosConMaximoDosDecimales_losNormalizaYAcepta() {
+        List<BigDecimal> montosValidos = List.of(
+                new BigDecimal("1"), new BigDecimal("1.0"), new BigDecimal("1.00"), BigDecimal.ZERO);
+
+        for (BigDecimal monto : montosValidos) {
+            configurarUsuarioYCajaPrincipal();
+            configurarAperturaDisponible();
+
+            CajaDTO.AperturaResponse response = cajaService.abrirCaja(10L, monto, null);
+
+            assertEquals(monto.setScale(2), response.montoInicial());
+        }
     }
 
     @Test
@@ -1028,6 +1064,11 @@ class CajaServiceImplementTest {
                 .thenReturn(Optional.of(cajaPrincipal));
         when(sesionCajaRepository.findByCajaAndEstado(cajaPrincipal, EstadoSesionCaja.ABIERTA))
                 .thenReturn(Optional.of(sesion));
+        when(movimientoCajaRepository.calcularSaldoPorSesionYCanal(
+                sesion,
+                CanalFondos.CAJA_FISICA,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO)).thenReturn(new BigDecimal("125.5"));
 
         CajaDTO.EstadoResponse respuesta = cajaService.obtenerEstadoCaja();
 
@@ -1036,6 +1077,28 @@ class CajaServiceImplementTest {
         assertEquals(true, respuesta.sesionAbierta());
         assertEquals(20L, respuesta.idSesionCaja());
         assertEquals(sesion.getFechaHoraApertura(), respuesta.fechaHoraApertura());
+        assertEquals(new BigDecimal("125.50"), respuesta.efectivoEsperado());
+        verify(movimientoCajaRepository).calcularSaldoPorSesionYCanal(
+                sesion,
+                CanalFondos.CAJA_FISICA,
+                SentidoMovimiento.INGRESO,
+                SentidoMovimiento.EGRESO);
+        verify(cajaRepository, never()).findByCodigoForUpdate(any());
+        verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
+    }
+
+    @Test
+    void obtenerEstadoCaja_conCajaCerrada_retornaEfectivoEsperadoNulo() {
+        when(cajaRepository.findByCodigo(CajaServiceImplement.CODIGO_CAJA_PRINCIPAL))
+                .thenReturn(Optional.of(cajaPrincipal));
+        when(sesionCajaRepository.findByCajaAndEstado(cajaPrincipal, EstadoSesionCaja.ABIERTA))
+                .thenReturn(Optional.empty());
+
+        CajaDTO.EstadoResponse respuesta = cajaService.obtenerEstadoCaja();
+
+        assertEquals(false, respuesta.sesionAbierta());
+        assertEquals(null, respuesta.efectivoEsperado());
+        verify(movimientoCajaRepository, never()).calcularSaldoPorSesionYCanal(any(), any(), any(), any());
         verify(cajaRepository, never()).findByCodigoForUpdate(any());
         verify(sesionCajaRepository, never()).findByCajaAndEstadoForUpdate(any(), any());
     }
