@@ -3,7 +3,7 @@
 
 <body>
 
-<div th:fragment="content">
+<div th:fragment="content" data-modulo="motos" data-page-title="Gestion de Motos">
 
     <div class="content p-3">
 
@@ -18,7 +18,7 @@
         <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
 
         <!-- BOTON NUEVO -->
-        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-moto" onclick="abrirModalNuevo()">
+        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-moto" onclick="AppModules.motos.abrirModalNuevo()">
             <i class="fas fa-plus"></i>
             Nueva Moto
         </button>
@@ -57,7 +57,7 @@
                 <th>Acciones</th>
             </tr>
             </thead>
-            <tbody id="tabla-motos" th:fragment="tablaMotos">
+            <tbody id="tabla-motos-body" th:fragment="tablaMotos">
 
             <!-- VACÍO -->
             <tr th:if="${#lists.isEmpty(motos)}">
@@ -78,14 +78,14 @@
                 <td>
                     <!-- EDITAR -->
                     <button class="btn btn-warning btn-sm"
-                            th:onclick="'abrirModalEditar(' + ${m.id} + ')'"
+                            th:onclick="'AppModules.motos.abrirModalEditar(' + ${m.id} + ')'"
                             title="Editar Moto">
                         <i class="fas fa-edit"></i>
                     </button>
 
                     <!-- ELIMINAR -->
                     <button class="btn btn-danger btn-sm"
-                            th:onclick="'eliminarMoto(' + ${m.id} + ')'"
+                            th:onclick="'AppModules.motos.eliminarMoto(' + ${m.id} + ')'"
                             title="Eliminar Moto">
                         <i class="fas fa-trash"></i>
                     </button>

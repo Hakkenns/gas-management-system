@@ -29,11 +29,21 @@ public class MotoController {
     // ─── GET: carga la vista HTML de gestión de motos ──────────────────
     @GetMapping
     public String motos(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloMotos(model, session);
+        model.addAttribute("contenido", "views/moto");
+        return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoMotos(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloMotos(model, session);
+        return "views/moto :: content";
+    }
+
+    private void cargarModeloMotos(Model model, jakarta.servlet.http.HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("motos", motoService.listMoto());
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("contenido", "views/moto"); // Nombre de tu archivo HTML dentro de templates/views/
-        return "components/layout";
     }
 
     // ─── GET por ID: retorna JSON para el JS del modal editar ──────────

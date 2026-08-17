@@ -20,10 +20,17 @@
             script: '/assets/js/empleados.js',
             titulo: 'Gestion de Empleados',
             nombre: 'Empleados'
+        },
+        motos: {
+            ruta: '/motos',
+            fragmento: '/motos/fragment',
+            script: '/assets/js/motos.js',
+            titulo: 'Gestion de Motos',
+            nombre: 'Motos'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
