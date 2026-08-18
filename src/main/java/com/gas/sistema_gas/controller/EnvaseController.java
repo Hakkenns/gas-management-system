@@ -44,7 +44,15 @@ public class EnvaseController {
 
     @GetMapping("/vista")
     public String vistaEnvases(Model model, HttpSession session) {
-        return catalogoEnvases(model, session);
+        cargarModeloCatalogoEnvases(model, session);
+        model.addAttribute("contenido", "views/envases-maestro");
+        return "components/layout";
+    }
+
+    @GetMapping("/vista/fragment")
+    public String fragmentoVistaEnvases(Model model, HttpSession session) {
+        cargarModeloCatalogoEnvases(model, session);
+        return "views/envases-maestro :: content";
     }
 
     @GetMapping("/maestro")
@@ -119,5 +127,10 @@ public class EnvaseController {
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         envaseService.eliminar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private void cargarModeloCatalogoEnvases(Model model, HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
     }
 }

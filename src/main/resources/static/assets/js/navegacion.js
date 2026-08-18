@@ -55,10 +55,17 @@
             script: '/assets/js/categoria.js',
             titulo: 'Gestion de Categorias',
             nombre: 'Tipos de productos'
+        },
+        envasesMaestro: {
+            ruta: '/envases/vista',
+            fragmento: '/envases/vista/fragment',
+            script: '/assets/js/envases-maestro.js',
+            titulo: 'Catalogo de Envases',
+            nombre: 'Envases'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias', '/envases/vista']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
