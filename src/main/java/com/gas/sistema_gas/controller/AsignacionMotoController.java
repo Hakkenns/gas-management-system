@@ -36,17 +36,15 @@ public class AsignacionMotoController {
 
     @GetMapping
     public String index(Model model, jakarta.servlet.http.HttpSession session) {
-        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
-
-        model.addAttribute("asignaciones", asignacionMotoService.listAll());
-
-        // CRÍTICO: Asegúrate de usar .listDisponibles() aquí para la carga inicial de la página
-        model.addAttribute("empleados", empleadoService.listDisponibles());
-        model.addAttribute("motos", motoService.listDisponibles());
-
-        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
+        cargarModeloAsignaciones(model, session);
         model.addAttribute("contenido", "views/asignacion_moto");
         return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoAsignaciones(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloAsignaciones(model, session);
+        return "views/asignacion_moto :: content";
     }
 
     @GetMapping("/tabla")
@@ -95,5 +93,13 @@ public class AsignacionMotoController {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("status", "ERROR", "message", message));
+    }
+
+    private void cargarModeloAsignaciones(Model model, jakarta.servlet.http.HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        model.addAttribute("asignaciones", asignacionMotoService.listAll());
+        model.addAttribute("empleados", empleadoService.listDisponibles());
+        model.addAttribute("motos", motoService.listDisponibles());
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
     }
 }

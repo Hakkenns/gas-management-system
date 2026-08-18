@@ -2,7 +2,9 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 
-<div th:fragment="content">
+<div th:fragment="content"
+     data-modulo="asignacionMotos"
+     data-page-title="Asignacion de Motos">
 
     <div class="content p-3">
 
@@ -13,10 +15,16 @@
 
         <hr>
 
-        <button class="btn btn-info mb-3" data-toggle="modal" data-target="#modal-asignacion" onclick="abrirModalNuevo()">
+        <button type="button" class="btn btn-info mb-3" id="btn-nueva-asignacion">
             <i class="fas fa-plus"></i>
             Nueva Asignación
         </button>
+
+        <div class="btn-group mb-3 ml-sm-2" role="group" aria-label="Filtrar asignaciones por estado">
+            <button type="button" class="btn btn-info btn-filtro-asignaciones" data-estado="ACTIVA">ACTIVAS</button>
+            <button type="button" class="btn btn-secondary btn-filtro-asignaciones" data-estado="FINALIZADA">FINALIZADAS</button>
+            <button type="button" class="btn btn-secondary btn-filtro-asignaciones" data-estado="TODAS">TODAS</button>
+        </div>
 
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 p-2 bg-light rounded border">
             <!-- Selector de registros por página (izquierda) -->
@@ -51,7 +59,7 @@
                 <th>Acciones</th>
             </tr>
             </thead>
-            <tbody id="tabla-asignaciones" th:fragment="tablaAsignaciones">
+            <tbody id="tabla-asignaciones-body" th:fragment="tablaAsignaciones">
 
             <tr th:if="${#lists.isEmpty(asignaciones)}">
                 <td colspan="7" class="text-center">No hay asignaciones de moto registradas.</td>
@@ -69,8 +77,9 @@
                 </td>
                 <td>
                     <button th:if="${a.estado().name() == 'ACTIVA'}"
-                            class="btn btn-danger btn-sm"
-                            th:onclick="'finalizarAsignacion(' + ${a.id()} + ')'"
+                            type="button"
+                            class="btn btn-danger btn-sm btn-finalizar-asignacion"
+                            th:data-id="${a.id()}"
                             title="Finalizar y Recibir Unidad">
                         <i class="fas fa-calendar-check"></i> Finalizar
                     </button>

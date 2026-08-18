@@ -41,10 +41,17 @@
             script: '/assets/js/rubro.js',
             titulo: 'Gestion de Rubros',
             nombre: 'Rubros'
+        },
+        asignacionMotos: {
+            ruta: '/asignacion_motos',
+            fragmento: '/asignacion_motos/fragment',
+            script: '/assets/js/asignacion_motos.js',
+            titulo: 'Asignacion de Motos',
+            nombre: 'Asignacion de Motos'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');
