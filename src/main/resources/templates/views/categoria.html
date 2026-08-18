@@ -3,7 +3,9 @@
 
 <body>
 
-    <div th:fragment="content">
+    <div th:fragment="content"
+         data-modulo="categorias"
+         data-page-title="Gestion de Categorias">
 
         <div class="content p-3">
 
@@ -14,8 +16,7 @@
 
             <hr>
 
-            <button id="btn-crear-categoria" class="btn btn-info mb-3" data-toggle="modal"
-                data-target="#modal-categoria">
+            <button id="btn-crear-categoria" type="button" class="btn btn-info mb-3">
                 <i class="fas fa-plus"></i>
                 Nueva Categoría
             </button>
@@ -41,7 +42,7 @@
                 </div>
             </div>
 
-            <div id="contenedor-tabla-categoria" th:fragment="tablaCategorias">
+            <div id="contenedor-tabla-categoria">
 
                 <table class="table table-bordered table-striped" id="tabla-categorias">
 
@@ -56,7 +57,7 @@
                         </tr>
                     </thead>
 
-                    <tbody>
+                    <tbody id="tabla-categorias-body" th:fragment="tablaCategorias">
 
                         <tr th:if="${#lists.isEmpty(categorias)}">
                             <td colspan="6" class="text-center">

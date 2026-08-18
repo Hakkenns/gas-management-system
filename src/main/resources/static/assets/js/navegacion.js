@@ -48,10 +48,17 @@
             script: '/assets/js/asignacion_motos.js',
             titulo: 'Asignacion de Motos',
             nombre: 'Asignacion de Motos'
+        },
+        categorias: {
+            ruta: '/categorias',
+            fragmento: '/categorias/fragment',
+            script: '/assets/js/categoria.js',
+            titulo: 'Gestion de Categorias',
+            nombre: 'Tipos de productos'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');

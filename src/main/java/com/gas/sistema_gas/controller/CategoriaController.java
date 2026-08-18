@@ -33,11 +33,15 @@ public class CategoriaController {
 
     @GetMapping
     public String categorias(Model model, jakarta.servlet.http.HttpSession session) {
-        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
-        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
-        model.addAttribute("categorias", categoriaService.listAll());
+        cargarModeloCategorias(model, session);
         model.addAttribute("contenido", "views/categoria");
         return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoCategorias(Model model, jakarta.servlet.http.HttpSession session) {
+        cargarModeloCategorias(model, session);
+        return "views/categoria :: content";
     }
 
     // 🔄 NUEVA RUTA: Retorna solo el fragmento HTML de la tabla para refrescar con
@@ -153,5 +157,11 @@ public class CategoriaController {
             String mensaje = e.getMessage() != null ? e.getMessage() : "No se pudo eliminar la categoría.";
             return Map.of("status", "ERROR", "message", mensaje);
         }
+    }
+
+    private void cargarModeloCategorias(Model model, jakarta.servlet.http.HttpSession session) {
+        Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
+        model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
+        model.addAttribute("categorias", categoriaService.listAll());
     }
 }

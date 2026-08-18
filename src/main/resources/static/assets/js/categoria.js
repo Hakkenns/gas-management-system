@@ -1,745 +1,493 @@
-document.addEventListener("DOMContentLoaded", function () {
-    const modalTitle = document.getElementById("modal-titulo-categoria");
-    const form = document.getElementById("form-categoria");
-    const idField = document.getElementById("categoria-id");
-    const nombreField = document.getElementById("nombre-categoria");
-    const descripcionField = document.getElementById("descripcion-categoria");
-    // NUEVO: Capturamos el ComboBox del tipo de unidad
-    const tipoUnidadField = document.getElementById("tipoUnidad");
-    const tipoUnidadHiddenField = document.getElementById("tipoUnidad-hidden");
-    const btnCreate = document.getElementById("btn-crear-categoria");
+window.AppModules = window.AppModules || {};
 
-    // Elementos de capacidades
-    const contenedorCapacidades = document.getElementById("contenedor-capacidades-categoria");
-    const inputNuevaCapacidad = document.getElementById("input-nueva-capacidad");
-    const btnAgregarCapacidad = document.getElementById("btn-agregar-capacidad");
-    const listaCapacidades = document.getElementById("lista-capacidades-categoria");
-    const capacidadesJsonInput = document.getElementById("capacidades-json");
+(function () {
+    var estadoCategorias = {
+        initialized: false, root: null, lifecycleId: 0, clickHandler: null,
+        formCategoria: null, submitHandler: null, tipoUnidadField: null,
+        tipoUnidadChangeHandler: null, inputNuevaCapacidad: null,
+        capacidadKeypressHandler: null, btnAgregarCapacidad: null,
+        capacidadClickHandler: null, modalCategoria: null, modalVerCapacidades: null,
+        modalHiddenHandler: null, table: null, dataTable: null, resizeHandler: null,
+        lengthSelect: null, lengthHandler: null, searchInput: null, searchHandler: null,
+        drawHandler: null, swipeCleanup: null, editAbortController: null,
+        editRequestId: 0, viewAbortController: null, viewRequestId: 0,
+        validationTimeoutId: null, capacidadesActuales: [], unidadActual: ''
+    };
 
-    let capacidadesActuales = [];
-    let unidadActual = ""; // "KG", "L", "M" o ""
-
-    // Elemento para mensaje de validación
-    const mensajeValidacion = document.createElement("small");
-    mensajeValidacion.className = "form-text text-danger mt-1";
-    mensajeValidacion.id = "mensaje-validacion-capacidad";
-    mensajeValidacion.style.display = "none";
-    inputNuevaCapacidad.parentNode.parentNode.appendChild(mensajeValidacion);
-
-    function obtenerLimites(unidad) {
-        switch (unidad) {
-            case "KG": return { min: 3, max: 45, decimales: 0, label: "kg (3 a 45)" };
-            case "L":  return { min: 3, max: 21, decimales: 2, label: "litros (3 a 21)" };
-            case "M":  return { min: 20, max: 100, decimales: 2, label: "metros (20 a 100)" };
-            default:   return null;
-        }
+    function activo(id) {
+        return estadoCategorias.initialized && estadoCategorias.lifecycleId === id
+            && estadoCategorias.root && estadoCategorias.root.isConnected;
     }
 
-    function tipoUnidadLabelPorCodigo(unidad) {
-        switch (unidad) {
-            case "KG": return "POR KILOS (KG)";
-            case "L":  return "POR LITROS (L)";
-            case "M":  return "POR METROS (M)";
-            default:    return "POR UNIDADES / PIEZAS";
-        }
+    function limites(unidad) {
+        if (unidad === 'KG') return { min: 3, max: 45, decimales: 0, label: 'kg (3 a 45)' };
+        if (unidad === 'L') return { min: 3, max: 21, decimales: 2, label: 'litros (3 a 21)' };
+        if (unidad === 'M') return { min: 20, max: 100, decimales: 2, label: 'metros (20 a 100)' };
+        return null;
     }
 
-    function tipoUnidadCodigoPorLabel(label) {
-        switch (label) {
-            case "POR KILOS (KG)": return "KG";
-            case "POR LITROS (L)": return "L";
-            case "POR METROS (M)": return "M";
-            default: return "";
-        }
+    function codigoPorLabel(label) {
+        if (label === 'POR KILOS (KG)') return 'KG';
+        if (label === 'POR LITROS (L)') return 'L';
+        if (label === 'POR METROS (M)') return 'M';
+        return '';
     }
 
-    function renderizarCapacidades() {
-        listaCapacidades.innerHTML = "";
-        const limites = obtenerLimites(unidadActual);
-        capacidadesActuales.forEach((item, index) => {
-            const valor = item.valor;
-            const enUso = item.enUso;
-            const texto = limites && limites.decimales === 0 ? valor.toFixed(0) : valor.toFixed(2);
-            const badge = document.createElement("span");
-            if (enUso) {
-                badge.className = "badge badge-danger p-2 mr-1 mb-1";
-                badge.style.fontSize = "14px";
-                badge.textContent = texto;
-                badge.title = "Capacidad en uso (no se puede eliminar)";
-            } else {
-                badge.className = "badge badge-info p-2 mr-1 mb-1 d-inline-flex align-items-center";
-                badge.style.fontSize = "14px";
-                badge.innerHTML = `${texto} <i class="fas fa-times ml-1 remove-capacity" style="cursor: pointer; font-size: 14px;" data-index="${index}"></i>`;
-                badge.querySelector(".remove-capacity").addEventListener("click", function() {
-                    capacidadesActuales.splice(parseInt(this.dataset.index), 1);
-                    renderizarCapacidades();
-                });
-            }
-            listaCapacidades.appendChild(badge);
-        });
-        const valores = capacidadesActuales.map(item => item.valor.toFixed(limites && limites.decimales === 0 ? 0 : 2));
-        capacidadesJsonInput.value = valores.join(",");
+    function labelPorCodigo(codigo) {
+        if (codigo === 'KG') return 'POR KILOS (KG)';
+        if (codigo === 'L') return 'POR LITROS (L)';
+        if (codigo === 'M') return 'POR METROS (M)';
+        return 'POR UNIDADES / PIEZAS';
     }
 
     function mostrarMensaje(texto) {
-        mensajeValidacion.textContent = texto;
-        mensajeValidacion.style.display = "block";
-        setTimeout(() => { mensajeValidacion.style.display = "none"; }, 3000);
+        var mensaje = estadoCategorias.root.querySelector('#mensaje-validacion-capacidad');
+        if (!mensaje) return;
+        if (estadoCategorias.validationTimeoutId) clearTimeout(estadoCategorias.validationTimeoutId);
+        mensaje.textContent = texto;
+        mensaje.style.display = 'block';
+        var lifecycleId = estadoCategorias.lifecycleId;
+        estadoCategorias.validationTimeoutId = setTimeout(function () {
+            if (activo(lifecycleId)) mensaje.style.display = 'none';
+        }, 3000);
+    }
+
+    function renderizarCapacidades() {
+        var lista = estadoCategorias.root.querySelector('#lista-capacidades-categoria');
+        var hidden = estadoCategorias.root.querySelector('#capacidades-json');
+        if (!lista || !hidden) return;
+        lista.innerHTML = '';
+        var reglas = limites(estadoCategorias.unidadActual);
+        estadoCategorias.capacidadesActuales.forEach(function (item, index) {
+            var valor = Number(item.valor);
+            var texto = reglas && reglas.decimales === 0 ? valor.toFixed(0) : valor.toFixed(2);
+            var badge = document.createElement('span');
+            badge.className = item.enUso
+                ? 'badge badge-danger p-2 mr-1 mb-1'
+                : 'badge badge-info p-2 mr-1 mb-1 d-inline-flex align-items-center';
+            badge.style.fontSize = '14px';
+            badge.textContent = texto;
+            if (item.enUso) {
+                badge.title = 'Capacidad en uso (no se puede eliminar)';
+            } else {
+                var remove = document.createElement('i');
+                remove.className = 'fas fa-times ml-1 remove-capacity';
+                remove.style.cssText = 'cursor: pointer; font-size: 14px;';
+                remove.dataset.index = String(index);
+                badge.appendChild(remove);
+            }
+            lista.appendChild(badge);
+        });
+        hidden.value = estadoCategorias.capacidadesActuales.map(function (item) {
+            return Number(item.valor).toFixed(reglas && reglas.decimales === 0 ? 0 : 2);
+        }).join(',');
+    }
+
+    function actualizarControlesUnidad() {
+        var input = estadoCategorias.inputNuevaCapacidad;
+        var contenedor = estadoCategorias.root.querySelector('#contenedor-capacidades-categoria');
+        var mensaje = estadoCategorias.root.querySelector('#mensaje-validacion-capacidad');
+        if (!input || !contenedor) return;
+        var reglas = limites(estadoCategorias.unidadActual);
+        var requiere = Boolean(reglas);
+        contenedor.style.display = requiere ? 'block' : 'none';
+        if (requiere) {
+            input.placeholder = 'Ej: ' + reglas.min + ' (' + reglas.label + ')';
+            input.step = reglas.decimales === 0 ? '1' : '0.01';
+            input.min = reglas.min;
+            input.max = reglas.max;
+        } else {
+            input.placeholder = '';
+            input.step = '0.01';
+            input.min = '0';
+            input.max = '';
+        }
+        if (mensaje) mensaje.style.display = 'none';
+    }
+
+    function cambiarTipoUnidad() {
+        var valor = estadoCategorias.tipoUnidadField.value;
+        estadoCategorias.unidadActual = valor === 'POR KILOS (KG)' ? 'KG'
+            : valor === 'POR LITROS (L)' ? 'L'
+                : valor === 'POR METROS (M)' ? 'M' : '';
+        var hidden = estadoCategorias.root.querySelector('#tipoUnidad-hidden');
+        if (hidden) hidden.value = valor;
+        estadoCategorias.capacidadesActuales = [];
+        estadoCategorias.inputNuevaCapacidad.value = '';
+        actualizarControlesUnidad();
+        renderizarCapacidades();
     }
 
     function agregarCapacidad() {
-        const limites = obtenerLimites(unidadActual);
-        if (!limites) return;
-
-        const valorRaw = inputNuevaCapacidad.value.trim();
-        if (valorRaw === "") {
-            Swal.fire({ icon: "warning", title: "Campo vacío", text: `Ingrese un valor entre ${limites.min} y ${limites.max} ${limites.label}.`, confirmButtonColor: "#28a745" });
+        var reglas = limites(estadoCategorias.unidadActual);
+        if (!reglas) return;
+        var raw = estadoCategorias.inputNuevaCapacidad.value.trim();
+        if (raw === '') {
+            window.Swal.fire({ icon: 'warning', title: 'Campo vacío', text: 'Ingrese un valor entre ' + reglas.min + ' y ' + reglas.max + ' ' + reglas.label + '.', confirmButtonColor: '#28a745' });
             return;
         }
-
-        const valor = parseFloat(valorRaw);
-        if (!limites) {
-            Swal.fire({ icon: "error", title: "Tipo de unidad inválido", text: "Seleccione primero una forma de venta válida para agregar capacidades.", confirmButtonColor: "#28a745" });
+        var valor = parseFloat(raw);
+        if (isNaN(valor) || valor < reglas.min || valor > reglas.max) {
+            window.Swal.fire({ icon: 'error', title: 'Fuera de rango', text: 'El valor debe estar entre ' + reglas.min + ' y ' + reglas.max + ' ' + reglas.label + '.', confirmButtonColor: '#28a745' });
             return;
         }
-        if (isNaN(valor) || valor < limites.min || valor > limites.max) {
-            Swal.fire({ icon: "error", title: "Fuera de rango", text: `El valor debe estar entre ${limites.min} y ${limites.max} ${limites.label}.`, confirmButtonColor: "#28a745" });
+        var redondeado = parseFloat(valor.toFixed(reglas.decimales));
+        if (estadoCategorias.capacidadesActuales.some(function (item) { return Number(item.valor) === redondeado; })) {
+            window.Swal.fire({ icon: 'error', title: 'Capacidad duplicada', text: 'Esa capacidad ya está registrada.', confirmButtonColor: '#28a745' });
             return;
         }
-
-        // Redondear según decimales permitidos
-        const valorRedondeado = parseFloat(valor.toFixed(limites.decimales));
-
-        // Verificar duplicados comparando solo el valor numérico
-        const existeDuplicado = capacidadesActuales.some(item => item.valor === valorRedondeado);
-        if (existeDuplicado) {
-            Swal.fire({ icon: "error", title: "Capacidad duplicada", text: "Esa capacidad ya está registrada.", confirmButtonColor: "#28a745" });
-            return;
-        }
-
-        // Agregar como objeto {valor, enUso: false}
-        capacidadesActuales.push({ valor: valorRedondeado, enUso: false });
-        capacidadesActuales.sort((a, b) => a.valor - b.valor);
-        inputNuevaCapacidad.value = "";
+        estadoCategorias.capacidadesActuales.push({ valor: redondeado, enUso: false });
+        estadoCategorias.capacidadesActuales.sort(function (a, b) { return a.valor - b.valor; });
+        estadoCategorias.inputNuevaCapacidad.value = '';
         renderizarCapacidades();
-        inputNuevaCapacidad.focus();
+        estadoCategorias.inputNuevaCapacidad.focus();
     }
 
-    btnAgregarCapacidad.addEventListener("click", agregarCapacidad);
-    inputNuevaCapacidad.addEventListener("keypress", function(e) {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            agregarCapacidad();
-        }
-    });
-
-    // Mostrar/ocultar sección de capacidades según el tipo de unidad seleccionado
-    tipoUnidadField.addEventListener("change", function() {
-        const valor = this.value;
-        const nuevaUnidad = valor === "POR KILOS (KG)" ? "KG"
-                          : valor === "POR LITROS (L)" ? "L"
-                          : valor === "POR METROS (M)" ? "M"
-                          : "";
-        const requiereCap = nuevaUnidad !== "";
-
-        // LIMPIAR SIEMPRE al cambiar de unidad (incluso entre KG/L/M)
-        capacidadesActuales = [];
-        inputNuevaCapacidad.value = "";
-        mensajeValidacion.style.display = "none";
+    function abrirModal(titulo, id, nombre, descripcion, tipoUnidad, capacidades, edicion) {
+        var root = estadoCategorias.root;
+        root.querySelector('#modal-titulo-categoria').textContent = titulo;
+        root.querySelector('#categoria-id').value = id || '';
+        root.querySelector('#nombre-categoria').value = nombre || '';
+        root.querySelector('#descripcion-categoria').value = descripcion || '';
+        estadoCategorias.tipoUnidadField.value = tipoUnidad || '';
+        estadoCategorias.tipoUnidadField.disabled = Boolean(edicion);
+        var hidden = root.querySelector('#tipoUnidad-hidden');
+        if (hidden) hidden.value = tipoUnidad || '';
+        estadoCategorias.unidadActual = codigoPorLabel(tipoUnidad || '');
+        estadoCategorias.capacidadesActuales = Array.isArray(capacidades) ? capacidades.map(function (item) {
+            return typeof item === 'object' ? { valor: item.valor, enUso: item.enUso } : { valor: item, enUso: false };
+        }) : [];
+        estadoCategorias.capacidadesActuales.sort(function (a, b) { return a.valor - b.valor; });
+        actualizarControlesUnidad();
         renderizarCapacidades();
-
-        unidadActual = nuevaUnidad;
-        if (tipoUnidadHiddenField) {
-            tipoUnidadHiddenField.value = this.value;
-        }
-        contenedorCapacidades.style.display = requiereCap ? "block" : "none";
-
-        // Actualizar placeholder según unidad
-        if (requiereCap) {
-            const limites = obtenerLimites(nuevaUnidad);
-            inputNuevaCapacidad.placeholder = `Ej: ${limites.min} (${limites.label})`;
-            inputNuevaCapacidad.step = limites.decimales === 0 ? "1" : "0.01";
-            inputNuevaCapacidad.min = limites.min;
-            inputNuevaCapacidad.max = limites.max;
-        } else {
-            inputNuevaCapacidad.placeholder = "";
-            inputNuevaCapacidad.step = "0.01";
-            inputNuevaCapacidad.min = "0";
-            inputNuevaCapacidad.max = "";
-        }
-    });
-
-    // Función reutilizable para abrir el modal (ACTUALIZADA con tipoUnidad, capacidades y modo edición)
-    const openModal = function (title, id = "", nombre = "", descripcion = "", tipoUnidad = "", capacidades = [], esEdicion = false) {
-        modalTitle.textContent = title;
-        idField.value = id;
-        nombreField.value = nombre;
-        descripcionField.value = descripcion;
-
-        // Asignamos el valor al ComboBox
-        if (tipoUnidadField) {
-            tipoUnidadField.value = tipoUnidad;
-            if (tipoUnidadHiddenField) {
-                tipoUnidadHiddenField.value = tipoUnidad;
-            }
-            unidadActual = tipoUnidadCodigoPorLabel(tipoUnidad);
-            contenedorCapacidades.style.display = unidadActual ? "block" : "none";
-            const limites = obtenerLimites(unidadActual);
-            inputNuevaCapacidad.placeholder = limites ? `Ej: ${limites.min} (${limites.label})` : "";
-            inputNuevaCapacidad.step = limites && limites.decimales === 0 ? "1" : "0.01";
-            inputNuevaCapacidad.min = limites ? limites.min : "0";
-            inputNuevaCapacidad.max = limites ? limites.max : "";
-            if (window.jQuery && typeof window.jQuery === "function") {
-                window.jQuery(tipoUnidadField).trigger("change");
-            }
-            // Bloquear select en modo edición
-            tipoUnidadField.disabled = esEdicion;
-        }
-
-        // Cargar capacidades existentes (pueden venir como {valor, enUso} o como números simples)
-        if (capacidades.length > 0 && typeof capacidades[0] === "object" && capacidades[0].valor !== undefined) {
-            capacidadesActuales = capacidades.map(item => ({ valor: item.valor, enUso: item.enUso }));
-        } else {
-            capacidadesActuales = (Array.isArray(capacidades) ? capacidades : []).map(valor => ({ valor: valor, enUso: false }));
-        }
-        capacidadesActuales.sort((a, b) => a.valor - b.valor);
-        renderizarCapacidades();
-
-        // Mostrar/ocultar contenedor según el tipo
-        const requiereCap = tipoUnidad === "POR KILOS (KG)" || tipoUnidad === "POR LITROS (L)" || tipoUnidad === "POR METROS (M)";
-        contenedorCapacidades.style.display = requiereCap ? "block" : "none";
-
-        if (window.jQuery && typeof window.jQuery === "function") {
-            window.jQuery("#modal-categoria").modal("show");
-        }
-    };
-
-    // Al hacer clic en "Nueva Categoría"
-    if (btnCreate) {
-        btnCreate.addEventListener("click", function () {
-            // Asegurar que el select esté habilitado para nueva categoría
-            if (tipoUnidadField) {
-                tipoUnidadField.disabled = false;
-                tipoUnidadField.value = "";
-            }
-            if (tipoUnidadHiddenField) {
-                tipoUnidadHiddenField.value = "";
-                tipoUnidadHiddenField.removeAttribute("name");
-            }
-            unidadActual = "";
-            inputNuevaCapacidad.value = "";
-            contenedorCapacidades.style.display = "none";
-            openModal("Nueva Categoría");
-        });
+        if (window.jQuery && window.jQuery.fn.modal) window.jQuery(estadoCategorias.modalCategoria).modal('show');
     }
 
-    // Reset completo al cerrar el modal
-    if (window.jQuery && typeof window.jQuery === "function") {
-        window.jQuery("#modal-categoria").on("hidden.bs.modal", function () {
-            // Limpiar input, array de capacidades y tipo de unidad
-            inputNuevaCapacidad.value = "";
-            capacidadesActuales = [];
-            unidadActual = "";
-            renderizarCapacidades();
-            if (tipoUnidadField) {
-                tipoUnidadField.disabled = false;
-                tipoUnidadField.value = "";
-            }
-            if (tipoUnidadHiddenField) {
-                tipoUnidadHiddenField.removeAttribute("name");
-                tipoUnidadHiddenField.value = "";
-            }
-            contenedorCapacidades.style.display = "none";
-        });
+    function abrirNuevaCategoria() {
+        estadoCategorias.formCategoria.reset();
+        var hidden = estadoCategorias.root.querySelector('#tipoUnidad-hidden');
+        estadoCategorias.tipoUnidadField.disabled = false;
+        estadoCategorias.tipoUnidadField.value = '';
+        if (hidden) { hidden.value = ''; hidden.removeAttribute('name'); }
+        estadoCategorias.capacidadesActuales = [];
+        estadoCategorias.unidadActual = '';
+        estadoCategorias.root.querySelector('#input-nueva-capacidad').value = '';
+        actualizarControlesUnidad();
+        renderizarCapacidades();
+        abrirModal('Nueva Categoría', '', '', '', '', [], false);
     }
 
-    // LISTENER GLOBAL DE CLICS (Para capturar Ver Capacidades, Editar, Eliminar y Estado)
-    document.addEventListener("click", function (e) {
-
-        // 0. Ver Capacidades
-        const verCapButton = e.target.closest(".btn-ver-capacidades");
-        if (verCapButton) {
-            const id = verCapButton.dataset.id;
-            const nombre = verCapButton.dataset.nombre;
-            document.getElementById("modal-cap-nombre").textContent = nombre;
-            const contenedor = document.getElementById("contenedor-lista-capacidades");
-            contenedor.innerHTML = '<p class="text-muted mb-0">Cargando...</p>';
-
-            fetch(`/categorias/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    const caps = data.capacidades || [];
-                    if (caps.length === 0) {
-                        contenedor.innerHTML = '<p class="text-muted mb-0">No hay capacidades registradas.</p>';
-                    } else {
-                        // Mostrar como lista de viñetas (solo lectura) con icono según enUso
-                        let html = '<ul class="list-unstyled text-left" style="max-width: 250px; margin: 0 auto;">';
-                        caps.forEach(item => {
-                            const valor = typeof item === "object" ? item.valor : item;
-                            const enUso = typeof item === "object" ? item.enUso : false;
-                            const icono = enUso ? "fa-lock text-danger" : "fa-check-circle text-success";
-                            html += `<li class="mb-1"><i class="fas ${icono} mr-1"></i> <strong>${valor.toFixed(2)}</strong></li>`;
-                        });
-                        html += '</ul>';
-                        contenedor.innerHTML = html;
-                    }
-                })
-                .catch(() => {
+    function verCapacidades(id, nombre, lifecycleId) {
+        if (estadoCategorias.viewAbortController) estadoCategorias.viewAbortController.abort();
+        var requestId = ++estadoCategorias.viewRequestId;
+        var controller = new AbortController();
+        estadoCategorias.viewAbortController = controller;
+        var contenedor = estadoCategorias.root.querySelector('#contenedor-lista-capacidades');
+        estadoCategorias.root.querySelector('#modal-cap-nombre').textContent = nombre;
+        contenedor.innerHTML = '<p class="text-muted mb-0">Cargando...</p>';
+        if (window.jQuery && window.jQuery.fn.modal) window.jQuery(estadoCategorias.modalVerCapacidades).modal('show');
+        fetch('/categorias/' + id, { signal: controller.signal })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (!activo(lifecycleId) || requestId !== estadoCategorias.viewRequestId) return;
+                var caps = data.capacidades || [];
+                if (!caps.length) {
+                    contenedor.innerHTML = '<p class="text-muted mb-0">No hay capacidades registradas.</p>';
+                    return;
+                }
+                var lista = document.createElement('ul');
+                lista.className = 'list-unstyled text-left';
+                lista.style.cssText = 'max-width: 250px; margin: 0 auto;';
+                caps.forEach(function (item) {
+                    var valor = typeof item === 'object' ? item.valor : item;
+                    var enUso = typeof item === 'object' && item.enUso;
+                    var li = document.createElement('li');
+                    li.className = 'mb-1';
+                    li.innerHTML = '<i class="fas ' + (enUso ? 'fa-lock text-danger' : 'fa-check-circle text-success') + ' mr-1"></i> <strong>' + Number(valor).toFixed(2) + '</strong>';
+                    lista.appendChild(li);
+                });
+                contenedor.innerHTML = '';
+                contenedor.appendChild(lista);
+            })
+            .catch(function (error) {
+                if (error.name !== 'AbortError' && activo(lifecycleId) && requestId === estadoCategorias.viewRequestId) {
                     contenedor.innerHTML = '<p class="text-danger mb-0">Error al cargar capacidades.</p>';
-                });
-
-            if (window.jQuery) {
-                window.jQuery("#modal-ver-capacidades").modal("show");
-            }
-        }
-
-        // 1. Cargar datos para Editar
-        const editButton = e.target.closest(".btn-editar-categoria");
-        if (editButton) {
-            const id = editButton.dataset.id || "";
-            const nombre = editButton.dataset.nombre || "";
-            const descripcion = editButton.dataset.descripcion || "";
-            const unidadMedida = editButton.dataset.unidadmedida || "";
-            const tipoUnidad = unidadMedida ? tipoUnidadLabelPorCodigo(unidadMedida) : (editButton.dataset.tipounidad || "");
-
-            // Obtener capacidades desde el backend
-            fetch(`/categorias/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    const capacidades = data.capacidades || [];
-                    // Pasar esEdicion = true para bloquear el select de unidad
-                    openModal("Editar Categoría", id, nombre, descripcion, tipoUnidad, capacidades, true);
-                })
-                .catch(() => {
-                    openModal("Editar Categoría", id, nombre, descripcion, tipoUnidad, [], true);
-                });
-        }
-
-        // 2. Cambiar Estado (Activar / Inhabilitar)
-        const statusButton = e.target.closest(".btn-cambiar-estado-categoria");
-        if (statusButton) {
-            const id = statusButton.dataset.id;
-            const nuevoEstado = statusButton.dataset.estado;
-            CategoriaCambiarEstado(id, nuevoEstado);
-        }
-
-        // 3. Eliminar Categoría
-        const deleteButton = e.target.closest(".btn-eliminar-categoria");
-        if (deleteButton) {
-            const id = deleteButton.dataset.id;
-            CategoriaEliminar(id);
-        }
-    });
-
-    // Función para refrescar únicamente el fragmento HTML de la tabla
-    function reloadCategoriasTable() {
-        fetch("/categorias/tabla")
-            .then(r => {
-                if (!r.ok) throw new Error("Error cargando tabla de categorías");
-                return r.text();
-            })
-            .then(html => {
-                const container = document.getElementById("contenedor-tabla-categoria");
-                if (container) {
-                    container.innerHTML = html;
                 }
             })
-            .catch(err => console.error("ERROR RECARGANDO TABLA:", err));
+            .finally(function () {
+                if (requestId === estadoCategorias.viewRequestId) estadoCategorias.viewAbortController = null;
+            });
     }
 
-    // Envío del Formulario (Guardar / Editar) vía AJAX
-    if (form) {
-        form.addEventListener("submit", function (e) {
-            e.preventDefault();
-            const submitButton = form.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.textContent = "Guardando...";
-            }
-
-            const formData = new FormData(form);
-            if (tipoUnidadHiddenField && tipoUnidadHiddenField.value) {
-                formData.set("tipoUnidad", tipoUnidadHiddenField.value);
-            } else if (tipoUnidadField) {
-                formData.set("tipoUnidad", tipoUnidadField.value);
-            }
-
-            fetch("/categorias/ajax", {
-                method: "POST",
-                body: formData,
+    function editarCategoria(boton, lifecycleId) {
+        if (estadoCategorias.editAbortController) estadoCategorias.editAbortController.abort();
+        var requestId = ++estadoCategorias.editRequestId;
+        var controller = new AbortController();
+        estadoCategorias.editAbortController = controller;
+        var id = boton.dataset.id || '';
+        var nombre = boton.dataset.nombre || '';
+        var descripcion = boton.dataset.descripcion || '';
+        var unidad = boton.dataset.unidadmedida || '';
+        var tipo = unidad ? labelPorCodigo(unidad) : (boton.dataset.tipounidad || '');
+        fetch('/categorias/' + id, { signal: controller.signal })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (activo(lifecycleId) && requestId === estadoCategorias.editRequestId) {
+                    abrirModal('Editar Categoría', id, nombre, descripcion, tipo, data.capacidades || [], true);
+                }
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "OK") {
-                        if (window.jQuery && typeof window.jQuery === "function") {
-                            window.jQuery("#modal-categoria").modal("hide");
-                        }
+            .catch(function (error) {
+                if (error.name !== 'AbortError' && activo(lifecycleId) && requestId === estadoCategorias.editRequestId) {
+                    abrirModal('Editar Categoría', id, nombre, descripcion, tipo, [], true);
+                }
+            })
+            .finally(function () {
+                if (requestId === estadoCategorias.editRequestId) estadoCategorias.editAbortController = null;
+            });
+    }
+
+    function cambiarEstado(id, estado, lifecycleId) {
+        var mensaje = estado == 1 ? '¿Deseas activar esta categoría?' : '¿Deseas inhabilitar esta categoría?';
+        if (!window.confirm(mensaje)) return;
+        fetch('/categorias/' + id + '/estado?estado=' + estado, { method: 'POST' })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (!activo(lifecycleId)) return;
+                if (data.status === 'OK') reloadCategoriasTable();
+                else window.alert(data.message || 'Error al cambiar el estado');
+            })
+            .catch(function (error) { if (activo(lifecycleId)) console.error('Error:', error); });
+    }
+
+    function eliminarCategoria(id, lifecycleId) {
+        window.Swal.fire({
+            title: '¿Estás seguro?', text: 'La categoría se eliminará del sistema.', icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', reverseButtons: true
+        }).then(function (result) {
+            if (!result.isConfirmed || !activo(lifecycleId)) return;
+            return fetch('/categorias/' + id + '/eliminar', { method: 'POST' })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (!activo(lifecycleId)) return;
+                    if (data.status === 'OK') {
                         reloadCategoriasTable();
-                        Swal.fire({
-                            icon: "success",
-                            title: "¡Guardado!",
-                            text: "La categoría se ha guardado correctamente.",
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
+                        window.Swal.fire({ icon: 'success', title: '¡Eliminado!', text: 'La categoría ha sido eliminada.', timer: 1500, showConfirmButton: false });
                     } else {
-                        Swal.fire({ icon: "error", title: "Error", text: data.message || "Error guardando categoría.", confirmButtonColor: "#28a745" });
-                    }
-                })
-                .catch(error => {
-                    console.error("Error guardando categoría:", error);
-                    Swal.fire({ icon: "error", title: "Error", text: "Ocurrió un error al guardar la categoría.", confirmButtonColor: "#28a745" });
-                })
-                .finally(() => {
-                    if (submitButton) {
-                        submitButton.disabled = false;
-                        submitButton.textContent = "Guardar";
+                        window.Swal.fire({ icon: 'error', title: 'No se puede eliminar', text: data.message || 'Error al eliminar la categoría.', confirmButtonColor: '#28a745' });
                     }
                 });
+        }).catch(function (error) {
+            console.error('Error:', error);
+            if (activo(lifecycleId)) {
+                window.Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Ocurrió un error al eliminar la categoría.',
+                    confirmButtonColor: '#28a745'
+                });
+            }
         });
     }
 
-    // Función: Cambiar Estado por Fetch asíncrono
-    function CategoriaCambiarEstado(id, estado) {
-        const mensaje = estado == 1 ? "¿Deseas activar esta categoría?" : "¿Deseas inhabilitar esta categoría?";
-        if (!confirm(mensaje)) return;
+    function manejarClick(event) {
+        var target = event.target;
+        if (target.closest('#btn-crear-categoria')) { event.preventDefault(); abrirNuevaCategoria(); return; }
+        var remove = target.closest('.remove-capacity');
+        if (remove) { estadoCategorias.capacidadesActuales.splice(parseInt(remove.dataset.index, 10), 1); renderizarCapacidades(); return; }
+        var ver = target.closest('.btn-ver-capacidades');
+        if (ver) { verCapacidades(ver.dataset.id, ver.dataset.nombre, estadoCategorias.lifecycleId); return; }
+        var editar = target.closest('.btn-editar-categoria');
+        if (editar) { editarCategoria(editar, estadoCategorias.lifecycleId); return; }
+        var estado = target.closest('.btn-cambiar-estado-categoria');
+        if (estado) { cambiarEstado(estado.dataset.id, estado.dataset.estado, estadoCategorias.lifecycleId); return; }
+        var eliminar = target.closest('.btn-eliminar-categoria');
+        if (eliminar) eliminarCategoria(eliminar.dataset.id, estadoCategorias.lifecycleId);
+    }
 
-        fetch(`/categorias/${id}/estado?estado=${estado}`, {
-            method: "POST"
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.status === "OK") {
+    function manejarSubmit(event) {
+        event.preventDefault();
+        var lifecycleId = estadoCategorias.lifecycleId;
+        var form = estadoCategorias.formCategoria;
+        var submit = form.querySelector('button[type="submit"]');
+        if (submit) { submit.disabled = true; submit.textContent = 'Guardando...'; }
+        var data = new FormData(form);
+        var hidden = estadoCategorias.root.querySelector('#tipoUnidad-hidden');
+        if (hidden && hidden.value) data.set('tipoUnidad', hidden.value);
+        else data.set('tipoUnidad', estadoCategorias.tipoUnidadField.value);
+        fetch('/categorias/ajax', { method: 'POST', body: data })
+            .then(function (response) { return response.json(); })
+            .then(function (result) {
+                if (!activo(lifecycleId)) return;
+                if (result.status === 'OK') {
+                    if (window.jQuery && window.jQuery.fn.modal) window.jQuery(estadoCategorias.modalCategoria).modal('hide');
                     reloadCategoriasTable();
+                    window.Swal.fire({ icon: 'success', title: '¡Guardado!', text: 'La categoría se ha guardado correctamente.', timer: 2000, showConfirmButton: false });
                 } else {
-                    alert(data.message || "Error al cambiar el estado");
+                    window.Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'Error guardando categoría.', confirmButtonColor: '#28a745' });
                 }
             })
-            .catch(err => console.error("Error:", err));
-    }
-
-    // Función: Eliminar Categoría por Fetch asíncrono con SweetAlert2
-    function CategoriaEliminar(id) {
-        Swal.fire({
-            title: "¿Estás seguro?",
-            text: "La categoría se eliminará del sistema.",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#dc3545",
-            cancelButtonColor: "#6c757d",
-            confirmButtonText: "Sí, eliminar",
-            cancelButtonText: "Cancelar",
-            reverseButtons: true
-        }).then((result) => {
-            if (!result.isConfirmed) return;
-
-            fetch(`/categorias/${id}/eliminar`, {
-                method: "POST"
+            .catch(function () {
+                if (activo(lifecycleId)) window.Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un error al guardar la categoría.', confirmButtonColor: '#28a745' });
             })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === "OK") {
-                        reloadCategoriasTable();
-                        Swal.fire({
-                            icon: "success",
-                            title: "¡Eliminado!",
-                            text: "La categoría ha sido eliminada.",
-                            timer: 1500,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        // Mostrar el mensaje exacto del backend (incluye validación de productos asociados)
-                        Swal.fire({
-                            icon: "error",
-                            title: "No se puede eliminar",
-                            text: data.message || "Error al eliminar la categoría.",
-                            confirmButtonColor: "#28a745"
-                        });
-                    }
-                })
-                .catch(err => {
-                    console.error("Error:", err);
-                    Swal.fire({
-                        icon: "error",
-                        title: "Error",
-                        text: "Ocurrió un error al eliminar la categoría.",
-                        confirmButtonColor: "#28a745"
-                    });
-                });
-        });
+            .finally(function () { if (submit && activo(lifecycleId)) { submit.disabled = false; submit.textContent = 'Guardar'; } });
     }
-});
 
-// Inicialización de DataTables para Categorías
-function initTablaCategorias() {
-    if ($.fn.DataTable) {
-        const table = $('#tabla-categorias');
-        if ($.fn.dataTable.isDataTable(table)) {
-            table.DataTable().destroy();
-        }
-
-        const dataTable = table.DataTable({
-            dom: 'rt<"bottom"ip><"clear">',
-            paging: true,
-            pageLength: 10,
-            lengthMenu: [[10, 20, 30, 40, 50], [10, 20, 30, 40, 50]],
-            lengthChange: true,
-            searching: true,
-            ordering: true,
-            info: true,
-            autoWidth: false,
-            responsive: true,
-            pagingType: 'simple',
-            scrollY: "400px",
-            scrollCollapse: true,
-            language: {
-                search: 'Buscar:',
-                lengthMenu: 'Mostrar _MENU_ registros',
-                info: 'Mostrando _START_ a _END_ de _TOTAL_ registros',
-                infoEmpty: 'No hay registros',
-                infoFiltered: '(filtrado de _MAX_ registros)',
-                zeroRecords: 'No se encontraron resultados',
-                paginate: {
-                    previous: 'Anterior',
-                    next: 'Siguiente'
-                }
-            }
+    function initTablaCategorias() {
+        if (!window.jQuery || !window.jQuery.fn.DataTable || !estadoCategorias.root) return;
+        var $table = window.jQuery(estadoCategorias.root.querySelector('#tabla-categorias'));
+        if (!$table.length) return;
+        if (window.jQuery.fn.dataTable.isDataTable($table)) $table.DataTable().destroy();
+        var dt = $table.DataTable({
+            dom: 'rt<"bottom"ip><"clear">', paging: true, pageLength: 10,
+            lengthMenu: [[10, 20, 30, 40, 50], [10, 20, 30, 40, 50]], lengthChange: true,
+            searching: true, ordering: true, info: true, autoWidth: false, responsive: true,
+            pagingType: 'simple', scrollY: '400px', scrollCollapse: true,
+            language: { search: 'Buscar:', lengthMenu: 'Mostrar _MENU_ registros', info: 'Mostrando _START_ a _END_ de _TOTAL_ registros', infoEmpty: 'No hay registros', infoFiltered: '(filtrado de _MAX_ registros)', zeroRecords: 'No se encontraron resultados', paginate: { previous: 'Anterior', next: 'Siguiente' } }
         });
-
-        // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
-            dataTable.columns.adjust().draw();
-        });
-
-        // Conectar controles personalizados
-        const $lengthSelect = $('#categorias-length');
-        const $searchInput = $('#categorias-search');
-
-        // Cambiar número de registros por página
-        if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
-                const pageLength = parseInt($(this).val(), 10);
-                dataTable.page.len(pageLength).draw();
-            });
+        estadoCategorias.table = $table[0]; estadoCategorias.dataTable = dt;
+        estadoCategorias.resizeHandler = function () { dt.columns.adjust().draw(); };
+        window.jQuery(window).on('resize.categorias', estadoCategorias.resizeHandler);
+        estadoCategorias.lengthSelect = estadoCategorias.root.querySelector('#categorias-length');
+        estadoCategorias.searchInput = estadoCategorias.root.querySelector('#categorias-search');
+        if (estadoCategorias.lengthSelect) {
+            estadoCategorias.lengthHandler = function () { dt.page.len(parseInt(estadoCategorias.lengthSelect.value, 10)).draw(); };
+            estadoCategorias.lengthSelect.addEventListener('change', estadoCategorias.lengthHandler);
         }
-
-        // Búsqueda personalizada
-        if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
-                dataTable.search(this.value).draw();
-            });
+        if (estadoCategorias.searchInput) {
+            estadoCategorias.searchHandler = function () { dt.search(estadoCategorias.searchInput.value).draw(); };
+            estadoCategorias.searchInput.addEventListener('keyup', estadoCategorias.searchHandler);
         }
-
-        // Ocultar controles nativos duplicados de DataTables
-        const $wrapper = table.closest('.dataTables_wrapper');
-        if ($wrapper.length) {
-            const wrapperEl = $wrapper[0];
-            const paginateContainer = wrapperEl.querySelector('.dataTables_paginate');
-            if (paginateContainer) {
-                paginateContainer.style.display = 'none';
-            }
-
-            const defaultInfo = wrapperEl.querySelector('.dataTables_info');
-            if (defaultInfo) {
-                defaultInfo.style.display = 'none';
-            }
-
-            const pagerRow = document.createElement('div');
-            pagerRow.className = 'compras-pager-row';
-            wrapperEl.appendChild(pagerRow);
-
-            const infoBar = document.createElement('div');
-            infoBar.className = 'compras-info-bar';
-            pagerRow.appendChild(infoBar);
-
-            const customPager = document.createElement('div');
-            customPager.className = 'compras-custom-pagination';
-            customPager.setAttribute('aria-label', 'Paginación de categorías');
-            pagerRow.appendChild(customPager);
-
-            injectCustomPaginationStyles();
-            renderCustomInfo(dataTable, infoBar);
-            renderCustomPagination(dataTable, customPager);
-            attachSwipePagination(wrapperEl, dataTable);
-
-            dataTable.on('draw.dt', () => {
-                renderCustomInfo(dataTable, infoBar);
-                renderCustomPagination(dataTable, customPager);
-            });
+        var wrapper = $table.closest('.dataTables_wrapper')[0];
+        if (wrapper) {
+            var nativePager = wrapper.querySelector('.dataTables_paginate'); if (nativePager) nativePager.style.display = 'none';
+            var nativeInfo = wrapper.querySelector('.dataTables_info'); if (nativeInfo) nativeInfo.style.display = 'none';
+            var pagerRow = document.createElement('div'); pagerRow.className = 'categorias-pager-row';
+            var info = document.createElement('div'); info.className = 'categorias-info-bar';
+            var pager = document.createElement('div'); pager.className = 'categorias-custom-pagination'; pager.setAttribute('aria-label', 'Paginación de categorías');
+            pagerRow.appendChild(info); pagerRow.appendChild(pager); wrapper.appendChild(pagerRow);
+            injectCustomPaginationStylesCategorias(); renderCustomInfoCategorias(dt, info); renderCustomPaginationCategorias(dt, pager);
+            estadoCategorias.swipeCleanup = attachSwipePaginationCategorias(wrapper, dt);
+            estadoCategorias.drawHandler = function () { renderCustomInfoCategorias(dt, info); renderCustomPaginationCategorias(dt, pager); };
+            dt.on('draw.dt.categorias', estadoCategorias.drawHandler);
         }
     }
-}
 
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
+    function destruirTablaCategorias() {
+        if (estadoCategorias.lengthSelect && estadoCategorias.lengthHandler) estadoCategorias.lengthSelect.removeEventListener('change', estadoCategorias.lengthHandler);
+        if (estadoCategorias.searchInput && estadoCategorias.searchHandler) estadoCategorias.searchInput.removeEventListener('keyup', estadoCategorias.searchHandler);
+        if (window.jQuery && estadoCategorias.resizeHandler) window.jQuery(window).off('resize.categorias', estadoCategorias.resizeHandler);
+        if (estadoCategorias.swipeCleanup) estadoCategorias.swipeCleanup();
+        if (estadoCategorias.table) { var wrapper = estadoCategorias.table.closest('.dataTables_wrapper'); if (wrapper) wrapper.querySelectorAll('.categorias-pager-row').forEach(function (row) { row.remove(); }); }
+        if (estadoCategorias.dataTable) { if (estadoCategorias.drawHandler) estadoCategorias.dataTable.off('draw.dt.categorias', estadoCategorias.drawHandler); estadoCategorias.dataTable.destroy(); }
+        estadoCategorias.table = null; estadoCategorias.dataTable = null; estadoCategorias.resizeHandler = null;
+        estadoCategorias.lengthSelect = null; estadoCategorias.lengthHandler = null; estadoCategorias.searchInput = null;
+        estadoCategorias.searchHandler = null; estadoCategorias.drawHandler = null; estadoCategorias.swipeCleanup = null;
+    }
+
+    function reloadCategoriasTable() {
+        var lifecycleId = estadoCategorias.lifecycleId;
+        return fetch('/categorias/tabla', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch', 'Accept': 'text/html' } })
+            .then(function (response) { if (!response.ok) throw new Error('Error cargando tabla de categorías'); return response.text(); })
+            .then(function (html) {
+                if (!activo(lifecycleId)) return;
+                destruirTablaCategorias();
+                var tbody = estadoCategorias.root.querySelector('#tabla-categorias-body');
+                if (!tbody) throw new Error('No se encontró el cuerpo de la tabla de categorías.');
+                tbody.outerHTML = html;
+                initTablaCategorias();
+            })
+            .catch(function (error) { if (activo(lifecycleId)) console.error('ERROR RECARGANDO TABLA:', error); });
+    }
+
+    function injectCustomPaginationStylesCategorias() {
+        if (document.getElementById('categorias-custom-pagination-style')) return;
+        var style = document.createElement('style'); style.id = 'categorias-custom-pagination-style';
+        style.textContent = '.categorias-info-bar{display:flex;justify-content:flex-start;align-items:center;margin:10px 0 6px;font-size:.95rem;color:#495057;font-weight:600;flex:1}.categorias-pager-row{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:4px;gap:12px}.categorias-custom-pagination{display:flex;justify-content:flex-end;align-items:center;gap:4px;padding:6px 0;flex-wrap:nowrap;white-space:nowrap;overflow:hidden}.categorias-custom-pagination .page-btn{min-width:38px;height:38px;padding:0 10px;border:1px solid #ced4da;border-radius:6px;background:#fff;color:#343a40;display:inline-flex;align-items:center;justify-content:center;font-weight:600;cursor:pointer;line-height:1}.categorias-custom-pagination .page-btn.active{background:#0d6efd;color:#fff;border-color:#0d6efd}.categorias-custom-pagination .page-btn:disabled{opacity:.65;cursor:not-allowed}.categorias-custom-pagination .page-btn:hover:not(:disabled){background:#e9ecef}';
+        document.head.appendChild(style);
+    }
+
+    function renderCustomInfoCategorias(dt, infoElement) {
+        var info = dt.page.info(); var total = info.recordsTotal; var start = total === 0 ? 0 : info.start + 1; var end = total === 0 ? 0 : info.end;
+        infoElement.textContent = total === 0 ? 'No hay registros para mostrar' : 'Mostrando ' + start + ' a ' + end + ' de ' + total + ' registros';
+    }
+
+    function renderCustomPaginationCategorias(dt, pager) {
+        var info = dt.page.info(); pager.innerHTML = '';
+        if (info.pages <= 1) { pager.style.display = 'none'; return; }
+        pager.style.display = 'flex';
+        function button(label, page, current, disabled) {
+            var el = document.createElement('button'); el.type = 'button'; el.textContent = label; el.className = 'page-btn' + (current ? ' active' : ''); el.disabled = disabled; el.setAttribute('aria-current', current ? 'page' : 'false');
+            if (!disabled) el.addEventListener('click', function (event) { event.preventDefault(); dt.page(page).draw(false); });
+            return el;
+        }
+        pager.appendChild(button('‹', Math.max(0, info.page - 1), false, info.page === 0));
+        var start = Math.max(0, Math.min(info.page - 1, info.pages - 3)); var end = Math.min(info.pages - 1, start + 2);
+        for (var page = start; page <= end; page += 1) pager.appendChild(button(String(page + 1), page, page === info.page, false));
+        pager.appendChild(button('›', Math.min(info.pages - 1, info.page + 1), false, info.page >= info.pages - 1));
+    }
+
+    function attachSwipePaginationCategorias(wrapper, dt) {
+        var startX = 0;
+        function touchStart(event) { startX = event.touches[0].clientX; }
+        function touchEnd(event) { if (!event.changedTouches.length) return; var delta = event.changedTouches[0].clientX - startX; if (Math.abs(delta) >= 50) dt.page(delta < 0 ? 'next' : 'previous').draw(false); }
+        wrapper.addEventListener('touchstart', touchStart, { passive: true }); wrapper.addEventListener('touchend', touchEnd, { passive: true });
+        return function () { wrapper.removeEventListener('touchstart', touchStart); wrapper.removeEventListener('touchend', touchEnd); };
+    }
+
+    function initCategorias() {
+        if (estadoCategorias.initialized) return;
+        estadoCategorias.root = document.querySelector('[data-modulo="categorias"]'); if (!estadoCategorias.root) return;
+        estadoCategorias.lifecycleId += 1; estadoCategorias.initialized = true;
+        estadoCategorias.modalCategoria = estadoCategorias.root.querySelector('#modal-categoria');
+        estadoCategorias.modalVerCapacidades = estadoCategorias.root.querySelector('#modal-ver-capacidades');
+        estadoCategorias.formCategoria = estadoCategorias.root.querySelector('#form-categoria');
+        estadoCategorias.tipoUnidadField = estadoCategorias.root.querySelector('#tipoUnidad');
+        estadoCategorias.inputNuevaCapacidad = estadoCategorias.root.querySelector('#input-nueva-capacidad');
+        estadoCategorias.btnAgregarCapacidad = estadoCategorias.root.querySelector('#btn-agregar-capacidad');
+        var input = estadoCategorias.inputNuevaCapacidad.parentNode.parentNode; var mensaje = document.createElement('small'); mensaje.className = 'form-text text-danger mt-1'; mensaje.id = 'mensaje-validacion-capacidad'; mensaje.style.display = 'none'; input.appendChild(mensaje);
+        estadoCategorias.clickHandler = manejarClick; estadoCategorias.root.addEventListener('click', estadoCategorias.clickHandler);
+        estadoCategorias.submitHandler = manejarSubmit; if (estadoCategorias.formCategoria) estadoCategorias.formCategoria.addEventListener('submit', estadoCategorias.submitHandler);
+        estadoCategorias.tipoUnidadChangeHandler = cambiarTipoUnidad; estadoCategorias.tipoUnidadField.addEventListener('change', estadoCategorias.tipoUnidadChangeHandler);
+        estadoCategorias.capacidadClickHandler = agregarCapacidad; estadoCategorias.btnAgregarCapacidad.addEventListener('click', estadoCategorias.capacidadClickHandler);
+        estadoCategorias.capacidadKeypressHandler = function (event) { if (event.key === 'Enter') { event.preventDefault(); agregarCapacidad(); } };
+        estadoCategorias.inputNuevaCapacidad.addEventListener('keypress', estadoCategorias.capacidadKeypressHandler);
+        estadoCategorias.modalHiddenHandler = function () { estadoCategorias.inputNuevaCapacidad.value = ''; estadoCategorias.capacidadesActuales = []; estadoCategorias.unidadActual = ''; renderizarCapacidades(); estadoCategorias.tipoUnidadField.disabled = false; estadoCategorias.tipoUnidadField.value = ''; var hidden = estadoCategorias.root.querySelector('#tipoUnidad-hidden'); if (hidden) { hidden.removeAttribute('name'); hidden.value = ''; } actualizarControlesUnidad(); };
+        if (window.jQuery && window.jQuery.fn.on) window.jQuery(estadoCategorias.modalCategoria).on('hidden.bs.modal.categorias', estadoCategorias.modalHiddenHandler);
         initTablaCategorias();
     }
-});
 
-// Funciones de paginación personalizada (reutilizadas de compras.js)
-function injectCustomPaginationStyles() {
-    if (document.getElementById('compras-custom-pagination-style')) {
-        return;
+    function destroyCategorias() {
+        if (!estadoCategorias.initialized) return;
+        estadoCategorias.root.removeEventListener('click', estadoCategorias.clickHandler);
+        if (estadoCategorias.formCategoria) estadoCategorias.formCategoria.removeEventListener('submit', estadoCategorias.submitHandler);
+        estadoCategorias.tipoUnidadField.removeEventListener('change', estadoCategorias.tipoUnidadChangeHandler);
+        estadoCategorias.inputNuevaCapacidad.removeEventListener('keypress', estadoCategorias.capacidadKeypressHandler);
+        estadoCategorias.btnAgregarCapacidad.removeEventListener('click', estadoCategorias.capacidadClickHandler);
+        if (window.jQuery && window.jQuery.fn.off) window.jQuery(estadoCategorias.modalCategoria).off('hidden.bs.modal.categorias', estadoCategorias.modalHiddenHandler);
+        destruirTablaCategorias();
+        if (estadoCategorias.editAbortController) estadoCategorias.editAbortController.abort(); if (estadoCategorias.viewAbortController) estadoCategorias.viewAbortController.abort();
+        estadoCategorias.editAbortController = null; estadoCategorias.viewAbortController = null; estadoCategorias.editRequestId += 1; estadoCategorias.viewRequestId += 1;
+        if (estadoCategorias.validationTimeoutId) clearTimeout(estadoCategorias.validationTimeoutId); estadoCategorias.validationTimeoutId = null;
+        if (window.jQuery && window.jQuery.fn.modal) { window.jQuery(estadoCategorias.modalCategoria).modal('hide'); window.jQuery(estadoCategorias.modalVerCapacidades).modal('hide'); }
+        estadoCategorias.lifecycleId += 1;
+        estadoCategorias.root = null;
+        estadoCategorias.clickHandler = null;
+        estadoCategorias.formCategoria = null;
+        estadoCategorias.submitHandler = null;
+        estadoCategorias.tipoUnidadField = null;
+        estadoCategorias.tipoUnidadChangeHandler = null;
+        estadoCategorias.inputNuevaCapacidad = null;
+        estadoCategorias.capacidadKeypressHandler = null;
+        estadoCategorias.btnAgregarCapacidad = null;
+        estadoCategorias.capacidadClickHandler = null;
+        estadoCategorias.modalCategoria = null;
+        estadoCategorias.modalVerCapacidades = null;
+        estadoCategorias.modalHiddenHandler = null;
+        estadoCategorias.capacidadesActuales = [];
+        estadoCategorias.unidadActual = '';
+        estadoCategorias.initialized = false;
     }
 
-    const style = document.createElement('style');
-    style.id = 'compras-custom-pagination-style';
-    style.textContent = `
-        .compras-info-bar {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            margin: 10px 0 6px;
-            font-size: 0.95rem;
-            color: #495057;
-            font-weight: 600;
-            visibility: visible !important;
-            opacity: 1 !important;
-            flex: 1;
-        }
-        .compras-pager-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            margin-top: 4px;
-            gap: 12px;
-        }
-        .compras-custom-pagination {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 4px;
-            padding: 6px 0;
-            flex-wrap: nowrap;
-            white-space: nowrap;
-            overflow: hidden;
-            visibility: visible !important;
-            opacity: 1 !important;
-        }
-        .compras-custom-pagination .page-btn {
-            min-width: 38px;
-            height: 38px;
-            padding: 0 10px;
-            border: 1px solid #ced4da;
-            border-radius: 6px;
-            background: #fff;
-            color: #343a40;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            cursor: pointer;
-            line-height: 1;
-        }
-        .compras-custom-pagination .page-btn.active {
-            background: #0d6efd;
-            color: #fff;
-            border-color: #0d6efd;
-        }
-        .compras-custom-pagination .page-btn:disabled {
-            opacity: 0.65;
-            cursor: not-allowed;
-        }
-        .compras-custom-pagination .page-btn:hover:not(:disabled) {
-            background: #e9ecef;
-        }
-        /* Ocultar controles nativos duplicados de DataTables */
-        .dataTables_wrapper .dataTables_length:not(:first-of-type),
-        .dataTables_wrapper .dataTables_filter:not(:first-of-type) {
-            display: none !important;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-function renderCustomInfo(dataTable, infoElement) {
-    const info = dataTable.page.info();
-    const totalRecords = info.recordsTotal;
-    const start = totalRecords === 0 ? 0 : info.start + 1;
-    const end = totalRecords === 0 ? 0 : info.end;
-
-    infoElement.textContent = totalRecords === 0
-        ? 'No hay registros para mostrar'
-        : `Mostrando ${start} a ${end} de ${totalRecords} registros`;
-}
-
-function renderCustomPagination(dataTable, pagerElement) {
-    const info = dataTable.page.info();
-    const totalPages = info.pages;
-    const currentPage = info.page;
-
-    pagerElement.innerHTML = '';
-
-    if (totalPages <= 1) {
-        pagerElement.style.display = 'none';
-        return;
-    }
-
-    pagerElement.style.display = 'flex';
-    pagerElement.style.visibility = 'visible';
-    pagerElement.style.opacity = '1';
-
-    const createPageButton = (label, pageIndex, isActive = false, disabled = false) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = label;
-        button.className = `page-btn${isActive ? ' active' : ''}`;
-        button.setAttribute('aria-current', isActive ? 'page' : 'false');
-
-        if (disabled) {
-            button.disabled = true;
-        } else {
-            button.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                }
-                dataTable.page(pageIndex).draw(false);
-            });
-        }
-
-        return button;
-    };
-
-    const prevButton = createPageButton('‹', Math.max(0, currentPage - 1), false, currentPage === 0);
-    prevButton.setAttribute('aria-label', 'Página anterior');
-    pagerElement.appendChild(prevButton);
-
-    const startPage = Math.max(0, Math.min(currentPage - 1, totalPages - 3));
-    const endPage = Math.min(totalPages - 1, startPage + 2);
-
-    for (let pageIndex = startPage; pageIndex <= endPage; pageIndex += 1) {
-        const pageButton = createPageButton(String(pageIndex + 1), pageIndex, pageIndex === currentPage);
-        pagerElement.appendChild(pageButton);
-    }
-
-    const nextButton = createPageButton('›', Math.min(totalPages - 1, currentPage + 1), false, currentPage >= totalPages - 1);
-    nextButton.setAttribute('aria-label', 'Página siguiente');
-    pagerElement.appendChild(nextButton);
-}
-
-function attachSwipePagination(wrapperElement, dataTable) {
-    let touchStartX = 0;
-
-    wrapperElement.addEventListener('touchstart', (event) => {
-        touchStartX = event.touches[0].clientX;
-    }, { passive: true });
-
-    wrapperElement.addEventListener('touchend', (event) => {
-        const touchEndX = event.changedTouches[0].clientX;
-        const deltaX = touchEndX - touchStartX;
-
-        if (Math.abs(deltaX) < 50) {
-            return;
-        }
-
-        if (deltaX < 0) {
-            dataTable.page('next').draw(false);
-        } else {
-            dataTable.page('previous').draw(false);
-        }
-    }, { passive: true });
-}
+    window.AppModules.categorias = { init: initCategorias, destroy: destroyCategorias, reloadTable: reloadCategoriasTable };
+}());
