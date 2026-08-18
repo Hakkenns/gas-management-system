@@ -62,10 +62,17 @@
             script: '/assets/js/envases-maestro.js',
             titulo: 'Catalogo de Envases',
             nombre: 'Envases'
+        },
+        productos: {
+            ruta: '/productos',
+            fragmento: '/productos/fragment',
+            script: '/assets/js/productos.js',
+            titulo: 'Gestion de Productos',
+            nombre: 'Productos'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias', '/envases/vista']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias', '/envases/vista', '/productos']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');

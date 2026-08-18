@@ -1,4 +1,62 @@
-document.addEventListener("DOMContentLoaded", function () {
+window.AppModules = window.AppModules || {};
+
+(function () {
+    const estadoProductos = {
+        initialized: false,
+        root: null,
+        lifecycleId: 0,
+        tableRequestId: 0,
+        categoryRequestId: 0,
+        editRequestId: 0,
+        providerRequestId: 0,
+        lotsRequestId: 0,
+        controllers: new Set(),
+        timers: new Set(),
+        readers: new Set(),
+        listeners: [],
+        swipeHandlers: [],
+        dataTable: null
+    };
+
+    function activo(lifecycleId) {
+        return estadoProductos.initialized
+            && estadoProductos.lifecycleId === lifecycleId
+            && estadoProductos.root
+            && estadoProductos.root.isConnected;
+    }
+
+    function registrarController(controller) {
+        estadoProductos.controllers.add(controller);
+        return controller;
+    }
+
+    function registrarTimer(callback, delay) {
+        const timer = setTimeout(() => {
+            estadoProductos.timers.delete(timer);
+            callback();
+        }, delay);
+        estadoProductos.timers.add(timer);
+        return timer;
+    }
+
+    function registrarListener(target, type, handler, options) {
+        if (!target) return;
+        target.addEventListener(type, handler, options);
+        estadoProductos.listeners.push({ target, type, handler, options });
+    }
+
+    function iniciarVistaProductos() {
+    const root = window.document.querySelector('[data-modulo="productos"]');
+    if (!root) return;
+    estadoProductos.root = root;
+    const lifecycleId = estadoProductos.lifecycleId;
+    const document = {
+        getElementById: id => root.querySelector('#' + id),
+        querySelector: selector => root.querySelector(selector),
+        querySelectorAll: selector => root.querySelectorAll(selector),
+        createElement: (...args) => window.document.createElement(...args),
+        get activeElement() { return window.document.activeElement; }
+    };
     const form = document.getElementById("form-producto");
     const modalTitulo = document.getElementById("modal-titulo-producto");
 
@@ -94,6 +152,11 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const requestId = ++estadoProductos.categoryRequestId;
+        if (estadoProductos.categoryController) estadoProductos.categoryController.abort();
+        const controller = registrarController(new AbortController());
+        estadoProductos.categoryController = controller;
+
         capacidadInput.innerHTML = "";
         const placeholder = document.createElement("option");
         placeholder.value = "";
@@ -103,11 +166,12 @@ document.addEventListener("DOMContentLoaded", function () {
         capacidadInput.appendChild(placeholder);
 
         try {
-            const response = await fetch(`/categorias/${categoriaId}`);
+            const response = await fetch(`/categorias/${categoriaId}`, { signal: controller.signal });
             if (!response.ok) {
                 throw new Error("No se pudo cargar la categoría");
             }
             const data = await response.json();
+            if (!activo(lifecycleId) || requestId !== estadoProductos.categoryRequestId) return;
             const unidad = data.unidadMedida || unidadMedidaSelect.value || "";
             const etiqueta = data.etiquetaCapacidad || labelCapacidad.innerText || "Capacidad";
             labelCapacidad.innerText = etiqueta;
@@ -135,7 +199,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 capacidadInput.appendChild(option);
             }
         } catch (error) {
+            if (error.name === 'AbortError') return;
             console.error("Error cargando capacidades de categoría:", error);
+        } finally {
+            estadoProductos.controllers.delete(controller);
         }
     }
 
@@ -280,6 +347,7 @@ document.addEventListener("DOMContentLoaded", function () {
             option.disabled = !coincideUnidad;
         });
 
+
         const opcionSeleccionada = Array.from(envaseSelect.options).find(option =>
             option.value === String(seleccionSolicitada) && !option.hidden
         );
@@ -382,7 +450,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ============ MANEJADORES DEL MODAL DE BÚSQUEDA DE CATEGORÍAS ============
 
     // Abrir modal al hacer clic en el botón de búsqueda
-    btnBuscarCategoria.addEventListener("click", function () {
+    registrarListener(btnBuscarCategoria, "click", function () {
         // Limpiar filtros
         inputBuscarCategoriaNombre.value = "";
         selectFiltroUnidadMedida.value = "";
@@ -413,16 +481,16 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Eventos para filtrar
-    inputBuscarCategoriaNombre.addEventListener("keyup", filtrarCategorias);
-    inputBuscarCategoriaNombre.addEventListener("change", filtrarCategorias);
-    selectFiltroUnidadMedida.addEventListener("change", filtrarCategorias);
+    registrarListener(inputBuscarCategoriaNombre, "keyup", filtrarCategorias);
+    registrarListener(inputBuscarCategoriaNombre, "change", filtrarCategorias);
+    registrarListener(selectFiltroUnidadMedida, "change", filtrarCategorias);
     // El botón de filtrar puede haber sido eliminado del DOM; añadir handler sólo si existe
     if (btnFiltrarCategorias) {
-        btnFiltrarCategorias.addEventListener("click", filtrarCategorias);
+        registrarListener(btnFiltrarCategorias, "click", filtrarCategorias);
     }
 
     // Seleccionar categoría desde el modal
-    tablaBusquedaCategorias.addEventListener("click", function (e) {
+    registrarListener(tablaBusquedaCategorias, "click", function (e) {
         const btnSeleccionar = e.target.closest(".btn-seleccionar-categoria");
         if (btnSeleccionar) {
             const fila = btnSeleccionar.closest("tr");
@@ -447,14 +515,14 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Eventos de cambio en unidad de medida
-    unidadMedidaSelect.addEventListener("change", function () {
+    registrarListener(unidadMedidaSelect, "change", function () {
         cargarEnvases();
         actualizarRestriccionesCapacidad();
         actualizarMensajeGanancia();
         actualizarMensajeStockMinimo();
     });
 
-    requiereEnvaseCheckbox.addEventListener("change", function () {
+    registrarListener(requiereEnvaseCheckbox, "change", function () {
         actualizarVisibilidadEnvase();
     });
 
@@ -470,21 +538,25 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    gananciaProductoInput.addEventListener("change", calcularPrecioVenta);
-    gananciaProductoInput.addEventListener("input", calcularPrecioVenta);
+    registrarListener(gananciaProductoInput, "change", calcularPrecioVenta);
+    registrarListener(gananciaProductoInput, "input", calcularPrecioVenta);
 
     // MANEJO DE VISTA PREVIA DE IMAGEN
-    archivoImagenInput.addEventListener("change", function (e) {
+    registrarListener(archivoImagenInput, "change", function (e) {
         const archivo = e.target.files[0];
         if (archivo) {
             const reader = new FileReader();
+            estadoProductos.readers.add(reader);
             reader.onload = function (evento) {
+                if (!activo(lifecycleId)) return;
                 previewImagen.src = evento.target.result;
                 previewImagen.style.display = "block";
                 textoSinImagen.style.display = "none";
                 document.querySelector(".custom-file-label").innerText = archivo.name;
                 quitarImagenInput.value = "false";
+                estadoProductos.readers.delete(reader);
             };
+            reader.onerror = () => estadoProductos.readers.delete(reader);
             reader.readAsDataURL(archivo);
         } else {
             previewImagen.src = "";
@@ -495,14 +567,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // BOTON AGREGAR IMAGEN
-    btnAgregarImagen.addEventListener("click", function () {
+    registrarListener(btnAgregarImagen, "click", function () {
         if (archivoImagenInput.files.length === 0) {
             alert("Por favor selecciona una imagen primero");
             return;
         }
         const archivo = archivoImagenInput.files[0];
         const reader = new FileReader();
+        estadoProductos.readers.add(reader);
         reader.onload = function (evento) {
+            if (!activo(lifecycleId)) return;
             imagenBase64Hidden.value = evento.target.result;
             quitarImagenInput.value = "false";
             btnAgregarImagen.innerText = "Imagen agregada";
@@ -513,12 +587,14 @@ document.addEventListener("DOMContentLoaded", function () {
             guardarEstadoImagenStaged(productoId);
 
             alert("La imagen se cargó correctamente");
+            estadoProductos.readers.delete(reader);
         };
+        reader.onerror = () => estadoProductos.readers.delete(reader);
         reader.readAsDataURL(archivo);
     });
 
     // BOTON LIMPIAR IMAGEN
-    btnLimpiarImagen.addEventListener("click", function () {
+    registrarListener(btnLimpiarImagen, "click", function () {
         archivoImagenInput.value = "";
         previewImagen.src = "";
         previewImagen.style.display = "none";
@@ -534,7 +610,7 @@ document.addEventListener("DOMContentLoaded", function () {
         guardarEstadoImagenStaged(productoId);
     });
 
-    form.addEventListener("submit", function (e) {
+    registrarListener(form, "submit", function (e) {
         e.preventDefault();
 
         if (!validarProducto()) {
@@ -550,6 +626,7 @@ document.addEventListener("DOMContentLoaded", function () {
         })
             .then(response => response.json())
             .then(res => {
+                if (!activo(lifecycleId)) return;
                 if (res.status === "OK") {
                     const productoId = idInput.value;
                     limpiarEstadoImagenStaged(productoId);
@@ -560,13 +637,18 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("Atención: " + res.message);
                 }
             })
-            .catch(err => alert("Error al procesar la solicitud."));
+            .catch(err => {
+                if (activo(lifecycleId)) alert("Error al procesar la solicitud.");
+            });
     });
 
-    document.addEventListener("click", function (e) {
+    registrarListener(contenedorTablaProductos, "click", function (e) {
         const editButton = e.target.closest(".btn-editar-producto");
 
         if (editButton) {
+            const currentEditRequestId = ++estadoProductos.editRequestId;
+            if (estadoProductos.editController) estadoProductos.editController.abort();
+            if (estadoProductos.editLotsController) estadoProductos.editLotsController.abort();
             modalTitulo.textContent = "Editar Producto";
 
             idInput.value = editButton.dataset.id;
@@ -605,10 +687,19 @@ document.addEventListener("DOMContentLoaded", function () {
             if (stockVaciosInput) stockVaciosInput.value = editButton.dataset.stockvacios || 0;
             requiereEnvaseCheckbox.checked = editButton.dataset.requiereenvase === "true";
             if (requiereEnvaseCheckbox.checked) {
-                fetch(`/productos/${editButton.dataset.id}/envase`)
+                const envaseController = registrarController(new AbortController());
+                estadoProductos.editController = envaseController;
+                fetch(`/productos/${editButton.dataset.id}/envase`, { signal: envaseController.signal })
                     .then(response => response.ok ? response.json() : { envaseId: null })
-                    .then(data => actualizarVisibilidadEnvase(data.envaseId || ""))
-                    .catch(() => actualizarVisibilidadEnvase());
+                    .then(data => {
+                        if (activo(lifecycleId) && currentEditRequestId === estadoProductos.editRequestId) {
+                            actualizarVisibilidadEnvase(data.envaseId || "");
+                        }
+                    })
+                    .catch(error => {
+                        if (error.name !== 'AbortError' && activo(lifecycleId) && currentEditRequestId === estadoProductos.editRequestId) actualizarVisibilidadEnvase();
+                    })
+                    .finally(() => estadoProductos.controllers.delete(envaseController));
             } else {
                 actualizarVisibilidadEnvase();
             }
@@ -616,7 +707,9 @@ document.addEventListener("DOMContentLoaded", function () {
             calcularPrecioVenta();
             cargarEstadoImagenStaged(editButton.dataset.id);
 
-            fetch(`/inventario-lotes/producto/${editButton.dataset.id}`)
+            const editLotsController = registrarController(new AbortController());
+            estadoProductos.editLotsController = editLotsController;
+            fetch(`/inventario-lotes/producto/${editButton.dataset.id}`, { signal: editLotsController.signal })
                 .then(response => {
                     if (!response.ok) {
                         throw new Error("No se pudo verificar el historial de lotes.");
@@ -624,27 +717,32 @@ document.addEventListener("DOMContentLoaded", function () {
                     return response.json();
                 })
                 .then(lotes => {
+                    if (!activo(lifecycleId) || currentEditRequestId !== estadoProductos.editRequestId) return;
                     const tieneLotes = Array.isArray(lotes) && lotes.length > 0;
                     actualizarGananciaEditable(!tieneLotes);
                     // Aplicar restricciones de edición: bloquear campos que no deben modificarse
                     aplicarRestriccionesEdicionProducto();
                     // Forzar carga de capacidad seleccionada después de cargar las opciones
                     if (capacidadInput && editButton.dataset.capacidad) {
-                        setTimeout(() => {
-                            capacidadInput.value = editButton.dataset.capacidad;
+                        registrarTimer(() => {
+                            if (activo(lifecycleId) && currentEditRequestId === estadoProductos.editRequestId && capacidadInput.isConnected) {
+                                capacidadInput.value = editButton.dataset.capacidad;
+                            }
                         }, 50);
                     }
-                    if (window.jQuery) window.jQuery("#modal-producto").modal("show");
+                    if (activo(lifecycleId) && window.jQuery) window.jQuery("#modal-producto").modal("show");
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || !activo(lifecycleId) || currentEditRequestId !== estadoProductos.editRequestId) return;
                     console.error(err);
                     alert("No se pudo verificar el historial de compras del producto. Por seguridad, intente nuevamente.");
-                });
+                })
+                .finally(() => estadoProductos.controllers.delete(editLotsController));
         }
     });
 
 
-    document.getElementById("contenedor-tabla-productos").addEventListener("click", function (e) {
+    registrarListener(contenedorTablaProductos, "click", function (e) {
         const btnVerDescripcion = e.target.closest(".btn-ver-descripcion");
         if (btnVerDescripcion) {
             const nombreProducto = btnVerDescripcion.dataset.nombre;
@@ -678,6 +776,7 @@ document.addEventListener("DOMContentLoaded", function () {
             fetch(`/productos/${id}/estado?estado=${nuevoEstado}`, { method: "POST" })
                 .then(response => response.json())
                 .then(res => {
+                    if (!activo(lifecycleId)) return;
                     if (res.status === "OK") {
                         const toastMensaje = document.getElementById("toast-mensaje");
                         if (toastMensaje) {
@@ -694,7 +793,9 @@ document.addEventListener("DOMContentLoaded", function () {
                         alert("Error al cambiar de estado: " + res.message);
                     }
                 })
-                .catch(err => alert("Error en el servidor al cambiar estado"));
+                .catch(err => {
+                    if (activo(lifecycleId)) alert("Error en el servidor al cambiar estado");
+                });
         }
 
         const btnEliminar = e.target.closest(".btn-eliminar-producto, .btn-eliminar");
@@ -711,26 +812,24 @@ document.addEventListener("DOMContentLoaded", function () {
                 method: "POST"
             })
             .then(r => r.json())
-            .then(res => {
+                .then(res => {
+                if (!activo(lifecycleId)) return;
                 if (res.status === "OK") {
                     console.log("Producto eliminado correctamente en la base de datos.");
-                    if (typeof reloadProductosTable === "function") {
-                        reloadProductosTable();
-                    } else {
-                        window.location.reload();
-                    }
+                    if (activo(lifecycleId)) recargarTabla(true);
                 } else {
                     alert("Atención: " + res.message);
                 }
             })
             .catch(err => {
+                if (!activo(lifecycleId)) return;
                 console.error("Error al eliminar el producto:", err);
                 alert("No se pudo procesar la eliminación del producto.");
             });
         }
     });
 
-    document.getElementById("btn-crear-producto").addEventListener("click", function () {
+    registrarListener(document.getElementById("btn-crear-producto"), "click", function () {
         modalTitulo.innerText = "Nuevo Producto";
         form.reset();
         categoriaDisplay.value = "";
@@ -787,8 +886,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function redrawRow(row) {
-        if (window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable('#tabla-productos')) {
-            const dataTable = $('#tabla-productos').DataTable();
+        const tableNode = estadoProductos.root && estadoProductos.root.querySelector('#tabla-productos');
+        if (tableNode && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(tableNode)) {
+            const dataTable = $(tableNode).DataTable();
             dataTable.row(row).invalidate('dom').draw(false);
         }
     }
@@ -940,43 +1040,52 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function recargarTabla(preservarPagina = false) {
-        const contenedor = document.getElementById("contenedor-tabla-productos");
+        if (!activo(lifecycleId)) return;
+        const contenedor = estadoProductos.root.querySelector("#contenedor-tabla-productos");
         if (!contenedor) return;
 
         // Capturar página actual antes de destruir
         let paginaActual = 0;
-        if (preservarPagina && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable('#tabla-productos')) {
-            paginaActual = $('#tabla-productos').DataTable().page.info().page;
+        const tableNode = estadoProductos.root.querySelector('#tabla-productos');
+        if (preservarPagina && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(tableNode)) {
+            paginaActual = $(tableNode).DataTable().page.info().page;
         }
 
-        const oldWrapper = contenedor.querySelector('.dataTables_wrapper');
-        if (oldWrapper) {
-            oldWrapper.remove();
-        }
+        const requestId = ++estadoProductos.tableRequestId;
+        if (estadoProductos.tableController) estadoProductos.tableController.abort();
+        const controller = registrarController(new AbortController());
+        estadoProductos.tableController = controller;
+        destruirTablaProductos();
+        const currentTable = estadoProductos.root.querySelector('#tabla-productos');
 
-        const oldTable = contenedor.querySelector('#tabla-productos');
-        if (oldTable && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(oldTable)) {
-            $(oldTable).DataTable().clear().destroy();
-        }
-
-        fetch("/productos/tabla")
+        fetch("/productos/tabla", { signal: controller.signal })
             .then(response => response.text())
             .then(html => {
-                contenedor.innerHTML = html;
+                if (!activo(lifecycleId) || requestId !== estadoProductos.tableRequestId) return;
+                if (!currentTable || !currentTable.isConnected) return;
+                currentTable.outerHTML = html;
 
                 if (window.jQuery && $.fn.DataTable) {
                     initTablaProductos();
                     // Restaurar página si se solicitó
                     if (preservarPagina && paginaActual > 0) {
-                        setTimeout(() => {
-                            if ($.fn.dataTable.isDataTable('#tabla-productos')) {
-                                $('#tabla-productos').DataTable().page(paginaActual).draw(false);
+                        registrarTimer(() => {
+                            const refreshedTable = estadoProductos.root && estadoProductos.root.querySelector('#tabla-productos');
+                            if (activo(lifecycleId) && refreshedTable && $.fn.dataTable.isDataTable(refreshedTable)) {
+                                const tabla = $(refreshedTable).DataTable();
+                                const ultimaPagina = Math.max(0, tabla.page.info().pages - 1);
+                                tabla.page(Math.min(paginaActual, ultimaPagina)).draw(false);
                             }
                         }, 100);
                     }
                 }
             })
-            .catch(err => console.error("Error al refrescar la tabla:", err));
+            .catch(err => {
+                if (err.name !== 'AbortError' && activo(lifecycleId)) {
+                    console.error("Error al refrescar la tabla:", err);
+                }
+            })
+            .finally(() => estadoProductos.controllers.delete(controller));
     }
 
     // =========================================================================
@@ -990,9 +1099,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const tablaProvBody = document.querySelector("#tabla-proveedores-catalogo tbody");
 
     // 1. ESCUCHADOR DE CLICS GLOBAL (Detecta el botón de la lupa de Proveedores)
-    document.addEventListener("click", function (e) {
+    registrarListener(contenedorTablaProductos, "click", function (e) {
         const btnCatalogo = e.target.closest(".btn-catalogo-proveedores");
         if (btnCatalogo) {
+            const currentProviderRequestId = ++estadoProductos.providerRequestId;
+            if (estadoProductos.providerController) estadoProductos.providerController.abort();
             const productoId = btnCatalogo.dataset.id;
             const productoNombre = btnCatalogo.dataset.nombre;
 
@@ -1008,9 +1119,12 @@ document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".check-proveedor-item").forEach(chk => chk.checked = false);
 
             // LLAMADA AJAX: Consultamos al backend qué proveedores ya venden este producto
-            fetch("/catalogo-proveedores/listarTodo")
+            const providerController = registrarController(new AbortController());
+            estadoProductos.providerController = providerController;
+            fetch("/catalogo-proveedores/listarTodo", { signal: providerController.signal })
                 .then(r => r.json())
                 .then(data => {
+                    if (!activo(lifecycleId) || currentProviderRequestId !== estadoProductos.providerRequestId) return;
                     // Filtramos las asociaciones que correspondan exactamente a nuestro productoId
                     // Nota: Tu SimpleResponse envía idProducto numerico
                     data.forEach(item => {
@@ -1028,15 +1142,17 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || !activo(lifecycleId) || currentProviderRequestId !== estadoProductos.providerRequestId) return;
                     console.error("Error cargando catálogo:", err);
                     alert("No se pudo cargar el catálogo de proveedores actual.");
-                });
+                })
+                .finally(() => estadoProductos.controllers.delete(providerController));
         }
     });
 
     // 2. BUSCADOR EN TIEMPO REAL (Filtra proveedores al escribir sin usar botones)
     if (inputBuscarProv) {
-        inputBuscarProv.addEventListener("input", ejecutarFiltradoProveedores);
+        registrarListener(inputBuscarProv, "input", ejecutarFiltradoProveedores);
     }
 
     function ejecutarFiltradoProveedores() {
@@ -1057,9 +1173,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // 3. SINCRONIZACIÓN REACTIVA EN TIEMPO REAL (Manejo de Checkboxes individuales)
-    document.addEventListener("change", function (e) {
+    registrarListener(root, "change", function (e) {
         const checkbox = e.target.closest(".check-proveedor-item");
         if (checkbox) {
+            const checkboxLifecycleId = lifecycleId;
             if (checkbox.dataset.bloqueado === "true") {
                 return;
             }
@@ -1083,18 +1200,22 @@ document.addEventListener("DOMContentLoaded", function () {
                 })
                     .then(r => r.json())
                     .then(res => {
+                        if (!activo(checkboxLifecycleId) || !checkbox.isConnected) return;
                         if (res.status !== "OK") {
                             checkbox.checked = estadoAnterior;
                             alert(res.message);
                         }
                     })
                     .catch(() => {
+                        if (!activo(checkboxLifecycleId) || !checkbox.isConnected) return;
                         checkbox.checked = estadoAnterior;
                         alert("Error al intentar comunicar con el servidor.");
                     })
                     .finally(() => {
-                        checkbox.disabled = false;
-                        delete checkbox.dataset.bloqueado;
+                        if (activo(checkboxLifecycleId) && checkbox.isConnected) {
+                            checkbox.disabled = false;
+                            delete checkbox.dataset.bloqueado;
+                        }
                     });
 
             } else {
@@ -1103,6 +1224,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 })
                     .then(r => r.json())
                     .then(res => {
+                        if (!activo(checkboxLifecycleId) || !checkbox.isConnected) return;
                         if (res.status !== "OK") {
                             checkbox.checked = estadoAnterior;
                             alert(res.message);
@@ -1110,12 +1232,15 @@ document.addEventListener("DOMContentLoaded", function () {
                         actualizarEstadoCheckTodos();
                     })
                     .catch(() => {
+                        if (!activo(checkboxLifecycleId) || !checkbox.isConnected) return;
                         checkbox.checked = estadoAnterior;
                         alert("Error de red al desasociar producto.");
                     })
                     .finally(() => {
-                        checkbox.disabled = false;
-                        delete checkbox.dataset.bloqueado;
+                        if (activo(checkboxLifecycleId) && checkbox.isConnected) {
+                            checkbox.disabled = false;
+                            delete checkbox.dataset.bloqueado;
+                        }
                     });
             }
         }
@@ -1123,7 +1248,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // 4. CONTROL DEL CHECKBOX MAESTRO (Seleccionar / Deseleccionar todos de golpe)
     if (checkTodosProv) {
-        checkTodosProv.addEventListener("change", function () {
+        registrarListener(checkTodosProv, "change", function () {
             const estadoMaestro = checkTodosProv.checked;
             const checkboxesVisibles = Array.from(tablaProvBody.querySelectorAll("tr"))
                 .filter(tr => tr.style.display !== "none") // Solo actúa sobre los que están filtrados en pantalla
@@ -1158,9 +1283,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const cuerpoTablaLotes = document.getElementById("cuerpo-tabla-lotes");
     const cuerpoTablaRollos = document.getElementById("cuerpo-tabla-rollos");
 
-    document.addEventListener("click", function (e) {
+    registrarListener(root, "click", function (e) {
         const btnVerLotes = e.target.closest(".btn-ver-lotes");
         if (btnVerLotes) {
+            const currentLotsRequestId = ++estadoProductos.lotsRequestId;
+            if (estadoProductos.lotsController) estadoProductos.lotsController.abort();
             const productoId = btnVerLotes.dataset.id;
             const productoNombre = btnVerLotes.dataset.nombre;
             const unidadProducto = btnVerLotes.dataset.unidadmedida || "";
@@ -1177,12 +1304,15 @@ document.addEventListener("DOMContentLoaded", function () {
                     </tr>`;
             }
 
-            fetch(`/inventario-lotes/producto/${productoId}`)
+            const lotsController = registrarController(new AbortController());
+            estadoProductos.lotsController = lotsController;
+            fetch(`/inventario-lotes/producto/${productoId}`, { signal: lotsController.signal })
                 .then(r => {
                     if (!r.ok) throw new Error("Error de servidor");
                     return r.json();
                 })
                 .then(lotes => {
+                    if (!activo(lifecycleId) || currentLotsRequestId !== estadoProductos.lotsRequestId) return;
                     cuerpoTablaLotes.innerHTML = "";
 
                     if (lotes.length === 0) {
@@ -1239,9 +1369,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || !activo(lifecycleId) || currentLotsRequestId !== estadoProductos.lotsRequestId) return;
                     console.error(err);
                     alert("No se pudo cargar el desglose de lotes del producto.");
-                });
+                })
+                .finally(() => estadoProductos.controllers.delete(lotsController));
         }
 
         const btnVerRollos = e.target.closest(".btn-ver-rollos");
@@ -1328,12 +1460,17 @@ document.addEventListener("DOMContentLoaded", function () {
             })
                 .then(r => r.json())
                 .then(res => {
+                    if (!activo(lifecycleId) || !btnGuardarPrecio.isConnected) {
+                        return;
+                    }
                     if (res.status === "OK") {
                         btnGuardarPrecio.classList.remove("btn-success");
                         btnGuardarPrecio.classList.add("btn-primary");
-                        setTimeout(() => {
-                            btnGuardarPrecio.classList.remove("btn-primary");
-                            btnGuardarPrecio.classList.add("btn-success");
+                        registrarTimer(() => {
+                            if (activo(lifecycleId) && btnGuardarPrecio.isConnected) {
+                                btnGuardarPrecio.classList.remove("btn-primary");
+                                btnGuardarPrecio.classList.add("btn-success");
+                            }
                         }, 1000);
 
                         const productoId = document.getElementById("lote-producto-id")?.value;
@@ -1363,16 +1500,25 @@ document.addEventListener("DOMContentLoaded", function () {
                         alert("Atención: " + res.message);
                     }
                 })
-                .catch(() => alert("Error de red al actualizar el precio del lote."))
-                .finally(() => btnGuardarPrecio.disabled = false);
+                .catch(() => {
+                    if (activo(lifecycleId) && btnGuardarPrecio.isConnected) {
+                        alert("Error de red al actualizar el precio del lote.");
+                    }
+                })
+                .finally(() => {
+                    if (activo(lifecycleId) && btnGuardarPrecio.isConnected) btnGuardarPrecio.disabled = false;
+                });
         }
     });
-});
+    estadoProductos.reloadTable = recargarTabla;
+    }
 
 // Inicialización de DataTables para Productos
 function initTablaProductos() {
     if ($.fn.DataTable) {
-        const table = $('#tabla-productos');
+        const tableNode = estadoProductos.root && estadoProductos.root.querySelector('#tabla-productos');
+        if (!tableNode) return;
+        const table = $(tableNode);
         if ($.fn.dataTable.isDataTable(table)) {
             table.DataTable().clear().destroy();
             table.removeClass('dataTable');
@@ -1408,6 +1554,7 @@ function initTablaProductos() {
         });
 
         // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
+        estadoProductos.dataTable = dataTable;
         $(window).off('resize.productosTable');
         $(window).on('resize.productosTable', function () {
             dataTable.columns.adjust().draw();
@@ -1417,12 +1564,12 @@ function initTablaProductos() {
         dataTable.columns.adjust().draw();
 
         // Conectar controles personalizados
-        const $lengthSelect = $('#productos-length');
-        const $searchInput = $('#productos-search');
+        const $lengthSelect = $(estadoProductos.root.querySelector('#productos-length'));
+        const $searchInput = $(estadoProductos.root.querySelector('#productos-search'));
 
         // Cambiar número de registros por página
         if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
+            $lengthSelect.off('.productos').on('change.productos', function () {
                 const pageLength = parseInt($(this).val(), 10);
                 dataTable.page.len(pageLength).draw();
             });
@@ -1430,7 +1577,7 @@ function initTablaProductos() {
 
         // Búsqueda personalizada
         if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
+            $searchInput.off('.productos').on('keyup.productos', function () {
                 dataTable.search(this.value).draw();
             });
         }
@@ -1467,20 +1614,13 @@ function initTablaProductos() {
             renderCustomPagination(dataTable, customPager);
             attachSwipePagination(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
+            dataTable.on('draw.dt.productos', () => {
                 renderCustomInfo(dataTable, infoBar);
                 renderCustomPagination(dataTable, customPager);
             });
         }
     }
 }
-
-// Inicializar tabla cuando se carga la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ($.fn.DataTable) {
-        initTablaProductos();
-    }
-});
 
 // Funciones de paginación personalizada (reutilizadas de compras.js)
 function injectCustomPaginationStyles() {
@@ -1629,11 +1769,10 @@ function renderCustomPagination(dataTable, pagerElement) {
 function attachSwipePagination(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
-
-    wrapperElement.addEventListener('touchend', (event) => {
+    };
+    const touchEndHandler = (event) => {
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -1646,5 +1785,86 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+    estadoProductos.swipeHandlers.push({ wrapperElement, touchStartHandler, touchEndHandler });
 }
+
+    function initProductos() {
+        if (estadoProductos.initialized) return;
+        const root = document.querySelector('[data-modulo="productos"]');
+        if (!root) return;
+        estadoProductos.lifecycleId += 1;
+        estadoProductos.initialized = true;
+        iniciarVistaProductos();
+        initTablaProductos();
+    }
+
+    function limpiarSwipeHandlers() {
+        estadoProductos.swipeHandlers.forEach(({ wrapperElement, touchStartHandler, touchEndHandler }) => {
+            wrapperElement.removeEventListener('touchstart', touchStartHandler);
+            wrapperElement.removeEventListener('touchend', touchEndHandler);
+        });
+        estadoProductos.swipeHandlers = [];
+    }
+
+    function destruirTablaProductos() {
+        limpiarSwipeHandlers();
+        const table = estadoProductos.root && estadoProductos.root.querySelector('#tabla-productos');
+        if (table && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(table)) {
+            $(table).off('.productos');
+            $(table).DataTable().off('.productos');
+            $(table).DataTable().destroy();
+        }
+        estadoProductos.dataTable = null;
+        if (window.jQuery) {
+            $(window).off('resize.productosTable');
+            $('#productos-length, #productos-search').off('.productos');
+        }
+        if (table) {
+            const wrapper = table.closest('.dataTables_wrapper');
+            if (wrapper) wrapper.querySelectorAll('.productos-pager-row, .productos-info-bar, .productos-custom-pagination').forEach(node => node.remove());
+        }
+    }
+
+    function destroyProductos() {
+        if (!estadoProductos.initialized) return;
+        estadoProductos.listeners.forEach(({ target, type, handler, options }) => {
+            target.removeEventListener(type, handler, options);
+        });
+        estadoProductos.listeners = [];
+        destruirTablaProductos();
+        estadoProductos.controllers.forEach(controller => controller.abort());
+        estadoProductos.controllers.clear();
+        estadoProductos.timers.forEach(timer => clearTimeout(timer));
+        estadoProductos.timers.clear();
+        estadoProductos.readers.forEach(reader => {
+            if (reader.readyState === FileReader.LOADING) reader.abort();
+        });
+        estadoProductos.readers.clear();
+        if (estadoProductos.root) {
+            estadoProductos.root.querySelectorAll('.modal').forEach(modal => {
+                if (window.jQuery && window.jQuery.fn.modal) window.jQuery(modal).modal('hide');
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+            });
+            const toast = estadoProductos.root.querySelector('#toast-estado');
+            if (toast && window.jQuery && window.jQuery.fn.toast) window.jQuery(toast).toast('hide');
+        }
+        estadoProductos.tableRequestId += 1;
+        estadoProductos.categoryRequestId += 1;
+        estadoProductos.editRequestId += 1;
+        estadoProductos.providerRequestId += 1;
+        estadoProductos.lotsRequestId += 1;
+        estadoProductos.lifecycleId += 1;
+        estadoProductos.root = null;
+        estadoProductos.initialized = false;
+    }
+
+    window.AppModules.productos = {
+        init: initProductos,
+        destroy: destroyProductos,
+        reloadTable: (preservarPagina) => estadoProductos.reloadTable && estadoProductos.reloadTable(preservarPagina)
+    };
+}());

@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpSession;
+
 @Controller
 @RequestMapping("/productos")
 @RequiredArgsConstructor // <-- 1. Lombok crea el constructor automático eliminando todo el amarillo
@@ -45,24 +47,28 @@ public class ProductoController {
     private final EnvaseService envaseService;
     private final ProductoRepository productoRepository;
 
-    // Vista principal: Carga la plantilla base con el menú y los selectores
-    @GetMapping
-    public String productos(Model model, jakarta.servlet.http.HttpSession session) {
+    private void cargarModeloProductos(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
 
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll());
         model.addAttribute("envases", envaseService.listarTodos());
-        
-        // =====================================================================
-        // 🌟 NUEVA LÍNEA: Enviamos los proveedores al Thymeleaf de la pantalla
-        // =====================================================================
-        model.addAttribute("proveedores", proveedorService.listAll()); 
-        // =====================================================================
-        
+        model.addAttribute("proveedores", proveedorService.listAll());
+    }
+
+    // Vista principal: Carga la plantilla base con el menú y los selectores
+    @GetMapping
+    public String productos(Model model, HttpSession session) {
+        cargarModeloProductos(model, session);
         model.addAttribute("contenido", "views/productos");
         return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoProductos(Model model, HttpSession session) {
+        cargarModeloProductos(model, session);
+        return "views/productos :: content";
     }
 
     // Carga asíncrona del fragmento HTML de la tabla de productos
