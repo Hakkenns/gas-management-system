@@ -2,6 +2,7 @@ package com.gas.sistema_gas.service.Implement;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -100,5 +101,19 @@ public class CatalogoProveedorServiceImplement implements CatalogoProveedorServi
         return catalogoProveedorRepository.findById(id)
                 .map(catalogoProveedorMapper::toSimpleResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El registro de catálogo no existe"));
+    }
+    @Override
+    @Transactional
+    public List<CatalogoProveedorDTO.ProveedorCatalogoResponse> buscarProveedores(String texto, Integer limite) {
+        int tamano = limite == null || limite <= 0 ? 30 : Math.min(limite, 50);
+        String criterio = texto == null ? "" : texto.trim();
+        return catalogoProveedorRepository.buscarProveedoresActivos(criterio, PageRequest.of(0, tamano))
+                .getContent().stream()
+                .map(row -> new CatalogoProveedorDTO.ProveedorCatalogoResponse(
+                        ((Number) row[0]).longValue(),
+                        (String) row[1],
+                        (String) row[2],
+                        ((Number) row[3]).longValue()))
+                .collect(Collectors.toList());
     }
 }

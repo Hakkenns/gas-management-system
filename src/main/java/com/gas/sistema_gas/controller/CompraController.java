@@ -8,12 +8,9 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import com.gas.sistema_gas.dto.CompraDTO;
-import com.gas.sistema_gas.Model.DetalleCompra;
 import com.gas.sistema_gas.service.*;
 import jakarta.servlet.http.HttpSession;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 
@@ -90,38 +87,8 @@ public class CompraController {
 
     @GetMapping("/detalle/{id}")
     @ResponseBody
-    public ResponseEntity<List<Map<String, Object>>> getDetalleByCompra(@PathVariable Long id) {
-        List<DetalleCompra> detalles = compraService.listDetallesByCompraId(id);
-        List<Map<String, Object>> res = detalles.stream().map(d -> {
-            var producto = d.getProducto();
-            var capacidad = producto.getCapacidad();
-            var unidad = producto.getUnidadMedida();
-            String unidadLabel = "";
-            if ("KG".equals(unidad)) unidadLabel = " kg";
-            else if ("L".equals(unidad)) unidadLabel = " L";
-            else if ("M".equals(unidad)) unidadLabel = " m";
-            String nombreCompleto = producto.getNombre();
-            if (capacidad != null) {
-                nombreCompleto = nombreCompleto + " - " + capacidad + unidadLabel;
-            }
-            
-            var cantidadBD = java.math.BigDecimal.valueOf(d.getCantidad());
-            var precio = d.getPrecioCostoUnitario();
-            
-            if ("M".equals(unidad) && capacidad != null && capacidad.compareTo(java.math.BigDecimal.ZERO) > 0) {
-                cantidadBD = cantidadBD.divide(capacidad, 2, java.math.RoundingMode.HALF_UP);
-                precio = precio.multiply(capacidad);
-            }
-            
-            Map<String, Object> m = new HashMap<>();
-            m.put("producto", nombreCompleto);
-            m.put("cantidad", cantidadBD);
-            m.put("precio", precio);
-            m.put("unidad", unidad);
-            m.put("capacidad", capacidad);
-            return m;
-        }).toList();
-        return ResponseEntity.ok(res);
+    public ResponseEntity<CompraDTO.DetailResponse> getDetalleByCompra(@PathVariable Long id) {
+        return ResponseEntity.ok(compraService.getDetalleByCompraId(id));
     }
 
     @GetMapping("/ultimo-costo")

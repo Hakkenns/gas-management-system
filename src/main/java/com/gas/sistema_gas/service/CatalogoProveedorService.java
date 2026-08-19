@@ -14,4 +14,6 @@ public interface CatalogoProveedorService {
     List<CatalogoProveedorDTO.ProductoCompraResponse> listarProductosPorProveedor(Long idProveedor);
     
     CatalogoProveedorDTO.SimpleResponse buscarPorId(Long id);
+
+    List<CatalogoProveedorDTO.ProveedorCatalogoResponse> buscarProveedores(String texto, Integer limite);
 }

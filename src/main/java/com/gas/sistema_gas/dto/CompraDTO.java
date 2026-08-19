@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class CompraDTO {
@@ -38,5 +39,26 @@ public class CompraDTO {
         String fechaCompra,
         String nombreUsuario,
         Integer situacion
+    ){}
+
+    public record DetailResponse(
+        Long idCompra,
+        String numDocumento,
+        String proveedor,
+        String usuario,
+        LocalDateTime fechaCompra,
+        Integer situacion,
+        BigDecimal montoTotal,
+        List<DetailItemResponse> detalles
+    ){}
+
+    public record DetailItemResponse(
+        String producto,
+        BigDecimal capacidad,
+        Integer cantidad,
+        String unidadMedida,
+        BigDecimal metrosPorRollo,
+        BigDecimal precioCostoUnitario,
+        BigDecimal subtotal
     ){}
 }

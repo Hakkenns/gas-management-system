@@ -24,6 +24,13 @@ public class CatalogoProveedorDTO {
         String nombreProducto
     ){}
 
+    public record ProveedorCatalogoResponse(
+        Long idProveedor,
+        String ruc,
+        String nombreProveedor,
+        Long cantidadProductos
+    ){}
+
     // Respuesta plana para el modal de Compras. Evita serializar entidades
     // JPA y sus relaciones lazy (categoría/envase) fuera de la transacción.
     public record ProductoCompraResponse(

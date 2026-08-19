@@ -69,6 +69,14 @@ public class CatalogoProveedorController {
     public List<CatalogoProveedorDTO.SimpleResponse> listarTodo() {
         return catalogoProveedorService.listarTodo();
     }
+
+    @GetMapping("/buscar")
+    @ResponseBody
+    public List<CatalogoProveedorDTO.ProveedorCatalogoResponse> buscarProveedores(
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) Integer limite) {
+        return catalogoProveedorService.buscarProveedores(texto, limite);
+    }
     // =========================================================================
 
 }

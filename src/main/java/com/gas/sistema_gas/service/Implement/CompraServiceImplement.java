@@ -3,6 +3,7 @@ package com.gas.sistema_gas.service.Implement;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,10 @@ public class CompraServiceImplement implements CompraService {
     private CorrelativoService correlativoService;
     @Autowired
     private InventarioLoteService inventarioLoteService;
+    @Autowired
+    private CatalogoProveedorRepository catalogoProveedorRepository;
+    @Autowired
+    private InventarioLoteRepository inventarioLoteRepository;
 
     @Override
     @Transactional
@@ -53,6 +58,13 @@ public class CompraServiceImplement implements CompraService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proveedor no encontrado"));
         Usuario usuario = usuarioRepository.findById(idUsuarioLogueado)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        for (CompraDTO.DetalleItem item : dto.detalles()) {
+            if (!catalogoProveedorRepository.existsRelacionActiva(proveedor.getId(), item.idProducto())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El producto seleccionado no pertenece al catÃ¡logo activo del proveedor.");
+            }
+        }
 
         // Convertir DTO a Entidad base
         Compra compra = compraMapper.toEntity(dto);
@@ -132,6 +144,54 @@ public class CompraServiceImplement implements CompraService {
         compra.setSituacion(2);
         Compra compraActualizada = compraRepository.save(compra);
         return compraMapper.toSimpleResponse(compraActualizada);
+    }
+
+    @Override
+    @Transactional
+    public CompraDTO.DetailResponse getDetalleByCompraId(Long idCompra) {
+        Compra compra = compraRepository.findById(idCompra)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compra no encontrada"));
+        List<DetalleCompra> detalles = detalleCompraRepository.findByCompraId(idCompra);
+        Map<Long, List<BigDecimal>> metrosPorRolloPorProducto = inventarioLoteRepository.findByCompraId(idCompra)
+                .stream()
+                .filter(lote -> lote.getProducto() != null && lote.getProducto().getId() != null)
+                .filter(lote -> lote.getMetrosPorRollo() != null
+                        && lote.getMetrosPorRollo().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.groupingBy(
+                        lote -> lote.getProducto().getId(),
+                        Collectors.mapping(InventarioLote::getMetrosPorRollo, Collectors.toList())));
+
+        List<CompraDTO.DetailItemResponse> items = detalles.stream().map(detalle -> {
+            Producto producto = detalle.getProducto();
+            List<BigDecimal> metrajes = metrosPorRolloPorProducto.getOrDefault(producto.getId(), List.of())
+                    .stream()
+                    .distinct()
+                    .toList();
+            BigDecimal metrosPorRollo = metrajes.size() == 1 ? metrajes.get(0) : null;
+            BigDecimal capacidad = "M".equals(producto.getUnidadMedida())
+                    ? metrosPorRollo
+                    : producto.getCapacidad();
+            BigDecimal subtotal = BigDecimal.valueOf(detalle.getCantidad())
+                    .multiply(detalle.getPrecioCostoUnitario());
+            return new CompraDTO.DetailItemResponse(
+                    producto.getNombre(),
+                    capacidad,
+                    detalle.getCantidad(),
+                    producto.getUnidadMedida(),
+                    metrosPorRollo,
+                    detalle.getPrecioCostoUnitario(),
+                    subtotal);
+        }).toList();
+
+        return new CompraDTO.DetailResponse(
+                compra.getId(),
+                compra.getNumDocumento(),
+                compra.getProveedor().getNombre(),
+                compra.getUsuario().getUserName(),
+                compra.getFechaCompra(),
+                compra.getSituacion(),
+                compra.getMontoTotal(),
+                items);
     }
 
     @Override

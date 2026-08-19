@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -13,11 +15,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
 import com.gas.sistema_gas.Repository.InventarioLoteRepository;
 import com.gas.sistema_gas.dto.CategoriaDTO;
+import com.gas.sistema_gas.dto.CompraDTO;
 import com.gas.sistema_gas.service.CategoriaService;
 import com.gas.sistema_gas.service.CompraService;
 import com.gas.sistema_gas.service.OpcionService;
@@ -95,6 +99,21 @@ class CompraControllerTest {
         verify(compraService).listAll();
         verifyNoInteractions(opcionService, proveedorService, productoService,
                 categoriaService, inventarioLoteRepository, session);
+    }
+
+    @Test
+    void getDetalleByCompra_devuelveContratoHistorico() {
+        CompraDTO.DetailResponse detalle = new CompraDTO.DetailResponse(
+                8L, "NC001-0053", "AGUACIX", "admin_zair",
+                LocalDateTime.of(2026, 8, 19, 11, 21, 34), 1,
+                new BigDecimal("1100.00"), List.of());
+        when(compraService.getDetalleByCompraId(8L)).thenReturn(detalle);
+
+        ResponseEntity<CompraDTO.DetailResponse> response = controller.getDetalleByCompra(8L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(detalle, response.getBody());
+        verify(compraService).getDetalleByCompraId(8L);
     }
 
     private void configurarModelo(Long perfilId) {

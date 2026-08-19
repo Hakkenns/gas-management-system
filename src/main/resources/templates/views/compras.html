@@ -101,8 +101,34 @@
                 </table>
             </div>
         </div>
-        <div class="modal fade" id="modal-compra" tabindex="-1" data-backdrop="false">
-            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <style>
+            #modal-compra .modal-dialog { width: 80%; max-width: 1220px; }
+            #selector-catalogo-integrado { border-color: #e9ecef !important; }
+            #selector-catalogo-integrado .card-header { border-color: #edf0f2 !important; }
+            #selector-catalogo-integrado > .card-header { font-size: 1.03rem; }
+            #selector-catalogo-integrado #panel-proveedores-selector { flex: 0 0 36%; max-width: 36%; }
+            #selector-catalogo-integrado #panel-productos-selector { flex: 0 0 64%; max-width: 64%; }
+            #selector-catalogo-integrado .input-group-text { background: #f8f9fa; border-color: #dee2e6; color: #6c757d; }
+            #selector-catalogo-integrado .form-control { min-height: 40px; border-color: #dee2e6; }
+            #selector-catalogo-integrado .proveedor-selector-item { padding: .55rem .7rem; transition: background-color .15s ease, border-color .15s ease; }
+            #selector-catalogo-integrado .proveedor-selector-boton { min-height: 52px; box-shadow: none; }
+            #selector-catalogo-integrado .proveedor-selector-seleccionado { background-color: #f4faff !important; border-color: #007bff !important; }
+            #selector-catalogo-integrado .proveedor-selector-item:hover { background: #f8fbff !important; border-color: #cfe2f3 !important; }
+            #selector-catalogo-integrado .proveedor-selector-item:focus { outline: 0; box-shadow: 0 0 0 .15rem rgba(0,123,255,.14); }
+            #selector-catalogo-integrado .compras-selector-nota { background-color: #eef7ff; border: 1px solid #b8daff; color: #1f4e79; }
+            #selector-catalogo-integrado .producto-selector-item { min-height: 46px; }
+            #selector-catalogo-integrado .selector-pager { display: flex; justify-content: flex-end; align-items: center; gap: .25rem; min-height: 32px; }
+            #selector-catalogo-integrado .selector-pager .btn { min-width: 30px; padding: .16rem .45rem; opacity: 1; border-color: #dee2e6; color: #007bff; background: #fff; box-shadow: none; }
+            #selector-catalogo-integrado .selector-pager .btn.btn-primary { color: #fff; border-color: #007bff; background: #007bff; }
+            #selector-catalogo-integrado .selector-pager .btn:disabled { color: #adb5bd; background: #f8f9fa; opacity: .65; }
+            #selector-catalogo-integrado .selector-productos-info { color: #6c757d; font-size: .78rem; }
+            #modal-compra .table { border-color: #e9ecef; }
+            #modal-compra .table thead { background: #f8f9fa; }
+            #modal-compra .table th, #modal-compra .table td { border-color: #edf0f2; vertical-align: middle; }
+            @media (max-width: 767.98px) { #modal-compra .modal-dialog { width: auto; margin: .5rem; } #selector-catalogo-integrado #panel-proveedores-selector, #selector-catalogo-integrado #panel-productos-selector { flex: 0 0 100%; max-width: 100%; } }
+        </style>
+        <div class="modal fade" id="modal-compra" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
 
                 <div class="modal-content">
 
@@ -139,47 +165,57 @@
                                 </div>
                             </div>
 
-                            <div class="card border-secondary mt-3">
-                                <div class="card-header bg-secondary text-white py-2">Agregar Productos al Detalle
+                            <div class="card border-secondary mt-3" id="selector-catalogo-integrado">
+                                <div class="card-header bg-white border-bottom py-2 text-dark">
+                                    <i class="fas fa-search mr-2"></i>Seleccionar Proveedor
                                 </div>
-                                <div class="card-body row align-items-end py-3">
-                                    <div class="form-group col-md-4 mb-0">
-                                        <label >Producto</label>
-                                        <div class="input-group">
-                                            <input type="hidden" id="select-producto" />
-                                            <input type="hidden" id="select-unidad" />
-                                            <input type="hidden" id="select-capacidad" />
-                                            <input type="hidden" id="select-categoria" />
-                                            <input type="text" class="form-control" id="input-producto-nombre" placeholder="Seleccionar producto" readonly style="background-color: #fff; cursor: default;">
-                                            <div class="input-group-append">
-                                                <button type="button" id="btn-buscar-producto" class="btn btn-primary btn-sm" title="Buscar producto"  
-                                                style="display: flex; align-items: center; justify-content: center; height: 100%; min-width: 42px;">
-                                                    <i class="fas fa-search"></i>
-                                                </button>
+                                <div class="card-body p-3">
+                                    <div class="input-group mb-3">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        </div>
+                                        <input type="text" id="filtro-selector-catalogo" class="form-control"
+                                            placeholder="Buscar proveedor, RUC o producto... Ej: manguera, Sipan, agua">
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-5 mb-3 mb-md-0" id="panel-proveedores-selector">
+                                            <div class="card border-secondary h-100">
+                                                <div class="card-header bg-white py-2 border-bottom">
+                                                    <span class="font-weight-bold text-dark">Proveedores encontrados</span>
+                                                    <span id="contador-proveedores-selector" class="text-muted ml-1"></span>
+                                                </div>
+                                                <div id="lista-proveedores-selector" class="card-body p-2" style="height: 260px; overflow-y: auto;">
+                                                    <div class="text-muted text-center py-4">Escribe para buscar proveedores o productos.</div>
+                                                </div>
+                                                <div id="paginador-proveedores-selector" class="card-footer bg-white border-top py-1 selector-pager"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-7" id="panel-productos-selector">
+                                            <div class="card border-secondary h-100">
+                                                <div class="card-header bg-white py-2 border-bottom">
+                                                    <span id="titulo-productos-selector" class="font-weight-bold text-dark">Productos del proveedor</span>
+                                                    <span id="contador-productos-selector" class="text-muted ml-1"></span>
+                                                </div>
+                                                <div class="input-group input-group-sm p-2 pb-0">
+                                                    <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-filter"></i></span></div>
+                                                    <input type="text" id="filtro-productos-proveedor" class="form-control" placeholder="Buscar en productos...">
+                                                </div>
+                                                <div id="lista-productos-selector" class="card-body p-2" style="height: 220px; overflow-y: auto;">
+                                                    <div class="text-muted text-center py-4">Selecciona un proveedor para ver sus productos.</div>
+                                                </div>
+                                                <div class="card-footer bg-white border-top py-1 d-flex justify-content-between align-items-center">
+                                                    <span id="info-productos-selector" class="selector-productos-info"></span>
+                                                    <div id="paginador-productos-selector" class="selector-pager"></div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="form-group col-md-2 mb-0" id="contenedor-metros-rollo" style="display:none;">
-                                        <label>Metros/Rollo</label>
-                                        <input type="number" class="form-control" id="select-metros-rollo" readonly>
-                                    </div>
-                                    <div class="form-group col-md-2 mb-0">
-                                        <label id="label-cantidad">Cantidad</label>
-                                        <input type="number" class="form-control" id="select-cantidad" min="1" value="1" step="1">
-                                    </div>
-                                    <div class="form-group col-md-2 mb-0">
-                                        <label id="label-precio">Precio Costo</label>
-                                        <input type="number" class="form-control" id="select-precio" step="0.10" min="0.10">
-                                    </div>
-                                    <div class="form-group col-md-2 mb-0">
-                                        <button type="button" id="btn-agregar-lista" class="btn btn-info btn-block">
-                                            <i class="fas fa-plus"></i> Añadir
-                                        </button>
+                                    <div class="alert mt-3 mb-0 py-2 compras-selector-nota">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Selecciona un proveedor de la lista o busca un producto para encontrar qué proveedores lo ofrecen.
                                     </div>
                                 </div>
                             </div>
-
-                            <!-- búsqueda de productos: modal movido fuera del modal-compra -->
 
                             <table class="table table-sm table-bordered mt-3">
                                 <thead class="bg-light">
@@ -208,119 +244,72 @@
             </div>
         </div>
 
-        <!-- Modal búsqueda de productos (copiado de ventas) -->
-        <div class="modal fade" id="modal-buscar-producto" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
-            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <style>
+            #modal-detalle-ver .modal-dialog { max-width: 930px; }
+            #modal-detalle-ver .modal-content { border: 0; border-radius: .35rem; overflow: hidden; }
+            #modal-detalle-ver .modal-header { border-bottom: 0; padding: 1rem 1.25rem; }
+            #modal-detalle-ver .modal-body { padding: 1.25rem; }
+            #modal-detalle-ver .detalle-compra-resumen { display: flex; border: 1px solid #e5e9ed; border-radius: .35rem; background: #fff; }
+            #modal-detalle-ver .detalle-compra-datos { width: 65%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem 1.5rem; padding: 1.25rem; }
+            #modal-detalle-ver .detalle-compra-campo { min-width: 0; }
+            #modal-detalle-ver .detalle-compra-etiqueta { display: flex; align-items: center; gap: .4rem; margin-bottom: .3rem; color: #6c757d; font-size: .77rem; font-weight: 700; text-transform: uppercase; }
+            #modal-detalle-ver .detalle-compra-etiqueta i { width: 14px; color: #17a2b8; text-align: center; }
+            #modal-detalle-ver .detalle-compra-valor { display: block; overflow-wrap: anywhere; color: #343a40; font-size: .98rem; font-weight: 600; }
+            #modal-detalle-ver .detalle-compra-total { width: 35%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1.25rem; border-left: 1px solid #edf0f2; text-align: center; }
+            #modal-detalle-ver .detalle-compra-total-etiqueta { margin-bottom: .55rem; color: #6c757d; font-size: .78rem; font-weight: 700; line-height: 1.35; text-transform: uppercase; }
+            #modal-detalle-ver .detalle-compra-total-monto { color: #17a2b8; font-size: 1.65rem; font-weight: 700; line-height: 1.2; }
+            #modal-detalle-ver .detalle-productos-panel { margin-top: 1.25rem; border: 1px solid #e5e9ed; border-radius: .35rem; overflow: hidden; }
+            #modal-detalle-ver .detalle-productos-titulo { display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; border-bottom: 1px solid #e5e9ed; color: #343a40; font-weight: 700; }
+            #modal-detalle-ver .detalle-productos-titulo i { color: #17a2b8; }
+            #modal-detalle-ver .detalle-tabla-contenedor { max-height: 330px; overflow: auto; }
+            #modal-detalle-ver .detalle-tabla { margin-bottom: 0; }
+            #modal-detalle-ver .detalle-tabla thead th { position: sticky; top: 0; z-index: 1; background: #f8f9fa; border-top: 0; color: #495057; font-size: .78rem; text-transform: uppercase; white-space: nowrap; }
+            #modal-detalle-ver .detalle-tabla th, #modal-detalle-ver .detalle-tabla td { border-color: #edf0f2; vertical-align: middle; }
+            #modal-detalle-ver .detalle-tabla td:nth-child(1) { width: 48px; text-align: center; }
+            #modal-detalle-ver .detalle-tabla td:nth-child(3), #modal-detalle-ver .detalle-tabla td:nth-child(4), #modal-detalle-ver .detalle-tabla td:nth-child(5), #modal-detalle-ver .detalle-tabla td:nth-child(6) { white-space: nowrap; }
+            #modal-detalle-ver .modal-footer { border-top: 0; padding: .25rem 1.25rem 1.25rem; }
+            @media (max-width: 767.98px) {
+                #modal-detalle-ver .modal-dialog { margin: .5rem; }
+                #modal-detalle-ver .modal-body { padding: 1rem; }
+                #modal-detalle-ver .detalle-compra-resumen { display: block; }
+                #modal-detalle-ver .detalle-compra-datos, #modal-detalle-ver .detalle-compra-total { width: 100%; }
+                #modal-detalle-ver .detalle-compra-datos { grid-template-columns: 1fr; gap: .85rem; }
+                #modal-detalle-ver .detalle-compra-total { border-top: 1px solid #edf0f2; border-left: 0; }
+                #modal-detalle-ver .detalle-productos-panel { margin-top: 1rem; }
+            }
+        </style>
+        <div class="modal fade" id="modal-detalle-ver" tabindex="-1" aria-labelledby="titulo-modal-detalle-compra" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
                     <div class="modal-header bg-dark text-white">
-                        <h5 class="modal-title">Buscar producto</h5>
-                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
+                        <h5 class="modal-title" id="titulo-modal-detalle-compra">Detalle de Compra</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar detalle de compra"><span aria-hidden="true">&times;</span></button>
                     </div>
                     <div class="modal-body">
-                        <div class="form-row mb-3">
-                            <div class="col-md-6">
-                                <input type="text" id="buscar-producto-filtro" class="form-control" placeholder="Buscar por nombre">
+                        <section class="detalle-compra-resumen" aria-label="Resumen de la compra">
+                            <div class="detalle-compra-datos">
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-file-alt"></i>N° Documento</span><strong class="detalle-compra-valor" id="detalle-compra-documento">—</strong></div>
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-calendar-alt"></i>Fecha</span><strong class="detalle-compra-valor" id="detalle-compra-fecha">—</strong></div>
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-store"></i>Proveedor</span><strong class="detalle-compra-valor" id="detalle-compra-proveedor">—</strong></div>
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-clock"></i>Hora exacta</span><strong class="detalle-compra-valor" id="detalle-compra-hora">—</strong></div>
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-user"></i>Usuario que registró</span><strong class="detalle-compra-valor" id="detalle-compra-usuario">—</strong></div>
+                                <div class="detalle-compra-campo"><span class="detalle-compra-etiqueta"><i class="fas fa-chart-bar"></i>Situación</span><span id="detalle-compra-situacion">—</span></div>
                             </div>
-                            <div class="col-md-6">
-                                <select id="select-buscar-categoria" class="form-control">
-                                    <option value="">-- Todas las categorías --</option>
-                                    <option th:each="cat : ${categorias}" th:value="${cat.id}" th:text="${cat.nombre}"></option>
-                                </select>
+                            <div class="detalle-compra-total"><span class="detalle-compra-total-etiqueta">Total de la Compra</span><strong class="detalle-compra-total-monto" id="detalle-compra-total">—</strong></div>
+                        </section>
+                        <section class="detalle-productos-panel" aria-label="Productos de la compra">
+                            <div class="detalle-productos-titulo"><i class="fas fa-list"></i>Productos de la Compra</div>
+                            <div class="table-responsive detalle-tabla-contenedor">
+                                <table class="table table-sm detalle-tabla">
+                                    <thead>
+                                        <tr><th>#</th><th>Producto</th><th>Capacidad</th><th>Cantidad</th><th>Costo Unitario</th><th>Subtotal</th></tr>
+                                    </thead>
+                                    <tbody id="filas-ver-detalle"><tr><td colspan="6" class="text-center text-muted py-4">Seleccione una compra para ver su detalle.</td></tr></tbody>
+                                </table>
                             </div>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover" id="tabla-busqueda-productos">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>Nombre</th>
-                                        <th>Categoría</th>
-                                        <th class="text-right">Precio</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cuerpo-busqueda-productos">
-                                    <tr th:each="prod : ${productos}" th:data-id="${prod.id}" th:data-nombre="${prod.nombre}" th:data-precio="${prod.precioVenta}" th:data-categoria="${prod.idCategoria}" th:data-capacidad="${prod.capacidad}" th:data-unidad="${prod.unidadMedida}" th:data-ganancia="${prod.gananciaProducto}">
-                                                            <td th:text="${prod.capacidad != null and prod.capacidad != '' ? prod.nombre + ' - ' + prod.capacidad + (prod.unidadMedida == 'KG' ? ' kg' : prod.unidadMedida == 'L' ? ' L' : prod.unidadMedida == 'M' ? ' m' : '') : prod.nombre}"></td>
-                                        <td th:text="${prod.nombreCategoria}"></td>
-                                        <td class="text-right" th:text="${prod.precioVenta}"></td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-success btn-seleccionar-producto">Seleccionar</button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        </section>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal fade" id="modal-buscar-proveedor" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="false">
-            <div class="modal-dialog modal-md modal-dialog-centered" role="document">
-                <div class="modal-content">
-                    <div class="modal-header bg-light">
-                        <h5 class="modal-title font-weight-bold text-secondary">Seleccionar Proveedor</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body p-3">
-                        <div class="input-group input-group-sm mb-3">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text"><i class="fas fa-filter"></i></span>
-                            </div>
-                            <input type="text" id="filtro-buscar-proveedor" class="form-control" placeholder="Filtrar por RUC o Razón Social...">
-                        </div>
-                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                            <table class="table table-sm table-hover" id="tabla-busqueda-proveedores">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th>RUC</th>
-                                        <th>Razón Social</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr th:each="prov : ${proveedores}" th:data-id="${prov.id}" th:data-nombre="${prov.nombre}" th:data-ruc="${prov.ruc}">
-                                        <td th:text="${prov.ruc}"></td>
-                                        <td th:text="${prov.nombre}"></td>
-                                        <td>
-                                            <button type="button" class="btn btn-xs btn-success btn-seleccionar-proveedor">Seleccionar</button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal fade" id="modal-detalle-ver" tabindex="-1" data-backdrop="false">
-            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-                <div class="modal-content">
-                    <div class="modal-header bg-dark text-white">
-                        <h5 class="modal-title">Artículos en este Documento</h5>
-                        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <table class="table table-sm table-striped table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Producto</th>
-                                    <th>Cantidad Ingresada</th>
-                                    <th>Costo de Adquisición</th>
-                                </tr>
-                            </thead>
-                            <tbody id="filas-ver-detalle"></tbody>
-                        </table>
-                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button></div>
                 </div>
             </div>
         </div>
