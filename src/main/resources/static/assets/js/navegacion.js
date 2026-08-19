@@ -69,10 +69,17 @@
             script: '/assets/js/productos.js',
             titulo: 'Gestion de Productos',
             nombre: 'Productos'
+        },
+        compras: {
+            ruta: '/compras',
+            fragmento: '/compras/fragment',
+            script: '/assets/js/compras.js',
+            titulo: 'Registro de Compras',
+            nombre: 'Compras'
         }
     };
     const promesasScripts = {};
-    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias', '/envases/vista', '/productos']);
+    const origenesSeguros = new Set(['/', '/dashboard', '/clientes', '/usuarios', '/empleados', '/motos', '/proveedores', '/rubros', '/asignacion_motos', '/categorias', '/envases/vista', '/productos', '/compras']);
 
     function moduloActual() {
         const contenedor = document.getElementById('contenido-principal');

@@ -28,19 +28,28 @@ public class CompraController {
     @Autowired private CategoriaService categoriaService;
     @Autowired private InventarioLoteRepository inventarioLoteRepository;
 
-    @GetMapping
-    public String compras(Model model, jakarta.servlet.http.HttpSession session) {
+    private void cargarModeloCompras(Model model, HttpSession session) {
         Long perfilId = (Long) session.getAttribute("usuarioPerfilId");
         model.addAttribute("menu", opcionService.listByPerfilId(perfilId));
         model.addAttribute("compras", compraService.listAll());
-        model.addAttribute("proveedores", proveedorService.listAll()); // Para poblar el select de proveedores
-        model.addAttribute("productos", productoService.listAll());     // Para poblar el select de productos
-        // Filtrar solo categorías activas (estado == 1)
+        model.addAttribute("proveedores", proveedorService.listAll());
+        model.addAttribute("productos", productoService.listAll());
         model.addAttribute("categorias", categoriaService.listAll().stream()
-            .filter(cat -> cat.estado() != null && cat.estado() == 1)
-            .collect(java.util.stream.Collectors.toList()));
+                .filter(cat -> cat.estado() != null && cat.estado() == 1)
+                .collect(java.util.stream.Collectors.toList()));
+    }
+
+    @GetMapping
+    public String compras(Model model, HttpSession session) {
+        cargarModeloCompras(model, session);
         model.addAttribute("contenido", "views/compras");
         return "components/layout";
+    }
+
+    @GetMapping("/fragment")
+    public String fragmentoCompras(Model model, HttpSession session) {
+        cargarModeloCompras(model, session);
+        return "views/compras :: content";
     }
 
     @GetMapping("/tabla")

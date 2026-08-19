@@ -1,14 +1,75 @@
-document.addEventListener("DOMContentLoaded", () => {
-    let arrayDetalles = []; // Almacena temporalmente los artículos antes de enviar al controller
+window.AppModules = window.AppModules || {};
 
-    try {
-        initTablaCompras();
-    } catch (e) {
-        console.warn("La tabla de compras no pudo inicializarse con DataTables. Los botones seguirán funcionando.", e);
+(function () {
+    const estadoCompras = {
+        initialized: false,
+        root: null,
+        lifecycleId: 0,
+        controllers: new Set(),
+        requestIds: {
+            tabla: 0,
+            correlativo: 0,
+            detalle: 0,
+            costo: 0,
+            catalogo: 0
+        },
+        listeners: [],
+        jqueryHandlers: [],
+        dataTable: null,
+        dateFilter: null,
+        swipeHandlers: [],
+        timers: new Set()
+    };
+
+    function activo(lifecycleId) {
+        return estadoCompras.initialized
+            && estadoCompras.lifecycleId === lifecycleId
+            && estadoCompras.root
+            && estadoCompras.root.isConnected;
     }
 
+    function registrarController(controller) {
+        estadoCompras.controllers.add(controller);
+        return controller;
+    }
+
+    function registrarListener(target, type, handler, options) {
+        if (!target) return;
+        target.addEventListener(type, handler, options);
+        estadoCompras.listeners.push({ target, type, handler, options });
+    }
+
+    function registrarJQueryHandler(target, events, handler) {
+        if (!target || !window.jQuery) return;
+        window.jQuery(target).on(events, handler);
+        estadoCompras.jqueryHandlers.push({ target, events, handler });
+    }
+
+    function registrarTimer(callback, delay) {
+        const timer = setTimeout(() => {
+            estadoCompras.timers.delete(timer);
+            callback();
+        }, delay);
+        estadoCompras.timers.add(timer);
+        return timer;
+    }
+
+    function iniciarVistaCompras() {
+    const root = window.document.querySelector('[data-modulo="compras"]');
+    if (!root) return;
+    estadoCompras.root = root;
+    const lifecycleId = estadoCompras.lifecycleId;
+    const document = {
+        getElementById: id => root.querySelector('#' + id),
+        querySelector: selector => root.querySelector(selector),
+        querySelectorAll: selector => root.querySelectorAll(selector),
+        createElement: (...args) => window.document.createElement(...args),
+        get activeElement() { return window.document.activeElement; }
+    };
+    let arrayDetalles = []; // Almacena temporalmente los artículos antes de enviar al controller
+
     // Delegación de eventos para clicks
-    document.addEventListener("click", function (e) {
+    registrarListener(root, "click", function (e) {
         if (e.target.closest("#btn-crear-compra")) {
             arrayDetalles = [];
             renderizarFilas();
@@ -25,24 +86,40 @@ document.addEventListener("DOMContentLoaded", () => {
             inputFecha.max = fechaLocal;
 
             // Solicitar siguiente correlativo para compras y prellenar el campo de documento
-            fetch('/api/correlativos/next?tipo=COMPRA_NOTA&serie=NC001')
+            const correlativoRequestId = ++estadoCompras.requestIds.correlativo;
+            if (estadoCompras.correlativoController) estadoCompras.correlativoController.abort();
+            const correlativoController = registrarController(new AbortController());
+            estadoCompras.correlativoController = correlativoController;
+            fetch('/api/correlativos/next?tipo=COMPRA_NOTA&serie=NC001', { signal: correlativoController.signal })
                 .then(r => r.json())
                 .then(data => {
-                    if (data && data.codigo) {
+                    if (activo(lifecycleId) && correlativoRequestId === estadoCompras.requestIds.correlativo && data && data.codigo) {
                         document.getElementById('input-documento').value = data.codigo;
                     }
                 })
-                .catch(err => console.warn('No se pudo obtener correlativo:', err))
+                .catch(err => {
+                    if (err.name !== 'AbortError' && activo(lifecycleId)) console.warn('No se pudo obtener correlativo:', err);
+                })
                 .finally(() => {
-                    $("#modal-compra").modal("show");
+                    estadoCompras.controllers.delete(correlativoController);
+                    if (activo(lifecycleId)
+                        && correlativoRequestId === estadoCompras.requestIds.correlativo
+                        && window.jQuery) {
+                        window.jQuery(document.getElementById("modal-compra")).modal("show");
+                    }
                 });
         }
 
         if (e.target.closest(".btn-ver-detalle")) {
             const id = e.target.closest(".btn-ver-detalle").dataset.id;
-            fetch(`/compras/detalle/${id}`)
+            const detalleRequestId = ++estadoCompras.requestIds.detalle;
+            if (estadoCompras.detalleController) estadoCompras.detalleController.abort();
+            const detalleController = registrarController(new AbortController());
+            estadoCompras.detalleController = detalleController;
+            fetch(`/compras/detalle/${id}`, { signal: detalleController.signal })
                 .then(r => r.json())
                 .then(data => {
+                    if (!activo(lifecycleId) || detalleRequestId !== estadoCompras.requestIds.detalle) return;
                     const tbody = document.getElementById("filas-ver-detalle");
                     tbody.innerHTML = "";
                     data.forEach(item => {
@@ -55,9 +132,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                         tbody.appendChild(tr);
                     });
-                    $("#modal-detalle-ver").modal("show");
+                    if (window.jQuery) window.jQuery(document.getElementById("modal-detalle-ver")).modal("show");
                 })
-                .catch(err => console.error("ERROR CARGANDO DETALLES:", err));
+                .catch(err => {
+                    if (err.name !== 'AbortError' && activo(lifecycleId)) console.error("ERROR CARGANDO DETALLES:", err);
+                })
+                .finally(() => estadoCompras.controllers.delete(detalleController));
         }
 
         if (e.target.closest('#btn-buscar-proveedor')) {
@@ -76,6 +156,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const ruc = row.dataset.ruc || '';
             const inputProveedor = document.getElementById('input-proveedor');
             const displayProveedor = document.getElementById('display-proveedor');
+            estadoCompras.requestIds.costo += 1;
+            if (estadoCompras.costoController) estadoCompras.costoController.abort();
             if (inputProveedor) inputProveedor.value = id;
             if (displayProveedor) displayProveedor.value = `${ruc ? ruc + ' - ' : ''}${nombre}`;
 
@@ -113,16 +195,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 // Pedir el último precio de costo para este producto y proveedor
                 if (idProducto && idProveedor) {
-                    fetch(`/compras/ultimo-costo?idProducto=${encodeURIComponent(idProducto)}&idProveedor=${encodeURIComponent(idProveedor)}`)
+                    const costoRequestId = ++estadoCompras.requestIds.costo;
+                    if (estadoCompras.costoController) estadoCompras.costoController.abort();
+                    const costoController = registrarController(new AbortController());
+                    estadoCompras.costoController = costoController;
+                    fetch(`/compras/ultimo-costo?idProducto=${encodeURIComponent(idProducto)}&idProveedor=${encodeURIComponent(idProveedor)}`, { signal: costoController.signal })
                         .then(r => r.json())
                         .then(data => {
+                            if (!activo(lifecycleId) || costoRequestId !== estadoCompras.requestIds.costo) return;
                             const precio = parseFloat(data.precioCosto) || 0;
                             const inputPrecio = document.getElementById('select-precio');
                             const inputCant = document.getElementById('select-cantidad');
                             if (inputPrecio) inputPrecio.value = precio.toFixed(2);
                             if (inputCant) inputCant.value = '1';
                         })
-                        .catch(err => console.error('ERROR OBTENIENDO ULTIMO COSTO:', err));
+                        .catch(err => {
+                            if (err.name !== 'AbortError' && activo(lifecycleId)) console.error('ERROR OBTENIENDO ULTIMO COSTO:', err);
+                        })
+                        .finally(() => estadoCompras.controllers.delete(costoController));
                 }
 
                 if (window.jQuery) {
@@ -143,6 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     return r.json().catch(() => ({ status: 'OK' }));
                 })
                 .then(resp => {
+                    if (!activo(lifecycleId)) return;
                     if (resp.status === 'OK') {
                         reloadComprasTable();
                     } else {
@@ -150,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 })
                 .catch(err => {
+                    if (!activo(lifecycleId)) return;
                     console.error('ERROR ANULANDO COMPRA:', err);
                     alert('No se pudo anular la compra.');
                 });
@@ -157,7 +249,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Añadir artículo al listado interno del modal
-    document.getElementById("btn-agregar-lista").addEventListener("click", () => {
+    registrarListener(document.getElementById("btn-agregar-lista"), "click", () => {
         const selectProd = document.getElementById("select-producto");
         const inputNombreProd = document.getElementById("input-producto-nombre");
         const inputUnidad = document.getElementById("select-unidad");
@@ -252,7 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("txt-total-general").innerText = totalGeneral.toFixed(2);
 
         document.querySelectorAll(".btn-remover").forEach(btn => {
-            btn.addEventListener("click", (e) => {
+            registrarListener(btn, "click", (e) => {
                 const idx = e.currentTarget.dataset.index;
                 arrayDetalles.splice(idx, 1);
                 renderizarFilas();
@@ -281,7 +373,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Guardar el formulario completo vía AJAX enviando RequestBody
-    $("#form-compra").on("submit", function (e) {
+    registrarJQueryHandler(document.getElementById("form-compra"), "submit.compras", function (e) {
         e.preventDefault();
 
         if (arrayDetalles.length === 0) {
@@ -325,6 +417,7 @@ document.addEventListener("DOMContentLoaded", () => {
             data: JSON.stringify(payload),
             dataType: "json",
             success: function (resp) {
+                if (!activo(lifecycleId)) return;
                 if (resp.status === "OK") {
                     $("#modal-compra").modal('hide');
                     // limpiar modo edición
@@ -341,11 +434,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             },
             error: function (xhr) {
+                if (!activo(lifecycleId)) return;
                 alert("Error crítico en la transacción de almacén.");
                 console.error(xhr.responseText);
             },
             complete: function () {
-                btnSubmit.prop('disabled', false).text('Registrar Ingreso');
+                if (activo(lifecycleId)) btnSubmit.prop('disabled', false).text('Registrar Ingreso');
             }
         });
     });
@@ -354,7 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const cuerpoTablaProductos = document.getElementById("cuerpo-busqueda-productos");
 
     if (window.jQuery && modalBuscarProducto) {
-        $(modalBuscarProducto).on("show.bs.modal", function (e) {
+        registrarJQueryHandler(modalBuscarProducto, "show.bs.modal.compras", function (e) {
             const selectorProveedor = document.getElementById("input-proveedor");
             const idProveedor = selectorProveedor ? selectorProveedor.value : "";
 
@@ -373,12 +467,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     </tr>`;
             }
 
-            fetch(`/catalogo-proveedores/proveedor/${idProveedor}/productos`)
+            const catalogoRequestId = ++estadoCompras.requestIds.catalogo;
+            if (estadoCompras.catalogoController) estadoCompras.catalogoController.abort();
+            const catalogoController = registrarController(new AbortController());
+            estadoCompras.catalogoController = catalogoController;
+            fetch(`/catalogo-proveedores/proveedor/${idProveedor}/productos`, { signal: catalogoController.signal })
                 .then(response => {
                     if (!response.ok) throw new Error("Error en el servidor");
                     return response.json();
                 })
                 .then(productosAutorizados => {
+                    if (!activo(lifecycleId) || catalogoRequestId !== estadoCompras.requestIds.catalogo) return;
                     if (!cuerpoTablaProductos) return;
                     cuerpoTablaProductos.innerHTML = "";
 
@@ -421,17 +520,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     });
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || !activo(lifecycleId) || catalogoRequestId !== estadoCompras.requestIds.catalogo) return;
                     console.error(err);
                     if (cuerpoTablaProductos) {
                         cuerpoTablaProductos.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error al cargar el catálogo.</td></tr>`;
                     }
-                });
+                })
+                .finally(() => estadoCompras.controllers.delete(catalogoController));
         });
     }
 
     const filtroBuscarProveedor = document.getElementById('filtro-buscar-proveedor');
     if (filtroBuscarProveedor) {
-        filtroBuscarProveedor.addEventListener('input', () => {
+        registrarListener(filtroBuscarProveedor, 'input', () => {
             const textoFiltro = filtroBuscarProveedor.value.trim().toLowerCase();
             document.querySelectorAll('#tabla-busqueda-proveedores tbody tr').forEach(row => {
                 const textoFila = `${row.dataset.ruc || ''} ${row.dataset.nombre || ''}`.toLowerCase();
@@ -464,17 +565,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (inputFiltro) {
-        inputFiltro.addEventListener('input', filtrarProductosModal);
+        registrarListener(inputFiltro, 'input', filtrarProductosModal);
     }
 
     if (selectCategoria) {
-        selectCategoria.addEventListener('change', filtrarProductosModal);
+        registrarListener(selectCategoria, 'change', filtrarProductosModal);
     }
 
     // Abrir modal de búsqueda de productos
     const btnBuscarProducto = document.getElementById('btn-buscar-producto');
     if (btnBuscarProducto) {
-        btnBuscarProducto.addEventListener('click', () => {
+        registrarListener(btnBuscarProducto, 'click', () => {
             if (window.jQuery) {
                 window.jQuery('#modal-buscar-producto').modal('show');
             }
@@ -483,20 +584,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const inputProductoNombre = document.getElementById('input-producto-nombre');
     if (inputProductoNombre) {
-        inputProductoNombre.addEventListener('click', () => {
+        registrarListener(inputProductoNombre, 'click', () => {
             if (window.jQuery) {
                 window.jQuery('#modal-buscar-producto').modal('show');
             }
         });
     }
-});
+    }
 
 function initTablaCompras() {
     if (!$.fn.DataTable) return;
-    if (!$('#tabla-compras').length) return;
+    const tableNode = estadoCompras.root && estadoCompras.root.querySelector('#tabla-compras');
+    if (!tableNode) return;
 
     try {
-        const table = $('#tabla-compras');
+        const table = $(tableNode);
         if ($.fn.dataTable.isDataTable(table)) {
             table.DataTable().destroy();
         }
@@ -528,9 +630,10 @@ function initTablaCompras() {
                 }
             }
         });
+        estadoCompras.dataTable = dataTable;
 
         // Forzar reajuste de columnas al cambiar el tamaño de la ventana o zoom
-        $(window).on('resize', function () {
+        $(window).off('resize.comprasTable').on('resize.comprasTable', function () {
             dataTable.columns.adjust().draw();
         });
 
@@ -551,10 +654,10 @@ function initTablaCompras() {
         }
 
         // Filtro personalizado de fecha para DataTables
-        $.fn.dataTable.ext.search.push(
-            function(settings, data, dataIndex) {
-                var minInput = $('#minDate').val();
-                var maxInput = $('#maxDate').val();
+        const filtroFecha = function(settings, data, dataIndex) {
+                if (settings.nTable !== tableNode) return true;
+                var minInput = estadoCompras.root.querySelector('#minDate')?.value || '';
+                var maxInput = estadoCompras.root.querySelector('#maxDate')?.value || '';
                 
                 var textoCelda = data[idxFecha] || "";
                 var fechaCelda = limpiarYParsearFecha(textoCelda);
@@ -571,18 +674,21 @@ function initTablaCompras() {
                     return true;
                 }
                 return false;
-            }
-        );
+            };
+        estadoCompras.dateFilter = filtroFecha;
+        if (!$.fn.dataTable.ext.search.includes(filtroFecha)) {
+            $.fn.dataTable.ext.search.push(filtroFecha);
+        }
 
         // Conectar controles personalizados
-        const $lengthSelect = $('#compras-length');
-        const $searchInput = $('#compras-search');
-        const $minDate = $('#minDate');
-        const $maxDate = $('#maxDate');
+        const $lengthSelect = $(estadoCompras.root.querySelector('#compras-length'));
+        const $searchInput = $(estadoCompras.root.querySelector('#compras-search'));
+        const $minDate = $(estadoCompras.root.querySelector('#minDate'));
+        const $maxDate = $(estadoCompras.root.querySelector('#maxDate'));
 
         // Cambiar número de registros por página
         if ($lengthSelect.length) {
-            $lengthSelect.on('change', function () {
+            $lengthSelect.off('.compras').on('change.compras', function () {
                 const pageLength = parseInt($(this).val(), 10);
                 dataTable.page.len(pageLength).draw();
             });
@@ -590,23 +696,27 @@ function initTablaCompras() {
 
         // Búsqueda personalizada
         if ($searchInput.length) {
-            $searchInput.on('keyup', function () {
+            $searchInput.off('.compras').on('keyup.compras', function () {
                 dataTable.search(this.value).draw();
             });
         }
 
         // Filtrado por fecha en tiempo real
-        $('#minDate, #maxDate').on('change', function () {
+        $minDate.add($maxDate).off('.compras').on('change.compras', function () {
             dataTable.draw();
         });
 
         // Botón Limpiar filtros de fecha
-        $('#btnLimpiarFechas').on('click', function(e) {
+        $(estadoCompras.root.querySelector('#btnLimpiarFechas')).off('.compras').on('click.compras', function(e) {
             e.preventDefault();
-            $('#minDate').val('');
-            $('#maxDate').val('');
+            $minDate.val('');
+            $maxDate.val('');
             dataTable.draw();
         });
+
+        if ($minDate.val() || $maxDate.val()) {
+            dataTable.draw(false);
+        }
 
         const $wrapper = table.closest('.dataTables_wrapper');
         if ($wrapper.length) {
@@ -639,7 +749,7 @@ function initTablaCompras() {
             renderCustomPagination(dataTable, customPager);
             attachSwipePagination(wrapperEl, dataTable);
 
-            dataTable.on('draw.dt', () => {
+            dataTable.on('draw.dt.compras', () => {
                 renderCustomInfo(dataTable, infoBar);
                 renderCustomPagination(dataTable, customPager);
             });
@@ -790,11 +900,11 @@ function renderCustomPagination(dataTable, pagerElement) {
 function attachSwipePagination(wrapperElement, dataTable) {
     let touchStartX = 0;
 
-    wrapperElement.addEventListener('touchstart', (event) => {
+    const touchStartHandler = (event) => {
         touchStartX = event.touches[0].clientX;
-    }, { passive: true });
+    };
 
-    wrapperElement.addEventListener('touchend', (event) => {
+    const touchEndHandler = (event) => {
         const touchEndX = event.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
@@ -807,21 +917,134 @@ function attachSwipePagination(wrapperElement, dataTable) {
         } else {
             dataTable.page('previous').draw(false);
         }
-    }, { passive: true });
+    };
+    wrapperElement.addEventListener('touchstart', touchStartHandler, { passive: true });
+    wrapperElement.addEventListener('touchend', touchEndHandler, { passive: true });
+    estadoCompras.swipeHandlers.push({ wrapperElement, touchStartHandler, touchEndHandler });
 }
 
-function reloadComprasTable() {
-    fetch("/compras/tabla")
+function limpiarSwipeHandlers() {
+    estadoCompras.swipeHandlers.forEach(({ wrapperElement, touchStartHandler, touchEndHandler }) => {
+        wrapperElement.removeEventListener('touchstart', touchStartHandler);
+        wrapperElement.removeEventListener('touchend', touchEndHandler);
+    });
+    estadoCompras.swipeHandlers = [];
+}
+
+function destruirTablaCompras() {
+    limpiarSwipeHandlers();
+    const table = estadoCompras.root && estadoCompras.root.querySelector('#tabla-compras');
+    if (table && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(table)) {
+        $(table).DataTable().off('.compras');
+        $(table).DataTable().destroy();
+    }
+    if (window.jQuery) {
+        $(window).off('resize.comprasTable');
+        $('#compras-length, #compras-search, #minDate, #maxDate, #btnLimpiarFechas').off('.compras');
+    }
+    if (estadoCompras.dateFilter && window.jQuery && $.fn.dataTable) {
+        const filtros = $.fn.dataTable.ext.search;
+        const index = filtros.indexOf(estadoCompras.dateFilter);
+        if (index !== -1) filtros.splice(index, 1);
+    }
+    estadoCompras.dateFilter = null;
+    estadoCompras.dataTable = null;
+}
+
+function reloadComprasTable(preservarPagina = false) {
+    const lifecycleId = estadoCompras.lifecycleId;
+    if (!activo(lifecycleId)) return;
+    const table = estadoCompras.root.querySelector('#tabla-compras');
+    if (!table) return;
+    let paginaActual = 0;
+    if (preservarPagina && window.jQuery && $.fn.DataTable && $.fn.dataTable.isDataTable(table)) {
+        paginaActual = $(table).DataTable().page.info().page;
+    }
+    const requestId = ++estadoCompras.requestIds.tabla;
+    if (estadoCompras.tablaController) estadoCompras.tablaController.abort();
+    const controller = registrarController(new AbortController());
+    estadoCompras.tablaController = controller;
+    destruirTablaCompras();
+
+    fetch("/compras/tabla", { signal: controller.signal })
         .then(r => {
             if (!r.ok) throw new Error("Error cargando tabla de compras");
             return r.text();
         })
         .then(html => {
-            const container = document.getElementById("contenedor-tabla");
-            if (container) {
-                container.innerHTML = html;
-                initTablaCompras();
+            if (!activo(lifecycleId) || requestId !== estadoCompras.requestIds.tabla) return;
+            const currentTable = estadoCompras.root.querySelector('#tabla-compras');
+            if (!currentTable || !currentTable.isConnected) return;
+            currentTable.outerHTML = html;
+            initTablaCompras();
+            if (preservarPagina && paginaActual > 0) {
+                registrarTimer(() => {
+                    const refreshedTable = estadoCompras.root && estadoCompras.root.querySelector('#tabla-compras');
+                    if (!activo(lifecycleId) || !refreshedTable || !$.fn.dataTable.isDataTable(refreshedTable)) return;
+                    const dataTable = $(refreshedTable).DataTable();
+                    dataTable.page(Math.min(paginaActual, Math.max(0, dataTable.page.info().pages - 1))).draw(false);
+                }, 0);
             }
         })
-        .catch(err => console.error("ERROR RECARGANDO TABLA:", err));
+        .catch(err => {
+            if (err.name !== 'AbortError' && activo(lifecycleId)) console.error("ERROR RECARGANDO TABLA:", err);
+        })
+        .finally(() => estadoCompras.controllers.delete(controller));
 }
+
+function initCompras() {
+    if (estadoCompras.initialized) return;
+    const root = window.document.querySelector('[data-modulo="compras"]');
+    if (!root) return;
+    estadoCompras.lifecycleId += 1;
+    estadoCompras.initialized = true;
+    iniciarVistaCompras();
+    try {
+        initTablaCompras();
+    } catch (error) {
+        console.warn("La tabla de compras no pudo inicializarse con DataTables. Los botones seguirán funcionando.", error);
+    }
+}
+
+function destroyCompras() {
+    if (!estadoCompras.initialized) return;
+    estadoCompras.listeners.forEach(({ target, type, handler, options }) => target.removeEventListener(type, handler, options));
+    estadoCompras.listeners = [];
+    estadoCompras.jqueryHandlers.forEach(({ target, events, handler }) => window.jQuery(target).off(events, handler));
+    estadoCompras.jqueryHandlers = [];
+    destruirTablaCompras();
+    estadoCompras.controllers.forEach(controller => controller.abort());
+    estadoCompras.controllers.clear();
+    estadoCompras.requestIds.tabla += 1;
+    estadoCompras.requestIds.correlativo += 1;
+    estadoCompras.requestIds.detalle += 1;
+    estadoCompras.requestIds.costo += 1;
+    estadoCompras.requestIds.catalogo += 1;
+    estadoCompras.timers.forEach(timer => clearTimeout(timer));
+    estadoCompras.timers.clear();
+    if (estadoCompras.root) {
+        estadoCompras.root.querySelectorAll('.modal').forEach(modal => {
+            if (window.jQuery && window.jQuery.fn.modal) window.jQuery(modal).modal('hide');
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        });
+        if (!window.document.querySelector('.modal.show')) {
+            window.document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            if (window.document.body) {
+                window.document.body.classList.remove('modal-open');
+                window.document.body.style.removeProperty('padding-right');
+                window.document.body.style.removeProperty('overflow');
+            }
+        }
+    }
+    estadoCompras.lifecycleId += 1;
+    estadoCompras.root = null;
+    estadoCompras.initialized = false;
+}
+
+window.AppModules.compras = {
+    init: initCompras,
+    destroy: destroyCompras,
+    reloadTable: reloadComprasTable
+};
+}());
