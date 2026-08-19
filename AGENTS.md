@@ -11,3 +11,4 @@
 - No hagas staging automático solo porque las pruebas pasaron.
 - No hagas commit ni push sin autorización explícita.
 - No uses operaciones Git destructivas para limpiar el árbol.
+- Antes de cerrar cambios sustanciales, ejecuta una auditoría de regresión agresiva cuando el alcance lo justifique.
