@@ -2,6 +2,7 @@ package com.gas.sistema_gas.service.Implement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -10,6 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.gas.sistema_gas.Mapper.CompraMapper;
 import com.gas.sistema_gas.Model.Compra;
 import com.gas.sistema_gas.Model.DetalleCompra;
+import com.gas.sistema_gas.Model.Proveedor;
+import com.gas.sistema_gas.Model.Usuario;
 import com.gas.sistema_gas.Repository.CompraRepository;
 import com.gas.sistema_gas.Repository.DetalleCompraRepository;
 import com.gas.sistema_gas.Repository.ProductoRepository;
@@ -62,6 +67,41 @@ class CompraServiceImplementTest {
 
     @InjectMocks
     private CompraServiceImplement compraService;
+
+    @Test
+    void create_ignoraFechaEnviadaYUsaFechaActualDelServidor() {
+        CompraDTO.Create request = new CompraDTO.Create(
+            10L,
+            "NC-CLIENTE-FUTURO",
+            "2000-01-01T00:00",
+            BigDecimal.TEN,
+            List.of()
+        );
+        Proveedor proveedor = new Proveedor();
+        proveedor.setId(10L);
+        Usuario usuario = new Usuario();
+        Compra compra = new Compra();
+        CompraDTO.SimpleResponse response = new CompraDTO.SimpleResponse(
+            1L, "NC001-0001", "Proveedor", BigDecimal.TEN,
+            "01/01/2026 10:00", "Usuario", 1
+        );
+
+        when(proveedorRepository.findById(10L)).thenReturn(Optional.of(proveedor));
+        when(usuarioRepository.findById(20L)).thenReturn(Optional.of(usuario));
+        when(compraMapper.toEntity(request)).thenReturn(compra);
+        when(correlativoService.incrementarYObtenerCodigo("COMPRA_NOTA", "NC001"))
+            .thenReturn("NC001-0001");
+        when(compraRepository.save(compra)).thenReturn(compra);
+        when(compraMapper.toSimpleResponse(compra)).thenReturn(response);
+
+        LocalDateTime antes = LocalDateTime.now();
+        compraService.create(request, 20L);
+        LocalDateTime despues = LocalDateTime.now();
+
+        assertTrue(!compra.getFechaCompra().isBefore(antes)
+            && !compra.getFechaCompra().isAfter(despues));
+        verify(compraRepository).save(compra);
+    }
 
     // PRUEBA: anularCompra con ID nulo lanza BadRequest
     @Test

@@ -60,15 +60,7 @@ public class CompraServiceImplement implements CompraService {
         compra.setUsuario(usuario);
         compra.setSituacion(1);
 
-        if (dto.fechaCompra() != null && !dto.fechaCompra().isBlank()) {
-            LocalDateTime fecha = LocalDateTime.parse(dto.fechaCompra());
-            if (fecha.isAfter(LocalDateTime.now())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha de emisión no puede ser futura");
-            }
-            compra.setFechaCompra(fecha);
-        } else {
-            compra.setFechaCompra(LocalDateTime.now());
-        }
+        compra.setFechaCompra(LocalDateTime.now());
 
         // Generar correlativo definitivo al guardar
         String codigoCorrelativo = correlativoService.incrementarYObtenerCodigo("COMPRA_NOTA", "NC001");
